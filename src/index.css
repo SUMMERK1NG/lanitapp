@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --app-bg: #0b132b;
+    --app-surface: #203657;
+    --app-surface-hover: #29446c;
+    --app-card: #1c2e4a;
+    --app-border: #2a4365;
+    --app-text: #f8fafc;
+    --app-text-muted: #9ba3af;
+    --primary: #147df0;
+    --primary-rgb: 20, 125, 240;
+    --secondary: #00c2c7;
+    --accent: #ff914d;
+    --success: #10b981;
+    --danger: #ef4444;
+  }
+
+  /* Modo Azul Marino Profundo (Navy) */
+  .theme-navy {
+    --app-bg: #0b132b;
+    --app-surface: #203657;
+    --app-surface-hover: #29446c;
+    --app-card: #1c2e4a;
+    --app-border: #2a4365;
+    --app-text: #f8fafc;
+    --app-text-muted: #9ba3af;
+  }
+
+  /* Modo Oscuro Negro Puro (OLED / Pitch Dark) */
+  .theme-dark {
+    --app-bg: #080c14;
+    --app-surface: #111726;
+    --app-surface-hover: #1a2238;
+    --app-card: #0e1320;
+    --app-border: #1e293b;
+    --app-text: #f8fafc;
+    --app-text-muted: #94a3b8;
+  }
+
+  /* Modo Fondo Blanco / Light */
+  .theme-light {
+    --app-bg: #f8fafc;
+    --app-surface: #ffffff;
+    --app-surface-hover: #f1f5f9;
+    --app-card: #ffffff;
+    --app-border: #e2e8f0;
+    --app-text: #0f172a;
+    --app-text-muted: #64748b;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
+    overscroll-behavior-y: none;
+    min-height: 100vh;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--app-border);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Safe area support for mobile PWA */
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
+}
+
+/* Dynamic theme background & border classes */
+.bg-app {
+  background-color: var(--app-bg);
+}
+
+.bg-surface {
+  background-color: var(--app-surface);
+}
+
+.bg-surface-hover:hover {
+  background-color: var(--app-surface-hover);
+}
+
+.bg-card {
+  background-color: var(--app-card);
+}
+
+.border-app {
+  border-color: var(--app-border);
+}
+
+.text-app {
+  color: var(--app-text);
+}
+
+.text-muted {
+  color: var(--app-text-muted);
+}
+
+.bg-primary-custom {
+  background-color: var(--primary);
+}
+
+.text-primary-custom {
+  color: var(--primary);
+}
+
+.border-primary-custom {
+  border-color: var(--primary);
+}
+
+/* Hide spin buttons for number inputs */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

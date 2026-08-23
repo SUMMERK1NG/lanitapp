@@ -1,0 +1,697 @@
+import React, { useState } from 'react';
+import {
+  PiggyBank,
+  Plus,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  Clock,
+  Target,
+  DollarSign,
+  AlertCircle,
+  Layers,
+  X,
+} from 'lucide-react';
+import type { SavingsGoal, SavingContribution, FortnightType } from '../types/index.ts';
+import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution, skipSavingContributionPeriod } from '../lib/db.ts';
+import { MoneyInput } from './ui/MoneyInput.tsx';
+
+interface SavingsModuleProps {
+  savingsGoals: SavingsGoal[];
+  savingContributions: SavingContribution[];
+  currency?: string;
+}
+
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+export const SavingsModule: React.FC<SavingsModuleProps> = ({
+  savingsGoals,
+  savingContributions,
+  currency = '$',
+}) => {
+  // Modal states
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState<boolean>(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+
+  // Contribution modal
+  const [isContributionModalOpen, setIsContributionModalOpen] = useState<boolean>(false);
+  const [selectedGoalForContrib, setSelectedGoalForContrib] = useState<SavingsGoal | null>(null);
+  const [contribAmount, setContribAmount] = useState<number>(0);
+  const [contribNotes, setContribNotes] = useState<string>('');
+
+  // Skip period modal
+  const [isSkipModalOpen, setIsSkipModalOpen] = useState<boolean>(false);
+  const [selectedGoalForSkip, setSelectedGoalForSkip] = useState<SavingsGoal | null>(null);
+  const [skipReason, setSkipReason] = useState<string>('');
+
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+
+  // Form states for Goal
+  const [name, setName] = useState<string>('');
+  const [targetAmount, setTargetAmount] = useState<number>(0);
+  const [frequency, setFrequency] = useState<'fortnightly' | 'monthly'>('fortnightly');
+  const [targetFortnight, setTargetFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
+  const [amountPerPeriod, setAmountPerPeriod] = useState<number>(0);
+  const [targetDate, setTargetDate] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+
+  // Financial Stats
+  const totalTargetAll = savingsGoals.reduce((sum, g) => sum + g.target_amount, 0);
+  const totalAccumulated = savingsGoals.reduce((sum, g) => sum + g.current_amount, 0);
+  const globalProgress = totalTargetAll > 0 ? Math.round((totalAccumulated / totalTargetAll) * 100) : 0;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentFortnight: FortnightType = now.getDate() <= 15 ? 'q1' : 'q2';
+
+  // Planned savings commitment for current fortnight
+  const fortnightSavingsCommitment = savingsGoals
+    .filter((g) => g.status === 'active')
+    .filter((g) => {
+      if (g.frequency === 'fortnightly') return true;
+      return g.target_fortnight === 'both' || g.target_fortnight === currentFortnight;
+    })
+    .reduce((sum, g) => sum + g.amount_per_period, 0);
+
+  const handleOpenAddGoal = () => {
+    setEditingGoal(null);
+    setName('');
+    setTargetAmount(0);
+    setFrequency('fortnightly');
+    setTargetFortnight('q1');
+    setAmountPerPeriod(0);
+    setTargetDate('');
+    setNotes('');
+    setIsGoalModalOpen(true);
+  };
+
+  const handleOpenEditGoal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setName(goal.name);
+    setTargetAmount(goal.target_amount || 0);
+    setFrequency(goal.frequency);
+    setTargetFortnight(goal.target_fortnight || 'q1');
+    setAmountPerPeriod(goal.amount_per_period || 0);
+    setTargetDate(goal.target_date || '');
+    setNotes(goal.notes || '');
+    setIsGoalModalOpen(true);
+  };
+
+  const handleSaveGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numTarget = targetAmount;
+    const numPerPeriod = amountPerPeriod;
+    if (!name.trim() || isNaN(numTarget) || numTarget <= 0 || isNaN(numPerPeriod) || numPerPeriod <= 0) return;
+
+    await saveSavingsGoal({
+      id: editingGoal?.id,
+      name: name.trim(),
+      target_amount: numTarget,
+      current_amount: editingGoal ? editingGoal.current_amount : 0,
+      frequency,
+      target_fortnight: frequency === 'monthly' ? targetFortnight : 'both',
+      amount_per_period: numPerPeriod,
+      target_date: targetDate || undefined,
+      status: 'active',
+      notes,
+    });
+
+    setIsGoalModalOpen(false);
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    if (window.confirm('¿Seguro que deseas eliminar este plan de ahorro y sus registros de aporte?')) {
+      await deleteSavingsGoal(id);
+    }
+  };
+
+  const handleOpenContribModal = (goal: SavingsGoal) => {
+    setSelectedGoalForContrib(goal);
+    setContribAmount(goal.amount_per_period || 0);
+    setContribNotes(`Aporte Quincena ${currentFortnight === 'q1' ? '15' : '30'} de ${MONTH_NAMES[currentMonth]}`);
+    setIsContributionModalOpen(true);
+  };
+
+  const handleSaveContribution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const num = contribAmount;
+    if (!selectedGoalForContrib || isNaN(num) || num <= 0) return;
+
+    await addSavingContribution({
+      goal_id: selectedGoalForContrib.id,
+      amount: num,
+      year: currentYear,
+      month: currentMonth,
+      fortnight: currentFortnight,
+      notes: contribNotes,
+    });
+
+    setIsContributionModalOpen(false);
+  };
+
+  const handleOpenSkipModal = (goal: SavingsGoal) => {
+    setSelectedGoalForSkip(goal);
+    setSkipReason('Imprevisto médico / gastos de emergencia');
+    setIsSkipModalOpen(true);
+  };
+
+  const handleConfirmSkip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGoalForSkip) return;
+
+    await skipSavingContributionPeriod({
+      goal_id: selectedGoalForSkip.id,
+      year: currentYear,
+      month: currentMonth,
+      fortnight: currentFortnight,
+      reason: skipReason,
+    });
+
+    setIsSkipModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
+              <PiggyBank className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-app">Planes de Ahorro & Metas Financieras</h3>
+          </div>
+          <p className="text-xs text-muted mt-0.5">
+            Aparta sistemáticamente en cada quincena o mes para tus proyectos y fondos de emergencia
+          </p>
+        </div>
+
+        <button
+          onClick={handleOpenAddGoal}
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Nueva Meta de Ahorro
+        </button>
+      </div>
+
+      {/* KPI Cards Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Total Ahorrado Acumulado</span>
+          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+            {currency}{totalAccumulated.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block">En {savingsGoals.length} metas activas</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Aporte en Quincena Actual</span>
+          <p className="text-xl sm:text-2xl font-black text-primary-custom tracking-tight">
+            {currency}{fortnightSavingsCommitment.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block">Quincena {currentFortnight === 'q1' ? '15' : '30'} de {MONTH_NAMES[currentMonth]}</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Monto Objetivo Global</span>
+          <p className="text-xl sm:text-2xl font-black text-app tracking-tight">
+            {currency}{totalTargetAll.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block">Faltan ${Math.max(0, totalTargetAll - totalAccumulated).toFixed(2)}</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Progreso Global</span>
+          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+            {globalProgress}%
+          </p>
+          <div className="w-full bg-card h-1.5 rounded-full overflow-hidden mt-1">
+            <div
+              className="bg-[#00C2C7] h-full rounded-full transition-all"
+              style={{ width: `${Math.min(100, globalProgress)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Savings Goals Grid or Empty State */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {savingsGoals.length === 0 ? (
+          <div className="col-span-full p-8 sm:p-12 rounded-3xl bg-surface border border-app shadow-md text-center space-y-4 max-w-lg mx-auto">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-[#00C2C7]/15 text-[#00C2C7] flex items-center justify-center shadow-xl shadow-[#00C2C7]/10 border border-[#00C2C7]/20">
+              <PiggyBank className="w-8 h-8" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-app">Comienza a estructurar tus finanzas</h3>
+              <p className="text-xs text-muted max-w-sm mx-auto leading-relaxed">
+                Agrega tu primer registro para calcular tus balances y proyecciones de quincena automáticamente.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddGoal}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-lg shadow-primary-custom/25 hover:opacity-95 cursor-pointer transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Crear mi primera meta de ahorro</span>
+            </button>
+          </div>
+        ) : (
+          savingsGoals.map((goal) => {
+            const isCompleted = goal.current_amount >= goal.target_amount;
+            const pct = goal.target_amount > 0 ? Math.round((goal.current_amount / goal.target_amount) * 100) : 100;
+            const contributions = savingContributions.filter((sc) => sc.goal_id === goal.id);
+            const isExpanded = expandedGoalId === goal.id;
+
+            return (
+              <div
+                key={goal.id}
+                className="p-5 rounded-3xl bg-surface border border-app shadow-md hover:border-[#00C2C7]/60 transition-all space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold shadow-sm">
+                      <Target className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-app">{goal.name}</h4>
+                        {isCompleted && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            ¡LOGRADA!
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
+                        <span className="px-2 py-0.5 rounded bg-card text-[10px] font-semibold text-app">
+                          {goal.frequency === 'fortnightly' ? 'Apartar Cada Quincena ($' + goal.amount_per_period + ')' : 'Apartar Mensual ($' + goal.amount_per_period + ')'}
+                        </span>
+                        {goal.target_date && (
+                          <span className="flex items-center gap-1 text-[10px]">
+                            <Clock className="w-3 h-3" /> Meta: {goal.target_date}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEditGoal(goal)}
+                      className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
+                      title="Editar meta"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
+                      title="Eliminar meta"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress Bar & Balances */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-[#00C2C7]">
+                      {currency}{goal.current_amount.toFixed(2)} acumulados
+                    </span>
+                    <span className="text-muted">
+                      Meta: {currency}{goal.target_amount.toFixed(2)} ({pct}%)
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-card h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#00C2C7] to-primary-custom transition-all"
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions: Aportar Ahora & Omitir este periodo */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-app text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenContribModal(goal)}
+                      className="px-3 py-1.5 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <DollarSign className="w-3.5 h-3.5" />
+                      Aportar Ahora
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenSkipModal(goal)}
+                      className="px-2.5 py-1.5 rounded-xl bg-card hover:bg-[#FF914D]/20 text-muted hover:text-[#FF914D] border border-app font-bold transition-all cursor-pointer"
+                      title="Omitir el aporte de esta quincena por imprevisto"
+                    >
+                      Omitir Periodo
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
+                    className="text-[11px] font-bold text-muted hover:text-app flex items-center gap-1 cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    {contributions.length} aportes
+                  </button>
+                </div>
+
+                {/* Expanded Contribution History */}
+                {isExpanded && (
+                  <div className="p-3 bg-card/60 rounded-2xl border border-app space-y-2 animate-in fade-in duration-150">
+                    <span className="text-xs font-bold text-app block">Historial de Aportes & Periodos</span>
+                    {contributions.length === 0 ? (
+                      <p className="text-xs text-muted py-1">Sin aportes registrados aún.</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {contributions.map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex items-center justify-between p-2 rounded-xl bg-surface border border-app text-xs"
+                          >
+                            <div className="flex items-center gap-2">
+                              {c.is_skipped ? (
+                                <AlertCircle className="w-3.5 h-3.5 text-[#FF914D]" />
+                              ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#00C2C7]" />
+                              )}
+                              <div>
+                                <span className="font-semibold text-app">{c.contribution_date}</span>
+                                <span className="text-[10px] text-muted ml-1.5">
+                                  ({c.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})
+                                </span>
+                              </div>
+                            </div>
+
+                            <div>
+                              {c.is_skipped ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FF914D]/20 text-[#FF914D]">
+                                  OMITIDO
+                                </span>
+                              ) : (
+                                <span className="font-black text-[#00C2C7]">+{currency}{c.amount.toFixed(2)}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modal Nueva / Editar Meta de Ahorro */}
+      {isGoalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+            <h3 className="text-base font-bold mb-4">
+              {editingGoal ? 'Editar Meta de Ahorro' : 'Crear Nueva Meta de Ahorro'}
+            </h3>
+
+            <form onSubmit={handleSaveGoal} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Nombre de la Meta
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Fondo de Emergencia, Vacaciones, Reparación Moto..."
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Monto Objetivo ($ USD)
+                  </label>
+                  <MoneyInput
+                    value={targetAmount}
+                    onChange={setTargetAmount}
+                    currencySymbol="$"
+                    placeholder="0,00"
+                    required
+                    className="!py-2 !text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Monto a Apartar ($)
+                  </label>
+                  <MoneyInput
+                    value={amountPerPeriod}
+                    onChange={setAmountPerPeriod}
+                    currencySymbol="$"
+                    placeholder="0,00"
+                    required
+                    className="!py-2 !text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Frecuencia de Ahorro
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
+                    {[
+                      { id: 'fortnightly' as const, label: 'Quincenal' },
+                      { id: 'monthly' as const, label: 'Mensual' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFrequency(opt.id)}
+                        className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                          frequency === opt.id
+                            ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
+                            : 'text-muted hover:text-app'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {frequency === 'monthly' ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted mb-1">
+                      Quincena Asignada
+                    </label>
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
+                      {[
+                        { id: 'q1' as const, label: 'Quincena 15' },
+                        { id: 'q2' as const, label: 'Quincena 30' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setTargetFortnight(opt.id)}
+                          className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                            targetFortnight === opt.id
+                              ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
+                              : 'text-muted hover:text-app'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted mb-1">
+                      Fecha Límite Estimada
+                    </label>
+                    <input
+                      type="date"
+                      value={targetDate}
+                      onChange={(e) => setTargetDate(e.target.value)}
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Notas / Propósito
+                </label>
+                <input
+                  type="text"
+                  placeholder="Detalles sobre esta meta..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsGoalModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-extrabold shadow-md hover:opacity-95 transition-all cursor-pointer"
+                >
+                  Guardar Meta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aportar Ahora */}
+      {isContributionModalOpen && selectedGoalForContrib && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-app">Registrar Aporte de Ahorro</h3>
+                  <p className="text-[11px] text-muted">{selectedGoalForContrib.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsContributionModalOpen(false)}
+                className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveContribution} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Monto a Aportar ($ USD)
+                </label>
+                <MoneyInput
+                  value={contribAmount}
+                  onChange={setContribAmount}
+                  currencySymbol="$"
+                  placeholder="0,00"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Nota / Referencia
+                </label>
+                <input
+                  type="text"
+                  value={contribNotes}
+                  onChange={(e) => setContribNotes(e.target.value)}
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsContributionModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-md hover:opacity-95"
+                >
+                  Confirmar Aporte
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Omitir Periodo */}
+      {isSkipModalOpen && selectedGoalForSkip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold">
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-app">Omitir Aporte en esta Quincena</h3>
+                  <p className="text-[11px] text-muted">{selectedGoalForSkip.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSkipModalOpen(false)}
+                className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSkip} className="space-y-3.5">
+              <p className="text-xs text-muted">
+                Al omitir este periodo, el sistema registrará que no pudiste apartar este ahorro por imprevistos sin afectar negativamente tu balance actual.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Motivo de la Omisión
+                </label>
+                <input
+                  type="text"
+                  value={skipReason}
+                  onChange={(e) => setSkipReason(e.target.value)}
+                  placeholder="Ej. Gasto médico imprevisto, reparación de auto..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSkipModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-[#FF914D] text-white font-extrabold shadow-md hover:opacity-95"
+                >
+                  Confirmar Omisión
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
