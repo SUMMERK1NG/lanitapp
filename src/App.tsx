@@ -519,12 +519,16 @@ export function App() {
                 debtPayments={debtPayments}
                 savingsGoals={savingsGoals}
                 savingContributions={savingContributions}
+                accounts={accounts}
+                categories={categories}
                 rates={rates}
                 userEmail={currentUser?.email}
                 userName={currentUser?.name}
                 onOpenQuickPayment={handleOpenPaymentModal}
                 onNavigateToIncomes={() => setActiveView('incomes')}
                 onNavigateToSavings={() => setActiveView('savings')}
+                onNavigateToDebts={() => setActiveView('debts')}
+                onNavigateToFixedExpenses={() => setActiveView('fixed_expenses')}
               />
             </div>
           )}

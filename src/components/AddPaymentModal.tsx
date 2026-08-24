@@ -11,6 +11,10 @@ interface AddPaymentModalProps {
   debts: Debt[];
   rates: ExchangeRatesData;
   preselectedDebtId?: string;
+  initialAmount?: number;
+  initialYear?: number;
+  initialMonth?: number;
+  initialFortnight?: FortnightType;
 }
 
 const MONTH_NAMES = [
@@ -32,10 +36,14 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   debts,
   rates,
   preselectedDebtId,
+  initialAmount,
+  initialYear,
+  initialMonth,
+  initialFortnight,
 }) => {
   const activeDebts = debts.filter((d) => d.status === 'active' || d.id === preselectedDebtId);
   const [debtId, setDebtId] = useState<string>(preselectedDebtId || (activeDebts[0]?.id || ''));
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState<number>(initialAmount || 0);
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedFortnightKey, setSelectedFortnightKey] = useState<string>('');
   const [customRate, setCustomRate] = useState<string>(rates.bcvDollar.toString());
@@ -141,13 +149,21 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      setPaymentDate(today);
-      const smart = computeSmartFortnight(today);
-      setSelectedFortnightKey(`${smart.year}_${smart.month}_${smart.fortnight}`);
-      setSuggestedNotice(smart.notice);
+      if (initialAmount !== undefined && initialAmount > 0) {
+        setAmount(initialAmount);
+      }
+      if (initialYear !== undefined && initialMonth !== undefined && initialFortnight) {
+        setSelectedFortnightKey(`${initialYear}_${initialMonth}_${initialFortnight}`);
+        setSuggestedNotice(`Período seleccionado: Quincena ${initialFortnight === 'q1' ? '15' : '30'} de ${MONTH_NAMES[initialMonth]} ${initialYear}`);
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setPaymentDate(today);
+        const smart = computeSmartFortnight(today);
+        setSelectedFortnightKey(`${smart.year}_${smart.month}_${smart.fortnight}`);
+        setSuggestedNotice(smart.notice);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialAmount, initialYear, initialMonth, initialFortnight]);
 
   if (!isOpen) return null;
 

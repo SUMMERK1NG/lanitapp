@@ -261,3 +261,23 @@ export interface SyncResult {
   errors?: string[];
   lastSyncTime?: string;
 }
+
+export type FortnightItemStatus = 'pending' | 'paid' | 'skipped';
+
+export interface FortnightItemState {
+  id: string; // `${item_type}_${item_id}_${period_key}`
+  user_id?: string;
+  item_id: string;
+  item_type: 'expense' | 'debt';
+  period_key: string; // 'YYYY-MM-15' | 'YYYY-MM-30'
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+  status: FortnightItemStatus;
+  amount?: number;
+  transaction_id?: string;
+  notes?: string;
+  updated_at?: string;
+  sync_status?: SyncStatus;
+}
+

@@ -541,7 +541,13 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                     required
                     placeholder="Ej. 28322083"
                     value={editCedulaNumber}
-                    onChange={(e) => setEditCedulaNumber(e.target.value)}
+                    onChange={(e) => {
+                      const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);
+                      setEditCedulaNumber(numericVal);
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={9}
                     className="flex-1 min-w-0 bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                   />
                 </div>

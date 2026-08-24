@@ -204,7 +204,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   required
                   placeholder="Ej. 28322083"
                   value={loginCedula}
-                  onChange={(e) => setLoginCedula(e.target.value)}
+                  onChange={(e) => {
+                    const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);
+                    setLoginCedula(numericVal);
+                  }}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={9}
                   className="flex-1 min-w-0 bg-[#0B132B]/90 border border-white/15 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0] transition-all"
                 />
               </div>
@@ -306,7 +312,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   required
                   placeholder="Ej. 28322083"
                   value={regCedula}
-                  onChange={(e) => setRegCedula(e.target.value)}
+                  onChange={(e) => {
+                    const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);
+                    setRegCedula(numericVal);
+                  }}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={9}
                   className="flex-1 min-w-0 bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
                 />
               </div>

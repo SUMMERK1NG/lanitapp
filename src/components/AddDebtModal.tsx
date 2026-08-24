@@ -25,6 +25,15 @@ interface AddDebtModalProps {
   onClose: () => void;
   editingDebt?: Debt | null;
   categories?: Category[];
+  initialAmount?: number;
+  initialCreditor?: string;
+  initialDebtMode?: DebtModeType;
+  initialPlatform?: DebtPlatformType;
+  initialStartYear?: number;
+  initialStartMonth?: number;
+  initialStartFortnight?: FortnightType;
+  initialNotes?: string;
+  onSaved?: (debt: Debt) => void;
 }
 
 const MONTH_NAMES = [
@@ -45,11 +54,20 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   onClose,
   editingDebt,
   categories = [],
+  initialAmount,
+  initialCreditor,
+  initialDebtMode,
+  initialPlatform,
+  initialStartYear,
+  initialStartMonth,
+  initialStartFortnight,
+  initialNotes,
+  onSaved,
 }) => {
-  const [debtMode, setDebtMode] = useState<DebtModeType>(editingDebt?.debt_mode || 'installments');
-  const [creditor, setCreditor] = useState<string>(editingDebt?.creditor || '');
-  const [platform, setPlatform] = useState<DebtPlatformType>(editingDebt?.platform || 'cashea');
-  const [debtAmount, setDebtAmount] = useState<number>(editingDebt?.total_amount || 0);
+  const [debtMode, setDebtMode] = useState<DebtModeType>(editingDebt?.debt_mode || initialDebtMode || 'installments');
+  const [creditor, setCreditor] = useState<string>(editingDebt?.creditor || initialCreditor || '');
+  const [platform, setPlatform] = useState<DebtPlatformType>(editingDebt?.platform || initialPlatform || 'particular');
+  const [debtAmount, setDebtAmount] = useState<number>(editingDebt?.total_amount || initialAmount || 0);
   const [totalInstallments, setTotalInstallments] = useState<string>(editingDebt?.total_installments?.toString() || '4');
   const [pendingInstallments, setPendingInstallments] = useState<string>(editingDebt?.pending_installments?.toString() || '4');
   const [installmentAmount, setInstallmentAmount] = useState<number>(editingDebt?.installment_amount || 0);
@@ -70,18 +88,18 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
   // Starting period
   const now = new Date();
-  const initialStartYear = editingDebt?.start_year !== undefined ? editingDebt.start_year : now.getFullYear();
-  const initialStartMonth = editingDebt?.start_month !== undefined ? editingDebt.start_month : now.getMonth();
-  const initialStartFortnight = editingDebt?.start_fortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
+  const initialStartYearVal = editingDebt?.start_year !== undefined ? editingDebt.start_year : (initialStartYear !== undefined ? initialStartYear : now.getFullYear());
+  const initialStartMonthVal = editingDebt?.start_month !== undefined ? editingDebt.start_month : (initialStartMonth !== undefined ? initialStartMonth : now.getMonth());
+  const initialStartFortnightVal = editingDebt?.start_fortnight || initialStartFortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
   const [startPeriodKey, setStartPeriodKey] = useState<string>(
-    `${initialStartYear}_${initialStartMonth}_${initialStartFortnight}`
+    `${initialStartYearVal}_${initialStartMonthVal}_${initialStartFortnightVal}`
   );
   const [isStartPeriodDropdownOpen, setIsStartPeriodDropdownOpen] = useState<boolean>(false);
 
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'VES'>(editingDebt?.currency || 'USD');
   const [paymentType, setPaymentType] = useState<PaymentMethodType>(editingDebt?.payment_type || 'bcv_usd');
   const [dueDate, setDueDate] = useState<string>(editingDebt?.due_date || '');
-  const [notes, setNotes] = useState<string>(editingDebt?.notes || '');
+  const [notes, setNotes] = useState<string>(editingDebt?.notes || initialNotes || '');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Generate starting period options (Next 12 fortnights)
@@ -137,18 +155,26 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setInterestFortnight(editingDebt.interest_fortnight || 'q1');
       setDueDate(editingDebt.due_date || '');
       setNotes(editingDebt.notes || '');
-    } else {
-      setDebtMode('installments');
-      setCreditor('');
-      setPlatform('cashea');
-      setDebtAmount(0);
+    } else if (isOpen) {
+      const mode = initialDebtMode || 'installments';
+      setDebtMode(mode);
+      setCreditor(initialCreditor || (initialPlatform === 'particular' ? 'Préstamo Particular' : ''));
+      setPlatform(initialPlatform || 'particular');
+      const amt = initialAmount || 0;
+      setDebtAmount(amt);
       setTotalInstallments('4');
       setPendingInstallments('4');
-      setInstallmentAmount(0);
+      if (amt > 0 && mode === 'installments') {
+        setInstallmentAmount(Number((amt / 4).toFixed(2)));
+      } else {
+        setInstallmentAmount(0);
+      }
       setFortnightDue('q1');
 
-      const initialKey = `${now.getFullYear()}_${now.getMonth()}_${now.getDate() <= 15 ? 'q1' : 'q2'}`;
-      setStartPeriodKey(initialKey);
+      const sy = initialStartYear !== undefined ? initialStartYear : now.getFullYear();
+      const sm = initialStartMonth !== undefined ? initialStartMonth : now.getMonth();
+      const sf = initialStartFortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
+      setStartPeriodKey(`${sy}_${sm}_${sf}`);
 
       setCurrency('USD');
       setPaymentType('bcv_usd');
@@ -158,9 +184,9 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setInterestFrequency('monthly');
       setInterestFortnight('q1');
       setDueDate('');
-      setNotes('');
+      setNotes(initialNotes || '');
     }
-  }, [editingDebt, isOpen]);
+  }, [editingDebt, isOpen, initialAmount, initialCreditor, initialDebtMode, initialPlatform, initialStartYear, initialStartMonth, initialStartFortnight, initialNotes]);
 
   // Platform selection handler
   const handleSelectPlatform = (platId: DebtPlatformType) => {
@@ -247,7 +273,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await saveDebt({
+      const savedDebt = await saveDebt({
         id: editingDebt?.id,
         creditor: creditor.trim(),
         platform,
@@ -271,6 +297,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
         due_date: debtMode === 'open' ? dueDate || undefined : undefined,
         notes,
       });
+      if (onSaved) onSaved(savedDebt);
       onClose();
     } catch (err) {
       console.error('Error saving debt:', err);

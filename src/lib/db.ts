@@ -15,6 +15,7 @@ import type {
   UserProfile,
   SyncResult,
   FortnightType,
+  FortnightItemState,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
 
@@ -80,6 +81,7 @@ export class LanitappDatabase extends Dexie {
   savings_goals!: Table<SavingsGoal, string>;
   saving_contributions!: Table<SavingContribution, string>;
   user_profiles!: Table<UserProfile, string>;
+  fortnight_item_states!: Table<FortnightItemState, string>;
 
   constructor() {
     super('lanitapp_db');
@@ -97,6 +99,23 @@ export class LanitappDatabase extends Dexie {
       savings_goals: 'id, user_id, status, frequency, sync_status',
       saving_contributions: 'id, user_id, goal_id, year, month, fortnight, is_skipped, sync_status',
       user_profiles: 'id, cedula, email, role, is_active, sync_status',
+    });
+
+    this.version(9).stores({
+      transactions: 'id, user_id, type, category_id, account_id, transaction_date, sync_status',
+      categories: 'id, name, type, sync_status',
+      accounts: 'id, user_id, name, type, currency, sync_status',
+      fixed_incomes: 'id, user_id, default_fortnight, category_id, is_active, sync_status',
+      monthly_fixed_income_overrides: 'id, fixed_income_id, year, month, sync_status',
+      variable_incomes: 'id, user_id, year, month, fortnight, category_id, sync_status',
+      fixed_expenses: 'id, user_id, default_fortnight, category_id, is_active, sync_status',
+      monthly_fixed_overrides: 'id, fixed_expense_id, year, month, sync_status',
+      debts: 'id, user_id, creditor, platform, debt_mode, status, payment_type, sync_status',
+      debt_payments: 'id, user_id, debt_id, year, month, fortnight, sync_status',
+      savings_goals: 'id, user_id, status, frequency, sync_status',
+      saving_contributions: 'id, user_id, goal_id, year, month, fortnight, is_skipped, sync_status',
+      user_profiles: 'id, cedula, email, role, is_active, sync_status',
+      fortnight_item_states: 'id, user_id, item_id, item_type, period_key, year, month, fortnight, status, sync_status',
     });
 
     this.on('populate', async () => {
@@ -1057,6 +1076,7 @@ export async function clearCurrentUserData(userId?: string): Promise<void> {
   await db.debt_payments.where('user_id').equals(targetUid).delete();
   await db.savings_goals.where('user_id').equals(targetUid).delete();
   await db.saving_contributions.where('user_id').equals(targetUid).delete();
+  await db.fortnight_item_states.where('user_id').equals(targetUid).delete();
 
   // 2. Limpiar registros en Supabase si está online
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -1093,10 +1113,175 @@ export async function resetDatabaseToZero(): Promise<void> {
   await db.debt_payments.clear();
   await db.savings_goals.clear();
   await db.saving_contributions.clear();
+  await db.fortnight_item_states.clear();
 
   await db.categories.bulkPut(DEFAULT_CATEGORIES);
   await db.accounts.bulkPut(DEFAULT_ACCOUNTS);
 }
 
 export const resetDatabaseWithSamples = resetDatabaseToZero;
+
+/**
+ * Fortnight Item States (Pagado / Omitido por Quincena)
+ */
+export function getFortnightPeriodKey(year: number, month: number, fortnight: FortnightType): string {
+  const day = fortnight === 'q1' ? '15' : '30';
+  return `${year}-${String(month + 1).padStart(2, '0')}-${day}`;
+}
+
+export async function setFortnightExpensePaid(params: {
+  expense: FixedExpense;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+  amount: number;
+  accountId?: string;
+}): Promise<void> {
+  const userId = getActiveUserId();
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_expense_${params.expense.id}_${periodKey}`;
+  const txId = `tx_fe_${params.expense.id}_${periodKey}`;
+
+  // 1. Crear transacción de gasto vinculada
+  await db.transactions.put({
+    id: txId,
+    user_id: userId,
+    amount: params.amount,
+    type: 'expense',
+    description: `Pago Gasto Fijo: ${params.expense.name} (${params.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
+    category_id: params.expense.category_id || 'cat_services',
+    account_id: params.accountId || 'acc_cash',
+    transaction_date: periodKey,
+    sync_status: 'pending',
+    created_at: new Date().toISOString(),
+  });
+
+  // 2. Guardar estado quincenal
+  await db.fortnight_item_states.put({
+    id: stateId,
+    user_id: userId,
+    item_id: params.expense.id,
+    item_type: 'expense',
+    period_key: periodKey,
+    year: params.year,
+    month: params.month,
+    fortnight: params.fortnight,
+    status: 'paid',
+    amount: params.amount,
+    transaction_id: txId,
+    updated_at: new Date().toISOString(),
+    sync_status: 'pending',
+  });
+
+  if (navigator.onLine && isSupabaseConfigured()) {
+    syncWithSupabase().catch(err => console.error('Bg sync paid expense err:', err));
+  }
+}
+
+export async function unmarkFortnightExpensePaid(params: {
+  expenseId: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+}): Promise<void> {
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+
+  await db.transactions.delete(txId);
+  await db.fortnight_item_states.delete(stateId);
+
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('transactions').delete().eq('id', txId);
+    } catch (e) {
+      console.warn('Delete remote tx err:', e);
+    }
+  }
+}
+
+export async function setFortnightExpenseSkipped(params: {
+  expenseId: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+}): Promise<void> {
+  const userId = getActiveUserId();
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+
+  // Si existía transacción previa, eliminarla
+  await db.transactions.delete(txId);
+
+  await db.fortnight_item_states.put({
+    id: stateId,
+    user_id: userId,
+    item_id: params.expenseId,
+    item_type: 'expense',
+    period_key: periodKey,
+    year: params.year,
+    month: params.month,
+    fortnight: params.fortnight,
+    status: 'skipped',
+    updated_at: new Date().toISOString(),
+    sync_status: 'pending',
+  });
+
+  if (navigator.onLine && isSupabaseConfigured()) {
+    syncWithSupabase().catch(err => console.error('Bg sync skip expense err:', err));
+  }
+}
+
+export async function unmarkFortnightExpenseSkipped(params: {
+  expenseId: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+}): Promise<void> {
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  await db.fortnight_item_states.delete(stateId);
+}
+
+export async function setFortnightDebtSkipped(params: {
+  debtId: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+}): Promise<void> {
+  const userId = getActiveUserId();
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+
+  await db.fortnight_item_states.put({
+    id: stateId,
+    user_id: userId,
+    item_id: params.debtId,
+    item_type: 'debt',
+    period_key: periodKey,
+    year: params.year,
+    month: params.month,
+    fortnight: params.fortnight,
+    status: 'skipped',
+    updated_at: new Date().toISOString(),
+    sync_status: 'pending',
+  });
+
+  if (navigator.onLine && isSupabaseConfigured()) {
+    syncWithSupabase().catch(err => console.error('Bg sync skip debt err:', err));
+  }
+}
+
+export async function unmarkFortnightDebtSkipped(params: {
+  debtId: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+}): Promise<void> {
+  const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
+  const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+  await db.fortnight_item_states.delete(stateId);
+}
+
 
