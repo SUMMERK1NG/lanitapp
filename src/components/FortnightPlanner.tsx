@@ -234,7 +234,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const override = overrideMap.get(fe.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fe.amount;
         const state = allFortnightStates.find(
-          (s) => s.item_id === fe.id && s.item_type === 'expense' && s.period_key === activePeriodKey
+          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === activePeriodKey
         );
 
         return {
@@ -254,7 +254,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       .filter((fe) => {
         if (regularIds.has(fe.id)) return false;
         const prevSkippedState = allFortnightStates.find(
-          (s) => s.item_id === fe.id && s.item_type === 'expense' && s.period_key === prevPeriodInfo.key && s.status === 'skipped'
+          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === prevPeriodInfo.key && s.status === 'skipped'
         );
         return Boolean(prevSkippedState);
       })
@@ -262,7 +262,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const override = overrideMap.get(fe.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fe.amount;
         const state = allFortnightStates.find(
-          (s) => s.item_id === fe.id && s.item_type === 'expense' && s.period_key === activePeriodKey
+          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === activePeriodKey
         );
 
         return {

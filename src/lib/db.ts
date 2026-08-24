@@ -168,57 +168,88 @@ initializeDatabase().catch((err) => console.error('Database init error:', err));
 /**
  * Sanitiza el payload de Cuenta para PostgreSQL (evita error HTTP 400 por columnas inexistentes)
  */
-function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
-  const userId = acc.user_id || fallbackUserId || getActiveUserId();
+export function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
+  const currentUserId = acc.user_id || fallbackUserId || getActiveUserId();
+  const id = acc.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'acc_' + Math.random().toString(36).substring(2, 9));
   const balanceNum = typeof acc.balance === 'number'
     ? acc.balance
     : typeof acc.initial_balance === 'number'
     ? acc.initial_balance
     : parseFloat(acc.balance || acc.initial_balance || 0) || 0;
 
-  const payload: Record<string, any> = {
-    id: acc.id,
-    user_id: userId,
+  return {
+    id,
+    user_id: currentUserId,
     name: (acc.name || '').trim(),
     type: acc.type || 'cash',
     currency: acc.currency || 'USD',
     balance: balanceNum,
-    initial_balance: balanceNum,
+    updated_at: new Date().toISOString(),
   };
-
-  if (acc.created_at) payload.created_at = acc.created_at;
-  if (acc.updated_at) payload.updated_at = acc.updated_at;
-
-  return payload;
 }
 
 /**
- * Guarda o actualiza una cuenta en Supabase con tolerancia a nombres de columna
+ * Recarga las cuentas desde Supabase y actualiza Dexie en tiempo real
+ */
+export async function refreshAccountsFromSupabase(userId?: string): Promise<void> {
+  const currentUserId = userId || getActiveUserId();
+  if (!supabase || !navigator.onLine || !isSupabaseConfigured() || !currentUserId) return;
+
+  try {
+    const { data, error } = await supabase.from('accounts').select('*').eq('user_id', currentUserId);
+    if (error) {
+      console.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
+      return;
+    }
+    if (data) {
+      const normalized = data.map((a: any) => ({
+        id: a.id,
+        user_id: a.user_id || currentUserId,
+        name: a.name,
+        type: a.type || 'cash',
+        currency: a.currency || 'USD',
+        initial_balance: typeof a.balance === 'number' ? a.balance : typeof a.initial_balance === 'number' ? a.initial_balance : parseFloat(a.balance || a.initial_balance || 0) || 0,
+        color: a.color,
+        notes: a.notes || '',
+        created_at: a.created_at,
+        updated_at: a.updated_at,
+        sync_status: 'synced' as SyncStatus,
+      }));
+      if (normalized.length > 0) {
+        await db.accounts.bulkPut(normalized);
+      }
+    }
+  } catch (err) {
+    console.error('Error refreshing accounts from Supabase:', err);
+  }
+}
+
+/**
+ * Guarda o actualiza una cuenta en Supabase con tolerancia a nombres de columna y recarga inmediata
  */
 export async function upsertAccountToSupabase(payload: Record<string, any>): Promise<boolean> {
   if (!supabase || !navigator.onLine || !isSupabaseConfigured()) return false;
 
-  const cleanPayload = toSupabaseAccountPayload(payload);
+  const currentUserId = payload.user_id || getActiveUserId();
+  const cleanPayload = toSupabaseAccountPayload(payload, currentUserId);
 
-  // Intento 1: con ambos campos (balance e initial_balance)
+  // Intento 1: con columna 'balance' estándar
   const { error } = await supabase.from('accounts').upsert(cleanPayload);
-  if (!error) return true;
-
-  // Intento 2: si la columna 'initial_balance' no existe en Supabase, reintentar solo con 'balance'
-  if (error.message?.includes('initial_balance')) {
-    const { initial_balance, ...onlyBalancePayload } = cleanPayload;
-    const { error: err2 } = await supabase.from('accounts').upsert(onlyBalancePayload);
-    if (!err2) return true;
-    console.error('[Supabase Accounts Error (balance)]:', err2.message, err2.details, err2.hint);
-    return false;
+  if (!error) {
+    await refreshAccountsFromSupabase(currentUserId);
+    return true;
   }
 
-  // Intento 3: si la columna 'balance' no existe en Supabase, reintentar solo con 'initial_balance'
+  // Intento 2: si la columna 'balance' no existe en el esquema remoto, reintentar con 'initial_balance'
   if (error.message?.includes('balance')) {
     const { balance, ...onlyInitPayload } = cleanPayload;
-    const { error: err3 } = await supabase.from('accounts').upsert(onlyInitPayload);
-    if (!err3) return true;
-    console.error('[Supabase Accounts Error (initial_balance)]:', err3.message, err3.details, err3.hint);
+    const fallbackPayload = { ...onlyInitPayload, initial_balance: balance };
+    const { error: err2 } = await supabase.from('accounts').upsert(fallbackPayload);
+    if (!err2) {
+      await refreshAccountsFromSupabase(currentUserId);
+      return true;
+    }
+    console.error('[Supabase Accounts Error (initial_balance)]:', err2.message, err2.details, err2.hint);
     return false;
   }
 
@@ -1214,6 +1245,7 @@ export async function deleteAccount(id: string): Promise<void> {
       if (error) {
         console.error('[Supabase Accounts Delete Error]:', error.message, error.details, error.hint);
       }
+      await refreshAccountsFromSupabase(getActiveUserId());
     } catch (e) {
       console.warn('Delete remote account err:', e);
     }
@@ -1694,7 +1726,7 @@ export async function setFortnightExpensePaid(params: {
     id: stateId,
     user_id: userId,
     item_id: params.expense.id,
-    item_type: 'expense',
+    item_type: 'fixed_expense',
     period_key: periodKey,
     year: params.year,
     month: params.month,
@@ -1771,7 +1803,7 @@ export async function setFortnightExpenseSkipped(params: {
     id: stateId,
     user_id: userId,
     item_id: params.expenseId,
-    item_type: 'expense',
+    item_type: 'fixed_expense',
     period_key: periodKey,
     year: params.year,
     month: params.month,

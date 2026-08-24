@@ -268,7 +268,7 @@ export interface FortnightItemState {
   id: string; // `${item_type}_${item_id}_${period_key}`
   user_id?: string;
   item_id: string;
-  item_type: 'expense' | 'debt';
+  item_type: 'fixed_expense' | 'expense' | 'debt';
   period_key: string; // 'YYYY-MM-15' | 'YYYY-MM-30'
   year: number;
   month: number;
