@@ -35,6 +35,11 @@ if (isSupabaseConfigured()) {
         persistSession: true,
         autoRefreshToken: true,
       },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
     });
   } catch (error) {
     console.error('Failed to initialize Supabase client:', error);

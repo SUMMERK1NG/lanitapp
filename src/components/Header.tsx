@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
 import { NotificationCenterModal, computeSystemNotifications } from './NotificationCenterModal.tsx';
+import type { RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
 
 interface HeaderProps {
   activeViewTitle?: string;
@@ -18,6 +19,7 @@ interface HeaderProps {
   onRefreshRates?: () => void;
   isOnline: boolean;
   isSyncing: boolean;
+  syncStatus?: RealtimeSyncStatus;
   lastSyncTime: string | null;
   lastSyncResult: SyncResult | null;
   pendingCount: number;
@@ -36,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshRates,
   isOnline,
   isSyncing,
+  syncStatus,
   lastSyncTime,
   activeProfile,
   debts = [],
@@ -183,36 +186,46 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </div>
 
-          {/* Indicador de Estado de Sincronización */}
-          <button
-            onClick={onSync}
-            disabled={isSyncing || !isOnline}
-            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${
-              !isOnline
-                ? 'bg-card text-amber-400 border-amber-400/30'
-                : isSyncing
-                ? 'bg-card text-[#00C2C7] border-[#00C2C7]/30'
-                : 'bg-card text-emerald-400 border-emerald-500/30'
-            }`}
-            title={
-              !isOnline
-                ? 'Modo Offline: datos guardados localmente'
-                : isSyncing
-                ? 'Sincronizando con la nube...'
-                : `Sincronizado: ${lastSyncTime || 'Al iniciar'}`
+          {/* Indicador de Estado de Sincronización Realtime (4 Estados Visuales) */}
+          {(() => {
+            const effectiveStatus: RealtimeSyncStatus = syncStatus || (!isOnline ? 'offline' : isSyncing ? 'syncing' : 'connected');
+
+            let buttonClass = 'bg-card text-emerald-400 border-emerald-500/30';
+            let dotElement = <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />;
+            let labelText = 'Sincronizado';
+            let tooltipText = `🟢 Sincronizado: ${lastSyncTime || 'Tiempo Real Activo'}`;
+
+            if (effectiveStatus === 'syncing') {
+              buttonClass = 'bg-card text-[#00C2C7] border-[#00C2C7]/30';
+              dotElement = <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00C2C7]" />;
+              labelText = 'Sincronizando...';
+              tooltipText = '🔄 Sincronizando datos con Supabase...';
+            } else if (effectiveStatus === 'offline') {
+              buttonClass = 'bg-card text-amber-400 border-amber-400/30';
+              dotElement = <span className="w-2 h-2 rounded-full bg-amber-400" />;
+              labelText = 'Modo Offline';
+              tooltipText = '🟡 Modo Offline: datos guardados localmente en Dexie';
+            } else if (effectiveStatus === 'error') {
+              buttonClass = 'bg-card text-rose-400 border-rose-500/30';
+              dotElement = <span className="w-2 h-2 rounded-full bg-rose-500" />;
+              labelText = 'Error';
+              tooltipText = '🔴 Error de sincronización. Clic para reintentar.';
             }
-          >
-            {!isOnline ? (
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-            ) : isSyncing ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00C2C7]" />
-            ) : (
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            )}
-            <span className="hidden md:inline text-[11px] font-bold">
-              {!isOnline ? 'Modo Offline' : isSyncing ? 'Sincronizando...' : 'Sincronizado'}
-            </span>
-          </button>
+
+            return (
+              <button
+                onClick={onSync}
+                disabled={effectiveStatus === 'syncing' || !isOnline}
+                className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${buttonClass}`}
+                title={tooltipText}
+              >
+                {dotElement}
+                <span className="hidden md:inline text-[11px] font-bold">
+                  {labelText}
+                </span>
+              </button>
+            );
+          })()}
 
           {/* Botón Único de Perfil / Avatar en esquina superior derecha */}
           <button

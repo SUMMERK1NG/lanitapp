@@ -10,6 +10,7 @@ import {
   subscribeToRealtimeChanges,
 } from './lib/db.ts';
 import { useNetworkStatus } from './hooks/useNetworkStatus.ts';
+import { useRealtimeSync } from './hooks/useRealtimeSync.ts';
 import { useExchangeRates } from './hooks/useExchangeRates.ts';
 import { useTheme } from './hooks/useTheme.ts';
 import { useAuth } from './hooks/useAuth.ts';
@@ -122,12 +123,13 @@ export function App() {
     }
   }, []);
 
-  // Network & Exchange Rate hooks
-  const { isOnline, isSyncing, lastSyncTime, lastSyncResult, syncNow } = useNetworkStatus();
-  const { rates, loading: ratesLoading, isRefreshing: ratesRefreshing, refreshRates } = useExchangeRates();
-
   // Current active user ID
   const activeUserId = currentUser?.id || '';
+
+  // Realtime Sync & Exchange Rate hooks
+  const { isOnline, isSyncing, syncStatus, lastSyncTime, syncNow } = useRealtimeSync(activeUserId);
+  const { lastSyncResult } = useNetworkStatus();
+  const { rates, loading: ratesLoading, isRefreshing: ratesRefreshing, refreshRates } = useExchangeRates();
   const [isCloudLoading, setIsCloudLoading] = useState<boolean>(true);
 
   // Cloud-First Initial Consolidation & Realtime Subscriptions
@@ -418,6 +420,7 @@ export function App() {
           onRefreshRates={refreshRates}
           isOnline={isOnline}
           isSyncing={isSyncing}
+          syncStatus={syncStatus}
           lastSyncTime={lastSyncTime}
           lastSyncResult={lastSyncResult}
           pendingCount={pendingCount}

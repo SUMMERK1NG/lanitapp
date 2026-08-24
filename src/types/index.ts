@@ -178,6 +178,7 @@ export interface Debt {
   interest_fortnight?: FortnightType;
   due_date?: string;
   status: 'active' | 'paid';
+  priority?: 'low' | 'medium' | 'high' | string;
   notes?: string;
   sync_status: SyncStatus;
   created_at?: string;
