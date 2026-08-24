@@ -209,10 +209,11 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
 
     let initialFortnight: 15 | 30 | null = null;
     if (goal.frequency === 'monthly') {
-      if (goal.target_fortnight === 30 || (goal.target_fortnight as any) === 'q2') {
-        initialFortnight = 30;
-      } else if (goal.target_fortnight === 15 || (goal.target_fortnight as any) === 'q1') {
+      const tf = goal.target_fortnight as any;
+      if (tf === 'both' || tf === 'q1' || tf === 15 || tf === '15') {
         initialFortnight = 15;
+      } else if (tf === 'q2' || tf === 30 || tf === '30') {
+        initialFortnight = 30;
       } else {
         initialFortnight = getFortnightInfoFromDate(initDate).fortnightNumber;
       }
@@ -683,7 +684,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
               )}
 
               {/* Frecuencia de Ahorro y Quincena Específica con Chip Badge */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className={`grid ${frequency === 'monthly' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2.5`}>
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-semibold text-muted">
@@ -723,7 +724,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                   </div>
                 </div>
 
-                {frequency === 'monthly' ? (
+                {frequency === 'monthly' && (
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Quincena Específica
@@ -747,12 +748,6 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                         </button>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col justify-center text-xs text-muted px-1">
-                    <span className="text-[11px] font-medium text-muted leading-relaxed">
-                      Se apartará automáticamente en <strong className="text-app">ambas quincenas (15 y 30)</strong>.
-                    </span>
                   </div>
                 )}
               </div>
