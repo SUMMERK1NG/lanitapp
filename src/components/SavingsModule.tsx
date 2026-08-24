@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   PiggyBank,
   Plus,
@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Layers,
   X,
+  Sparkles,
 } from 'lucide-react';
 import type { SavingsGoal, SavingContribution, FortnightType } from '../types/index.ts';
 import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution, skipSavingContributionPeriod } from '../lib/db.ts';
@@ -53,7 +54,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const [name, setName] = useState<string>('');
   const [targetAmount, setTargetAmount] = useState<number>(0);
   const [frequency, setFrequency] = useState<'fortnightly' | 'monthly'>('fortnightly');
-  const [targetFortnight, setTargetFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
+  const [targetFortnight, setTargetFortnight] = useState<'q1' | 'q2' | 'both'>('both');
   const [amountPerPeriod, setAmountPerPeriod] = useState<number>(0);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState<string>('');
@@ -83,11 +84,82 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     return { fortnight, label, day, monthName, year };
   };
 
+  // Cambio de frecuencia con reseteo de quincena objetivo
+  const handleFrequencyChange = (newFreq: 'fortnightly' | 'monthly') => {
+    setFrequency(newFreq);
+    if (newFreq === 'fortnightly') {
+      setTargetFortnight('both');
+    } else {
+      const info = getFortnightInfoFromDate(startDate);
+      setTargetFortnight(targetFortnight === 'both' ? info.fortnight : (targetFortnight || 'q1'));
+    }
+  };
+
+  // Cambio de fecha de inicio con recalculo automático
   const handleStartDateChange = (val: string) => {
     setStartDate(val);
     const info = getFortnightInfoFromDate(val);
-    setTargetFortnight(info.fortnight);
+    if (frequency === 'fortnightly') {
+      setTargetFortnight('both');
+    } else {
+      setTargetFortnight(info.fortnight);
+    }
   };
+
+  // Cálculo inteligente de cuotas proyectadas entre Fecha de Inicio y Fecha Límite
+  const installmentInfo = useMemo(() => {
+    if (!startDate || !targetDate) return null;
+    const start = new Date(startDate);
+    const end = new Date(targetDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return null;
+
+    let periods = 0;
+    if (frequency === 'monthly') {
+      const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+      periods = Math.max(1, months + (end.getDate() >= start.getDate() ? 1 : 0));
+    } else {
+      let count = 0;
+      let currYear = start.getFullYear();
+      let currMonth = start.getMonth();
+      let currQ: FortnightType = start.getDate() <= 15 ? 'q1' : 'q2';
+
+      const endYear = end.getFullYear();
+      const endMonth = end.getMonth();
+      const endQ: FortnightType = end.getDate() <= 15 ? 'q1' : 'q2';
+
+      while (
+        currYear < endYear ||
+        (currYear === endYear && currMonth < endMonth) ||
+        (currYear === endYear && currMonth === endMonth && (currQ === 'q1' || endQ === 'q2'))
+      ) {
+        count++;
+        if (currYear === endYear && currMonth === endMonth && currQ === endQ) {
+          break;
+        }
+        if (currQ === 'q1') {
+          currQ = 'q2';
+        } else {
+          currQ = 'q1';
+          currMonth++;
+          if (currMonth > 11) {
+            currMonth = 0;
+            currYear++;
+          }
+        }
+        if (count > 240) break;
+      }
+      periods = Math.max(1, count);
+    }
+
+    const suggestedAmount = targetAmount > 0 && periods > 0 ? +(targetAmount / periods).toFixed(2) : 0;
+    const periodUnit = frequency === 'fortnightly' ? (periods === 1 ? 'quincena' : 'quincenas') : (periods === 1 ? 'mes' : 'meses');
+
+    return {
+      periods,
+      suggestedAmount,
+      periodUnit,
+    };
+  }, [startDate, targetDate, frequency, targetAmount]);
 
   // Financial Stats
   const totalTargetAll = savingsGoals.reduce((sum, g) => sum + g.target_amount, 0);
@@ -113,10 +185,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setName('');
     setTargetAmount(0);
     setFrequency('fortnightly');
+    setTargetFortnight('both');
     const todayStr = new Date().toISOString().split('T')[0];
     setStartDate(todayStr);
-    const info = getFortnightInfoFromDate(todayStr);
-    setTargetFortnight(info.fortnight);
     setAmountPerPeriod(0);
     setTargetDate('');
     setNotes('');
@@ -130,7 +201,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setFrequency(goal.frequency);
     const initDate = goal.start_date || goal.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
     setStartDate(initDate);
-    setTargetFortnight(goal.target_fortnight || getFortnightInfoFromDate(initDate).fortnight);
+    setTargetFortnight(goal.frequency === 'fortnightly' ? 'both' : (goal.target_fortnight || getFortnightInfoFromDate(initDate).fortnight));
     setAmountPerPeriod(goal.amount_per_period || 0);
     setTargetDate(goal.target_date || '');
     setNotes(goal.notes || '');
@@ -143,13 +214,15 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     const numPerPeriod = amountPerPeriod;
     if (!name.trim() || isNaN(numTarget) || numTarget <= 0 || isNaN(numPerPeriod) || numPerPeriod <= 0) return;
 
+    const finalFortnight = frequency === 'fortnightly' ? 'both' : (targetFortnight === 'both' ? 'q1' : targetFortnight);
+
     await saveSavingsGoal({
       id: editingGoal?.id,
       name: name.trim(),
       target_amount: numTarget,
       current_amount: editingGoal ? editingGoal.current_amount : 0,
       frequency,
-      target_fortnight: frequency === 'monthly' ? targetFortnight : 'both',
+      target_fortnight: finalFortnight,
       amount_per_period: numPerPeriod,
       start_date: startDate || new Date().toISOString().split('T')[0],
       target_date: targetDate || undefined,
@@ -539,6 +612,35 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 </div>
               </div>
 
+              {/* Cálculo Inteligente de Cuotas */}
+              {installmentInfo && (
+                <div className="p-3 rounded-2xl bg-primary-custom/10 border border-primary-custom/25 flex items-center justify-between gap-2 animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
+                        Cálculo Inteligente de Cuotas
+                      </span>
+                      <span className="text-xs font-bold text-app">
+                        {installmentInfo.periods} {installmentInfo.periodUnit} necesarias
+                        {installmentInfo.suggestedAmount > 0 && ` • $${installmentInfo.suggestedAmount} / ${frequency === 'fortnightly' ? 'quincena' : 'mes'}`}
+                      </span>
+                    </div>
+                  </div>
+                  {installmentInfo.suggestedAmount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAmountPerPeriod(installmentInfo.suggestedAmount)}
+                      className="px-2.5 py-1 rounded-xl bg-primary-custom text-white text-[11px] font-bold hover:opacity-90 transition-all cursor-pointer shrink-0 shadow-sm"
+                    >
+                      Aplicar Cuota
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Banner de Asignación Automática a Quincena */}
               <div className="p-3 rounded-2xl bg-[#00C2C7]/10 border border-[#00C2C7]/30 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
@@ -547,16 +649,18 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-                      Asignación Automática de Quincena
+                      {frequency === 'fortnightly' ? 'Aporte Quincenal Recurrente' : 'Asignación Automática de Quincena'}
                     </span>
                     <span className="text-xs font-bold text-[#00C2C7]">
-                      Se asignará a {getFortnightInfoFromDate(startDate).label}
+                      {frequency === 'fortnightly'
+                        ? `Ambas quincenas (15 y 30) a partir de ${getFortnightInfoFromDate(startDate).label}`
+                        : `Se apartará en ${targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'} de cada mes`}
                     </span>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span className="px-2.5 py-1 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] text-xs font-black uppercase">
-                    {targetFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'}
+                    {frequency === 'fortnightly' ? 'Ambas (15 y 30)' : targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
                   </span>
                 </div>
               </div>
@@ -574,7 +678,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setFrequency(opt.id)}
+                        onClick={() => handleFrequencyChange(opt.id)}
                         className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
                           frequency === opt.id
                             ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
@@ -615,7 +719,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 ) : (
                   <div className="flex flex-col justify-center text-xs text-muted px-2">
                     <span className="text-[11px] font-medium leading-relaxed">
-                      Se apartará en <strong className="text-app">ambas quincenas</strong> (15 y 30) a partir de la fecha de inicio.
+                      Se apartará en <strong className="text-app">ambas quincenas (15 y 30)</strong> a partir de la fecha de inicio.
                     </span>
                   </div>
                 )}
