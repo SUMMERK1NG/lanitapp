@@ -1152,10 +1152,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       target_amount: Number(goal.target_amount),
       current_amount: goal.current_amount !== undefined ? Number(goal.current_amount) : 0,
       frequency: goal.frequency,
-      target_fortnight: goal.target_fortnight || 'q1',
+      target_fortnight: goal.target_fortnight || (goal.frequency === 'fortnightly' ? 'both' : 'q1'),
       amount_per_period: Number(goal.amount_per_period),
       start_date: goal.start_date || new Date().toISOString().split('T')[0],
-      target_date: goal.target_date,
+      target_date: goal.target_date || undefined,
+      total_installments: goal.total_installments,
+      suggested_amount: goal.suggested_amount,
       icon: goal.icon || 'PiggyBank',
       color: goal.color || '#00C2C7',
       status: goal.status || 'active',
@@ -1172,7 +1174,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.savings_goals.put(record);
 
-    const { sync_status, ...payload } = record;
+    // Filtrar 'color' (columna inexistente en Supabase) y 'sync_status'
+    const { sync_status, color, ...payload } = record;
     console.log('[Supabase Savings Goals Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {

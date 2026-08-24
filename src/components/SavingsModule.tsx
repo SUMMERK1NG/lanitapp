@@ -214,6 +214,8 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     const numPerPeriod = amountPerPeriod;
     if (!name.trim() || isNaN(numTarget) || numTarget <= 0 || isNaN(numPerPeriod) || numPerPeriod <= 0) return;
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const finalStartDate = startDate && startDate >= todayStr ? startDate : todayStr;
     const finalFortnight = frequency === 'fortnightly' ? 'both' : (targetFortnight === 'both' ? 'q1' : targetFortnight);
 
     await saveSavingsGoal({
@@ -224,8 +226,10 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
       frequency,
       target_fortnight: finalFortnight,
       amount_per_period: numPerPeriod,
-      start_date: startDate || new Date().toISOString().split('T')[0],
+      start_date: finalStartDate,
       target_date: targetDate || undefined,
+      total_installments: installmentInfo?.periods || undefined,
+      suggested_amount: installmentInfo?.suggestedAmount || undefined,
       status: 'active',
       notes,
     });
@@ -403,6 +407,11 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                         <span className="px-2 py-0.5 rounded-lg bg-[#00C2C7]/15 text-[#00C2C7] text-[10px] font-bold">
                           {goal.frequency === 'fortnightly' ? 'Q1 & Q2' : goal.target_fortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
                         </span>
+                        {goal.total_installments && (
+                          <span className="px-2 py-0.5 rounded-lg bg-card text-[10px] font-semibold text-app border border-app">
+                            {goal.total_installments} {goal.frequency === 'fortnightly' ? 'quincenas' : 'meses'}
+                          </span>
+                        )}
                         {goal.start_date && (
                           <span className="flex items-center gap-1 text-[10px] text-muted">
                             <Clock className="w-3 h-3 text-[#00C2C7]" /> Inicio: {goal.start_date}
@@ -584,7 +593,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 </div>
               </div>
 
-              {/* Fechas: Inicio (Obligatorio) y Límite (Opcional) */}
+              {/* Fechas: Inicio (Obligatorio, solo futuras) y Límite (Opcional, posterior a inicio) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">
@@ -593,6 +602,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                   <input
                     type="date"
                     required
+                    min={new Date().toISOString().split('T')[0]}
                     value={startDate}
                     onChange={(e) => handleStartDateChange(e.target.value)}
                     className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
@@ -605,6 +615,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                   </label>
                   <input
                     type="date"
+                    min={startDate || new Date().toISOString().split('T')[0]}
                     value={targetDate}
                     onChange={(e) => setTargetDate(e.target.value)}
                     className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
@@ -614,55 +625,47 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
 
               {/* Cálculo Inteligente de Cuotas */}
               {installmentInfo && (
-                <div className="p-3 rounded-2xl bg-primary-custom/10 border border-primary-custom/25 flex items-center justify-between gap-2 animate-in fade-in">
+                <div className="p-3 rounded-2xl bg-[#00C2C7]/10 border border-[#00C2C7]/25 flex items-center justify-between gap-3 animate-in fade-in">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center shrink-0">
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-                        Cálculo Inteligente de Cuotas
-                      </span>
-                      <span className="text-xs font-bold text-app">
-                        {installmentInfo.periods} {installmentInfo.periodUnit} necesarias
-                        {installmentInfo.suggestedAmount > 0 && ` • $${installmentInfo.suggestedAmount} / ${frequency === 'fortnightly' ? 'quincena' : 'mes'}`}
-                      </span>
+                      <div className="text-xs font-bold text-app">
+                        {installmentInfo.periods} {installmentInfo.periodUnit} estimadas
+                      </div>
+                      {installmentInfo.suggestedAmount > 0 && (
+                        <div className="text-[11px] text-muted">
+                          Sugerido: <strong className="text-[#00C2C7]">${installmentInfo.suggestedAmount}</strong> / {frequency === 'fortnightly' ? 'quincena' : 'mes'}
+                        </div>
+                      )}
                     </div>
                   </div>
                   {installmentInfo.suggestedAmount > 0 && (
                     <button
                       type="button"
                       onClick={() => setAmountPerPeriod(installmentInfo.suggestedAmount)}
-                      className="px-2.5 py-1 rounded-xl bg-primary-custom text-white text-[11px] font-bold hover:opacity-90 transition-all cursor-pointer shrink-0 shadow-sm"
+                      className="px-2.5 py-1.5 rounded-xl bg-[#00C2C7] text-slate-950 text-xs font-black hover:opacity-90 transition-all cursor-pointer shrink-0 shadow-sm"
                     >
-                      Aplicar Cuota
+                      Usar sugerido
                     </button>
                   )}
                 </div>
               )}
 
-              {/* Banner de Asignación Automática a Quincena */}
-              <div className="p-3 rounded-2xl bg-[#00C2C7]/10 border border-[#00C2C7]/30 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center shrink-0">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-                      {frequency === 'fortnightly' ? 'Aporte Quincenal Recurrente' : 'Asignación Automática de Quincena'}
-                    </span>
-                    <span className="text-xs font-bold text-[#00C2C7]">
-                      {frequency === 'fortnightly'
-                        ? `Ambas quincenas (15 y 30) a partir de ${getFortnightInfoFromDate(startDate).label}`
-                        : `Se apartará en ${targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'} de cada mes`}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="px-2.5 py-1 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] text-xs font-black uppercase">
-                    {frequency === 'fortnightly' ? 'Ambas (15 y 30)' : targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
+              {/* Indicador compacto de quincena */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-app text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-[#00C2C7]" />
+                  <span className="text-xs font-medium text-muted">
+                    {frequency === 'fortnightly'
+                      ? 'Aporte activo en ambas quincenas (15 y 30)'
+                      : `Aporte mensual en ${targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}`}
                   </span>
                 </div>
+                <span className="px-2 py-0.5 rounded-lg bg-[#00C2C7]/15 text-[#00C2C7] text-[10px] font-bold">
+                  {frequency === 'fortnightly' ? 'Ambas (15 y 30)' : targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
