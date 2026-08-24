@@ -54,7 +54,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const [name, setName] = useState<string>('');
   const [targetAmount, setTargetAmount] = useState<number>(0);
   const [frequency, setFrequency] = useState<'fortnightly' | 'monthly'>('fortnightly');
-  const [targetFortnight, setTargetFortnight] = useState<'q1' | 'q2' | 'both'>('both');
+  const [targetFortnight, setTargetFortnight] = useState<15 | 30 | null>(null);
   const [amountPerPeriod, setAmountPerPeriod] = useState<number>(0);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState<string>('');
@@ -64,10 +64,10 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const getFortnightInfoFromDate = (dateStr: string) => {
     if (!dateStr) {
       const d = new Date();
-      const isQ1 = d.getDate() <= 15;
+      const is15 = d.getDate() <= 15;
       return {
-        fortnight: isQ1 ? ('q1' as FortnightType) : ('q2' as FortnightType),
-        label: isQ1 ? `Quincena 15 de ${MONTH_NAMES[d.getMonth()]}` : `Quincena 30 de ${MONTH_NAMES[d.getMonth()]}`,
+        fortnightNumber: is15 ? (15 as const) : (30 as const),
+        label: is15 ? `Quincena 15 de ${MONTH_NAMES[d.getMonth()]}` : `Quincena 30 de ${MONTH_NAMES[d.getMonth()]}`,
         day: d.getDate(),
         monthName: MONTH_NAMES[d.getMonth()],
         year: d.getFullYear(),
@@ -78,10 +78,10 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     const month = parseInt(parts[1], 10) - 1;
     const day = parseInt(parts[2], 10);
     const monthName = !isNaN(month) && MONTH_NAMES[month] ? MONTH_NAMES[month] : '';
-    const isQ1 = day <= 15;
-    const fortnight: FortnightType = isQ1 ? 'q1' : 'q2';
-    const label = isQ1 ? `Quincena 15 de ${monthName}` : `Quincena 30 de ${monthName}`;
-    return { fortnight, label, day, monthName, year };
+    const is15 = day <= 15;
+    const fortnightNumber: 15 | 30 = is15 ? 15 : 30;
+    const label = is15 ? `Quincena 15 de ${monthName}` : `Quincena 30 de ${monthName}`;
+    return { fortnightNumber, label, day, monthName, year };
   };
 
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -90,10 +90,10 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const handleFrequencyChange = (newFreq: 'fortnightly' | 'monthly') => {
     setFrequency(newFreq);
     if (newFreq === 'fortnightly') {
-      setTargetFortnight('both');
+      setTargetFortnight(null);
     } else {
       const info = getFortnightInfoFromDate(startDate || todayStr);
-      setTargetFortnight(targetFortnight === 'both' ? info.fortnight : (targetFortnight || 'q1'));
+      setTargetFortnight(targetFortnight === null ? info.fortnightNumber : targetFortnight);
     }
   };
 
@@ -105,9 +105,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     }
     const info = getFortnightInfoFromDate(val || todayStr);
     if (frequency === 'fortnightly') {
-      setTargetFortnight('both');
+      setTargetFortnight(null);
     } else {
-      setTargetFortnight(info.fortnight);
+      setTargetFortnight(info.fortnightNumber);
     }
   };
 
@@ -177,11 +177,12 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const currentFortnight: FortnightType = now.getDate() <= 15 ? 'q1' : 'q2';
 
   // Planned savings commitment for current fortnight
+  const currentFortnightNum: 15 | 30 = now.getDate() <= 15 ? 15 : 30;
   const fortnightSavingsCommitment = savingsGoals
     .filter((g) => g.status === 'active')
     .filter((g) => {
-      if (g.frequency === 'fortnightly') return true;
-      return g.target_fortnight === 'both' || g.target_fortnight === currentFortnight;
+      if (g.frequency === 'fortnightly' || g.target_fortnight === null || (g.target_fortnight as any) === 'both') return true;
+      return g.target_fortnight === currentFortnightNum || (currentFortnightNum === 15 ? (g.target_fortnight as any) === 'q1' : (g.target_fortnight as any) === 'q2');
     })
     .reduce((sum, g) => sum + g.amount_per_period, 0);
 
@@ -190,7 +191,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setName('');
     setTargetAmount(0);
     setFrequency('fortnightly');
-    setTargetFortnight('both');
+    setTargetFortnight(null);
     setStartDate(todayStr);
     setAmountPerPeriod(0);
     setTargetDate('');
@@ -205,7 +206,18 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setFrequency(goal.frequency);
     const initDate = goal.start_date || goal.created_at?.split('T')[0] || todayStr;
     setStartDate(initDate);
-    setTargetFortnight(goal.frequency === 'fortnightly' ? 'both' : (goal.target_fortnight || getFortnightInfoFromDate(initDate).fortnight));
+
+    let initialFortnight: 15 | 30 | null = null;
+    if (goal.frequency === 'monthly') {
+      if (goal.target_fortnight === 30 || (goal.target_fortnight as any) === 'q2') {
+        initialFortnight = 30;
+      } else if (goal.target_fortnight === 15 || (goal.target_fortnight as any) === 'q1') {
+        initialFortnight = 15;
+      } else {
+        initialFortnight = getFortnightInfoFromDate(initDate).fortnightNumber;
+      }
+    }
+    setTargetFortnight(initialFortnight);
     setAmountPerPeriod(goal.amount_per_period || 0);
     setTargetDate(goal.target_date || '');
     setNotes(goal.notes || '');
@@ -218,9 +230,8 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     const numPerPeriod = amountPerPeriod;
     if (!name.trim() || isNaN(numTarget) || numTarget <= 0 || isNaN(numPerPeriod) || numPerPeriod <= 0) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
     const finalStartDate = startDate && startDate >= todayStr ? startDate : todayStr;
-    const finalFortnight = frequency === 'fortnightly' ? 'both' : (targetFortnight === 'both' ? 'q1' : targetFortnight);
+    const finalFortnight: 15 | 30 | null = frequency === 'fortnightly' ? null : (targetFortnight === 30 ? 30 : 15);
 
     await saveSavingsGoal({
       id: editingGoal?.id,
@@ -409,7 +420,11 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                           {goal.frequency === 'fortnightly' ? `Apartar Quincenal ($${goal.amount_per_period})` : `Apartar Mensual ($${goal.amount_per_period})`}
                         </span>
                         <span className="px-2 py-0.5 rounded-lg bg-[#00C2C7]/15 text-[#00C2C7] text-[10px] font-bold">
-                          {goal.frequency === 'fortnightly' ? 'Q1 & Q2' : goal.target_fortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
+                          {goal.frequency === 'fortnightly' || goal.target_fortnight === null || (goal.target_fortnight as any) === 'both'
+                            ? 'Ambas quincenas'
+                            : goal.target_fortnight === 30 || (goal.target_fortnight as any) === 'q2'
+                            ? 'Quincena 30'
+                            : 'Quincena 15'}
                         </span>
                         {goal.total_installments && (
                           <span className="px-2 py-0.5 rounded-lg bg-card text-[10px] font-semibold text-app border border-app">
@@ -678,13 +693,13 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                       title={
                         frequency === 'fortnightly'
                           ? 'Se apartará en ambas quincenas (15 y 30) de cada mes'
-                          : targetFortnight === 'q2'
+                          : targetFortnight === 30
                           ? 'Se apartará en Quincena 30 de cada mes'
                           : 'Se apartará en Quincena 15 de cada mes'
                       }
                       className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-[10px] font-extrabold border border-cyan-500/30 cursor-help"
                     >
-                      {frequency === 'fortnightly' ? 'Q15+Q30' : targetFortnight === 'q2' ? 'Q30' : 'Q15'}
+                      {frequency === 'fortnightly' ? 'Q15+Q30' : targetFortnight === 30 ? 'Q30' : 'Q15'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
@@ -715,8 +730,8 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                     </label>
                     <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
                       {[
-                        { id: 'q1' as const, label: 'Quincena 15' },
-                        { id: 'q2' as const, label: 'Quincena 30' },
+                        { id: 15 as const, label: 'Quincena 15' },
+                        { id: 30 as const, label: 'Quincena 30' },
                       ].map((opt) => (
                         <button
                           key={opt.id}

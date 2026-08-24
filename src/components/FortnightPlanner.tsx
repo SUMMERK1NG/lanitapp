@@ -360,8 +360,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     return savingsGoals
       .filter((g) => g.status === 'active')
       .filter((g) => {
-        if (g.frequency === 'fortnightly') return true;
-        return g.target_fortnight === 'both' || g.target_fortnight === selectedFortnight;
+        if (g.frequency === 'fortnightly' || g.target_fortnight === null || (g.target_fortnight as any) === 'both') return true;
+        return selectedFortnight === 'q1'
+          ? g.target_fortnight === 15 || (g.target_fortnight as any) === 'q1'
+          : g.target_fortnight === 30 || (g.target_fortnight as any) === 'q2';
       });
   }, [savingsGoals, selectedFortnight]);
 

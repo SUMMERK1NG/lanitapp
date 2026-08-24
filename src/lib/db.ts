@@ -890,6 +890,20 @@ export async function saveSavingsGoal(
 ): Promise<SavingsGoal> {
   const id = ensureValidUuid(goal.id);
   const userId = goal.user_id || getActiveUserId();
+  let targetFortnight: 15 | 30 | null = null;
+  if (goal.frequency === 'monthly') {
+    if (goal.target_fortnight === 30 || (goal.target_fortnight as any) === 'q2') {
+      targetFortnight = 30;
+    } else if (goal.target_fortnight === 15 || (goal.target_fortnight as any) === 'q1') {
+      targetFortnight = 15;
+    } else {
+      const startDay = new Date(goal.start_date || new Date().toISOString().split('T')[0]).getDate();
+      targetFortnight = startDay <= 15 ? 15 : 30;
+    }
+  } else {
+    targetFortnight = null;
+  }
+
   const record: SavingsGoal = {
     id,
     user_id: userId,
@@ -897,11 +911,12 @@ export async function saveSavingsGoal(
     target_amount: Number(goal.target_amount),
     current_amount: goal.current_amount !== undefined ? Number(goal.current_amount) : 0,
     frequency: goal.frequency,
-    target_fortnight: goal.target_fortnight || (goal.frequency === 'fortnightly' ? 'both' : 'q1'),
+    target_fortnight: targetFortnight,
     amount_per_period: Number(goal.amount_per_period),
     start_date: goal.start_date || new Date().toISOString().split('T')[0],
     target_date: goal.target_date || undefined,
     total_installments: goal.total_installments,
+    completed_installments: goal.completed_installments || 0,
     suggested_amount: goal.suggested_amount,
     icon: goal.icon || 'PiggyBank',
     color: goal.color || '#00C2C7',
@@ -914,8 +929,7 @@ export async function saveSavingsGoal(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      // Filtrar 'color' para evitar Error 400 por columna inexistente en PostgreSQL
-      const { sync_status, color, ...cloudPayload } = record;
+      const { sync_status, ...cloudPayload } = record;
       const { error } = await supabase.from('savings_goals').upsert(cloudPayload);
       if (!error) {
         record.sync_status = 'synced';
