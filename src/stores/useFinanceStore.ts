@@ -25,7 +25,7 @@ import {
   getFortnightPeriodKey,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { ensureUuid, generateUuid } from '../utils/uuid.ts';
+import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
@@ -324,7 +324,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const categories: Category[] = rawCategories.length > 0 ? rawCategories : DEFAULT_CATEGORIES;
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({
-        id: ensureUuid(a.id),
+        id: ensureValidUuid(a.id),
         user_id: a.user_id || userId,
         name: a.name,
         type: a.type || 'cash',
@@ -337,17 +337,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced' as SyncStatus,
       }));
 
-      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({ ...i, id: ensureUuid(i.id), sync_status: 'synced' }));
+      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({ ...i, id: ensureValidUuid(i.id), sync_status: 'synced' }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureUuid(v.id), sync_status: 'synced' }));
-      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({ ...e, id: ensureUuid(e.id), sync_status: 'synced' }));
+      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureValidUuid(v.id), sync_status: 'synced' }));
+      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({ ...e, id: ensureValidUuid(e.id), sync_status: 'synced' }));
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const debts: Debt[] = rawDebts.map((d: any) => ({ ...d, id: ensureUuid(d.id), sync_status: 'synced' }));
-      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureUuid(p.id), sync_status: 'synced' }));
-      const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({ ...s, id: ensureUuid(s.id), sync_status: 'synced' }));
-      const savingContributions: SavingContribution[] = rawContribs.map((c: any) => ({ ...c, id: ensureUuid(c.id), sync_status: 'synced' }));
-      const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => ({ ...st, id: ensureUuid(st.id), sync_status: 'synced' }));
-      const transactions: Transaction[] = rawTxs.map((t: any) => ({ ...t, id: ensureUuid(t.id), sync_status: 'synced' }));
+      const debts: Debt[] = rawDebts.map((d: any) => ({ ...d, id: ensureValidUuid(d.id), sync_status: 'synced' }));
+      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureValidUuid(p.id), sync_status: 'synced' }));
+      const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({ ...s, id: ensureValidUuid(s.id), sync_status: 'synced' }));
+      const savingContributions: SavingContribution[] = rawContribs.map((c: any) => ({ ...c, id: ensureValidUuid(c.id), sync_status: 'synced' }));
+      const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => ({ ...st, id: ensureValidUuid(st.id), sync_status: 'synced' }));
+      const transactions: Transaction[] = rawTxs.map((t: any) => ({ ...t, id: ensureValidUuid(t.id), sync_status: 'synced' }));
 
       // Sincronizar Dexie en segundo plano
       await Promise.all([
@@ -425,7 +425,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     if (newRow?.user_id && newRow.user_id !== userId) return;
 
     const normalizeAcc = (row: any): Account => ({
-      id: ensureUuid(row.id),
+      id: ensureValidUuid(row.id),
       user_id: row.user_id || userId,
       name: row.name,
       type: row.type || 'cash',
@@ -459,7 +459,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id) }));
           await db.fixed_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedIncome = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: FixedIncome = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
               ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
@@ -489,7 +489,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: VariableIncome = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: VariableIncome = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
               ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
@@ -504,7 +504,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
           await db.fixed_expenses.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedExpense = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: FixedExpense = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fixedExpenses: s.fixedExpenses.some((e) => e.id === item.id)
               ? s.fixedExpenses.map((e) => (e.id === item.id ? item : e))
@@ -534,7 +534,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debts: s.debts.filter((d) => d.id !== oldRow.id) }));
           await db.debts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: Debt = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: Debt = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             debts: s.debts.some((d) => d.id === item.id)
               ? s.debts.map((d) => (d.id === item.id ? item : d))
@@ -549,7 +549,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debtPayments: s.debtPayments.filter((p) => p.id !== oldRow.id) }));
           await db.debt_payments.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: DebtPayment = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: DebtPayment = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             debtPayments: s.debtPayments.some((p) => p.id === item.id)
               ? s.debtPayments.map((p) => (p.id === item.id ? item : p))
@@ -564,7 +564,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== oldRow.id) }));
           await db.savings_goals.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: SavingsGoal = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: SavingsGoal = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             savingsGoals: s.savingsGoals.some((g) => g.id === item.id)
               ? s.savingsGoals.map((g) => (g.id === item.id ? item : g))
@@ -579,7 +579,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingContributions: s.savingContributions.filter((c) => c.id !== oldRow.id) }));
           await db.saving_contributions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: SavingContribution = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: SavingContribution = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             savingContributions: s.savingContributions.some((c) => c.id === item.id)
               ? s.savingContributions.map((c) => (c.id === item.id ? item : c))
@@ -594,7 +594,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== oldRow.id) }));
           await db.fortnight_item_states.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FortnightItemState = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: FortnightItemState = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fortnightItemStates: s.fortnightItemStates.some((st) => st.id === item.id)
               ? s.fortnightItemStates.map((st) => (st.id === item.id ? item : st))
@@ -609,7 +609,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ transactions: s.transactions.filter((t) => t.id !== oldRow.id) }));
           await db.transactions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: Transaction = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
+          const item: Transaction = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             transactions: s.transactions.some((t) => t.id === item.id)
               ? s.transactions.map((t) => (t.id === item.id ? item : t))
@@ -667,7 +667,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   // -----------------------------------------------------------------
 
   saveAccount: async (account, userId) => {
-    const id = ensureUuid(account.id);
+    const id = ensureValidUuid(account.id);
     const balanceNum = typeof account.initial_balance === 'number'
       ? account.initial_balance
       : parseFloat(String(account.initial_balance || 0)) || 0;
@@ -724,7 +724,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteAccount: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id && a.id !== cleanId) }));
     await db.accounts.delete(id);
 
@@ -746,7 +746,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   adjustAccountBalance: async (accountId, newInitialBalance, userId) => {
-    const cleanId = ensureUuid(accountId);
+    const cleanId = ensureValidUuid(accountId);
     const existing = get().accounts.find((a) => a.id === accountId || a.id === cleanId);
     if (!existing) return;
 
@@ -779,7 +779,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveFixedIncome: async (income, userId) => {
-    const id = ensureUuid(income.id);
+    const id = ensureValidUuid(income.id);
     const record: FixedIncome = {
       id,
       user_id: userId,
@@ -825,7 +825,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteFixedIncome: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== id && i.id !== cleanId) }));
     await db.fixed_incomes.delete(id);
 
@@ -843,8 +843,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveVariableIncome: async (income, userId) => {
-    const id = ensureUuid(income.id);
-    const resolvedAccountId = ensureUuid(income.account_id || get().accounts[0]?.id);
+    const id = ensureValidUuid(income.id);
+    const resolvedAccountId = ensureValidUuid(income.account_id || get().accounts[0]?.id);
 
     const record: VariableIncome = {
       id,
@@ -895,7 +895,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteVariableIncome: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== id && v.id !== cleanId) }));
     await db.variable_incomes.delete(id);
 
@@ -913,7 +913,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveFixedExpense: async (expense, userId) => {
-    const id = ensureUuid(expense.id);
+    const id = ensureValidUuid(expense.id);
     const record: FixedExpense = {
       id,
       user_id: userId,
@@ -964,7 +964,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteFixedExpense: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== id && e.id !== cleanId) }));
     await db.fixed_expenses.delete(id);
 
@@ -982,7 +982,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveDebt: async (debt, userId) => {
-    const id = ensureUuid(debt.id);
+    const id = ensureValidUuid(debt.id);
     const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
     const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
@@ -1054,7 +1054,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteDebt: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ debts: s.debts.filter((d) => d.id !== id && d.id !== cleanId) }));
     await db.debts.delete(id);
 
@@ -1072,7 +1072,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   addDebtPayment: async (data, userId) => {
-    const debtId = ensureUuid(data.debt_id);
+    const debtId = ensureValidUuid(data.debt_id);
     const debt = get().debts.find((d) => d.id === data.debt_id || d.id === debtId);
     if (!debt) throw new Error('Deuda no encontrada');
 
@@ -1145,7 +1145,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveSavingsGoal: async (goal, userId) => {
-    const id = ensureUuid(goal.id);
+    const id = ensureValidUuid(goal.id);
     const record: SavingsGoal = {
       id,
       user_id: userId,
@@ -1189,7 +1189,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteSavingsGoal: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== id && g.id !== cleanId) }));
     await db.savings_goals.delete(id);
 
@@ -1206,7 +1206,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   addSavingContribution: async (data, userId) => {
-    const goalId = ensureUuid(data.goal_id);
+    const goalId = ensureValidUuid(data.goal_id);
     const goal = get().savingsGoals.find((g) => g.id === data.goal_id || g.id === goalId);
     if (!goal) throw new Error('Meta no encontrada');
 
@@ -1269,10 +1269,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   setFortnightExpensePaid: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const expenseId = ensureUuid(params.expense.id);
+    const expenseId = ensureValidUuid(params.expense.id);
     const stateId = generateUuid();
     const txId = generateUuid();
-    const resolvedAccountId = ensureUuid(params.accountId || get().accounts[0]?.id);
+    const resolvedAccountId = ensureValidUuid(params.accountId || get().accounts[0]?.id);
 
     const txRecord: Transaction = {
       id: txId,
@@ -1340,7 +1340,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   unmarkFortnightExpensePaid: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const expenseId = ensureUuid(params.expenseId);
+    const expenseId = ensureValidUuid(params.expenseId);
 
     const existingState = get().fortnightItemStates.find(
       (st) => (st.item_id === params.expenseId || st.item_id === expenseId) && st.period_key === periodKey
@@ -1375,7 +1375,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   setFortnightExpenseSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const expenseId = ensureUuid(params.expenseId);
+    const expenseId = ensureValidUuid(params.expenseId);
     const stateId = generateUuid();
 
     const stateRecord: FortnightItemState = {
@@ -1417,7 +1417,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   unmarkFortnightExpenseSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const expenseId = ensureUuid(params.expenseId);
+    const expenseId = ensureValidUuid(params.expenseId);
 
     const existingState = get().fortnightItemStates.find(
       (st) => (st.item_id === params.expenseId || st.item_id === expenseId) && st.period_key === periodKey
@@ -1442,7 +1442,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   setFortnightDebtSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const debtId = ensureUuid(params.debtId);
+    const debtId = ensureValidUuid(params.debtId);
     const stateId = generateUuid();
 
     const stateRecord: FortnightItemState = {
@@ -1484,7 +1484,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   unmarkFortnightDebtSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const debtId = ensureUuid(params.debtId);
+    const debtId = ensureValidUuid(params.debtId);
 
     const existingState = get().fortnightItemStates.find(
       (st) => (st.item_id === params.debtId || st.item_id === debtId) && st.period_key === periodKey
@@ -1509,7 +1509,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   addTransaction: async (txData, userId) => {
     const id = generateUuid();
-    const resolvedAccountId = ensureUuid(txData.account_id || get().accounts[0]?.id);
+    const resolvedAccountId = ensureValidUuid(txData.account_id || get().accounts[0]?.id);
 
     const record: Transaction = {
       ...txData,
@@ -1541,7 +1541,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteTransaction: async (id, userId) => {
-    const cleanId = ensureUuid(id);
+    const cleanId = ensureValidUuid(id);
     set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id && t.id !== cleanId) }));
     await db.transactions.delete(id);
 

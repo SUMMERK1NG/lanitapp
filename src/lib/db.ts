@@ -19,7 +19,7 @@ import type {
   SyncStatus,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
-import { ensureUuid } from '../utils/uuid.ts';
+import { ensureValidUuid } from '../utils/uuid.ts';
 
 export function getActiveUserId(): string {
   try {
@@ -171,7 +171,7 @@ initializeDatabase().catch((err) => console.error('Database init error:', err));
  */
 export function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
   const currentUserId = acc.user_id || fallbackUserId || getActiveUserId();
-  const id = ensureUuid(acc.id);
+  const id = ensureValidUuid(acc.id);
   const balanceNum = typeof acc.balance === 'number'
     ? acc.balance
     : typeof acc.initial_balance === 'number'
@@ -875,7 +875,7 @@ export async function forceCloudSyncAndPurgeResiduals(userId?: string): Promise<
 export async function saveSavingsGoal(
   goal: Partial<SavingsGoal> & { name: string; target_amount: number; amount_per_period: number; frequency: SavingsGoal['frequency'] }
 ): Promise<SavingsGoal> {
-  const id = ensureUuid(goal.id);
+  const id = ensureValidUuid(goal.id);
   const userId = goal.user_id || getActiveUserId();
   const record: SavingsGoal = {
     id,
@@ -944,7 +944,7 @@ export async function addSavingContribution(data: {
 
   const userId = data.user_id || getActiveUserId();
   const record: SavingContribution = {
-    id: ensureUuid(),
+    id: ensureValidUuid(),
     user_id: userId,
     goal_id: data.goal_id,
     amount: Number(data.amount),
@@ -1057,7 +1057,7 @@ export async function skipSavingContributionPeriod(data: {
 export async function saveFixedIncome(
   income: Partial<FixedIncome> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
 ): Promise<FixedIncome> {
-  const id = ensureUuid(income.id);
+  const id = ensureValidUuid(income.id);
   const userId = income.user_id || getActiveUserId();
   const record: FixedIncome = {
     id,
@@ -1139,7 +1139,7 @@ export async function toggleMonthlyFixedIncomeOverride(
 export async function saveVariableIncome(
   income: Partial<VariableIncome> & { description: string; amount: number; year: number; month: number; fortnight: FortnightType }
 ): Promise<VariableIncome> {
-  const id = ensureUuid(income.id);
+  const id = ensureValidUuid(income.id);
   const userId = income.user_id || getActiveUserId();
   const record: VariableIncome = {
     id,
@@ -1257,7 +1257,7 @@ export async function deleteCategory(id: string): Promise<void> {
 export async function saveAccount(
   account: Partial<Account> & { name: string; type: Account['type']; currency: string; initial_balance: number }
 ): Promise<Account> {
-  const id = ensureUuid(account.id);
+  const id = ensureValidUuid(account.id);
   const userId = account.user_id || getActiveUserId();
   const balanceNum = typeof account.initial_balance === 'number'
     ? account.initial_balance
@@ -1321,7 +1321,7 @@ export async function adjustAccountBalance(accountId: string, newInitialBalance:
  * Perfil de Usuario
  */
 export async function saveUserProfile(profile: Partial<UserProfile> & { name: string }): Promise<UserProfile> {
-  const id = ensureUuid(profile.id || getActiveUserId());
+  const id = ensureValidUuid(profile.id || getActiveUserId());
   const role = profile.role || 'user';
   const record: UserProfile = {
     id,
@@ -1344,6 +1344,7 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
     try {
       const profilePayload = {
         id,
+        email: record.email || `${id}@lanitapp.local`,
         cedula: record.cedula || '',
         first_name: record.first_name || record.name?.split(' ')[0] || '',
         last_name: record.last_name || record.name?.split(' ').slice(1).join(' ') || '',
@@ -1402,7 +1403,7 @@ export async function toggleMonthlyFixedOverride(
 export async function saveFixedExpense(
   expense: Partial<FixedExpense> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
 ): Promise<FixedExpense> {
-  const id = ensureUuid(expense.id);
+  const id = ensureValidUuid(expense.id);
   const userId = expense.user_id || getActiveUserId();
   const record: FixedExpense = {
     id,
@@ -1458,7 +1459,7 @@ export async function deleteFixedExpense(id: string): Promise<void> {
 export async function saveDebt(
   debt: Partial<Debt> & { creditor: string; total_amount: number; payment_type: Debt['payment_type'] }
 ): Promise<Debt> {
-  const id = ensureUuid(debt.id);
+  const id = ensureValidUuid(debt.id);
   const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
   const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
@@ -1568,7 +1569,7 @@ export async function addDebtPayment(data: {
   }
 
   const paymentRecord: DebtPayment = {
-    id: ensureUuid(),
+    id: ensureValidUuid(),
     user_id: userId,
     debt_id: data.debt_id,
     amount: Number(data.amount),
@@ -1651,7 +1652,7 @@ export async function addTransaction(
     ...data,
     user_id: userId,
     amount: Number(data.amount),
-    id: ensureUuid(),
+    id: ensureValidUuid(),
     sync_status: 'pending',
     created_at: new Date().toISOString(),
   };

@@ -132,6 +132,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
     try {
       if (isSupabaseConfigured() && supabase) {
         const profileUpdatePayload = {
+          email: editEmail.trim().toLowerCase(),
           cedula: fullCedula,
           first_name: editFirstName.trim(),
           last_name: editLastName.trim(),

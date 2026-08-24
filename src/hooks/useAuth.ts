@@ -90,13 +90,18 @@ export function useAuth() {
             try {
               const profilePayload = {
                 id: authUser.id,
+                email: authUser.email || `${authUser.id}@lanitapp.local`,
                 cedula: authUser.user_metadata?.cedula || '',
                 first_name: authUser.user_metadata?.first_name || '',
                 last_name: authUser.user_metadata?.last_name || '',
                 role,
                 updated_at: new Date().toISOString(),
               };
-              await supabase.from('profiles').upsert(profilePayload);
+              console.log('[Supabase Profiles Init Payload]:', profilePayload);
+              const { error: profInitErr } = await supabase.from('profiles').upsert(profilePayload);
+              if (profInitErr) {
+                console.error('[Supabase Profiles Init Error]:', profInitErr.message, profInitErr.details);
+              }
             } catch (e) {
               console.warn('Profile upsert notice:', e);
             }
@@ -389,6 +394,7 @@ export function useAuth() {
 
         const profilePayload = {
           id: userId,
+          email: cleanEmail || authData.user.email || '',
           cedula: fullCedula,
           first_name: cleanFirstName,
           last_name: cleanLastName,
@@ -396,10 +402,10 @@ export function useAuth() {
           updated_at: new Date().toISOString(),
         };
 
-        console.log('[Supabase Profiles Payload]:', profilePayload);
+        console.log('[Supabase Profiles SignUp Payload]:', profilePayload);
         const { error: profErr } = await supabase.from('profiles').upsert(profilePayload);
         if (profErr) {
-          console.error('[Supabase Profiles Error]:', profErr.message, profErr.details);
+          console.error('[Supabase Profiles SignUp Error]:', profErr.message, profErr.details);
         }
 
         await saveUserProfile(userProfile);
@@ -501,13 +507,16 @@ export function useAuth() {
 
     if (isSupabaseConfigured() && supabase && navigator.onLine) {
       try {
+        const updatePayload = {
+          email: currentUser.email || `${currentUser.id}@lanitapp.local`,
+          first_name: updated.first_name || updated.name?.split(' ')[0] || '',
+          last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
+          updated_at: new Date().toISOString(),
+        };
+        console.log('[Supabase Profiles Update Payload]:', updatePayload);
         await supabase
           .from('profiles')
-          .update({
-            first_name: updated.first_name || updated.name?.split(' ')[0] || '',
-            last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', currentUser.id);
       } catch (e) {
         console.warn('Sync profile err:', e);

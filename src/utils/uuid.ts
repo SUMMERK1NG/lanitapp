@@ -1,36 +1,31 @@
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 /**
- * Genera un UUID v4 estándar válido RFC4122 para PostgreSQL
+ * Utilidades de validación y generación de UUID v4 estricto para Supabase / PostgreSQL 15
  */
-export function generateUuid(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+
+export const isValidUuid = (id?: string | null): boolean => {
+  if (!id || typeof id !== 'string') return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id.trim());
+};
+
+export const generateUuid = (): string => {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+};
+
+export const ensureValidUuid = (existingId?: string | null): string => {
+  // Si existe y es un UUID válido estricto, lo retorna.
+  if (existingId && isValidUuid(existingId)) {
+    return existingId.trim();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-/**
- * Asegura que un ID tenga formato UUID v4 estricto para Supabase/PostgreSQL.
- * Si es nulo, vacío, o tiene formato inválido (ej. 'acc_cash', 'acc_123', 'vi_456'),
- * genera y retorna un UUID v4 nuevo y válido.
- */
-export function ensureUuid(id?: string): string {
-  if (!id) return generateUuid();
-  const trimmed = id.trim();
-  if (UUID_REGEX.test(trimmed)) return trimmed;
-
-  // Si tiene un UUID válido embebido
-  const match = trimmed.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
-  if (match && UUID_REGEX.test(match[0])) return match[0];
-
+  // Si es un ID de plantilla (ej: "acc_cash", "cat_salary") o está corrupto, genera uno nuevo limpio.
   return generateUuid();
-}
+};
 
-export function isValidUuid(id?: string): boolean {
-  return Boolean(id && UUID_REGEX.test(id.trim()));
-}
+// Alias retrocompatible
+export const ensureUuid = ensureValidUuid;
