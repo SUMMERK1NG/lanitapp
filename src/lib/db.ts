@@ -19,6 +19,7 @@ import type {
   SyncStatus,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
+import { ensureUuid } from '../utils/uuid.ts';
 
 export function getActiveUserId(): string {
   try {
@@ -57,10 +58,10 @@ export const DEFAULT_CATEGORIES: Category[] = [
 ];
 
 export const DEFAULT_ACCOUNTS: Account[] = [
-  { id: 'acc_cash', name: 'Efectivo Cash (USD)', type: 'cash', currency: 'USD', initial_balance: 0 },
-  { id: 'acc_bank_usd', name: 'Cuenta Custodia USD', type: 'bank', currency: 'USD', initial_balance: 0 },
-  { id: 'acc_bank_ves', name: 'Banco Nacional (Bs)', type: 'bank', currency: 'VES', initial_balance: 0 },
-  { id: 'acc_savings', name: 'Fondo de Ahorro', type: 'savings', currency: 'USD', initial_balance: 0 },
+  { id: '11111111-1111-4111-8111-111111111111', name: 'Efectivo Cash (USD)', type: 'cash', currency: 'USD', initial_balance: 0 },
+  { id: '22222222-2222-4222-8222-222222222222', name: 'Cuenta Custodia USD', type: 'bank', currency: 'USD', initial_balance: 0 },
+  { id: '33333333-3333-4333-8333-333333333333', name: 'Banco Nacional (Bs)', type: 'bank', currency: 'VES', initial_balance: 0 },
+  { id: '44444444-4444-4444-8444-444444444444', name: 'Fondo de Ahorro', type: 'savings', currency: 'USD', initial_balance: 0 },
 ];
 
 export const DEFAULT_FIXED_INCOMES: FixedIncome[] = [];
@@ -170,7 +171,7 @@ initializeDatabase().catch((err) => console.error('Database init error:', err));
  */
 export function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
   const currentUserId = acc.user_id || fallbackUserId || getActiveUserId();
-  const id = acc.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'acc_' + Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(acc.id);
   const balanceNum = typeof acc.balance === 'number'
     ? acc.balance
     : typeof acc.initial_balance === 'number'
@@ -874,7 +875,7 @@ export async function forceCloudSyncAndPurgeResiduals(userId?: string): Promise<
 export async function saveSavingsGoal(
   goal: Partial<SavingsGoal> & { name: string; target_amount: number; amount_per_period: number; frequency: SavingsGoal['frequency'] }
 ): Promise<SavingsGoal> {
-  const id = goal.id || 'save_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(goal.id);
   const userId = goal.user_id || getActiveUserId();
   const record: SavingsGoal = {
     id,
@@ -943,7 +944,7 @@ export async function addSavingContribution(data: {
 
   const userId = data.user_id || getActiveUserId();
   const record: SavingContribution = {
-    id: 'sc_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
+    id: ensureUuid(),
     user_id: userId,
     goal_id: data.goal_id,
     amount: Number(data.amount),
@@ -1056,7 +1057,7 @@ export async function skipSavingContributionPeriod(data: {
 export async function saveFixedIncome(
   income: Partial<FixedIncome> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
 ): Promise<FixedIncome> {
-  const id = income.id || 'fi_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(income.id);
   const userId = income.user_id || getActiveUserId();
   const record: FixedIncome = {
     id,
@@ -1138,7 +1139,7 @@ export async function toggleMonthlyFixedIncomeOverride(
 export async function saveVariableIncome(
   income: Partial<VariableIncome> & { description: string; amount: number; year: number; month: number; fortnight: FortnightType }
 ): Promise<VariableIncome> {
-  const id = income.id || 'vi_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(income.id);
   const userId = income.user_id || getActiveUserId();
   const record: VariableIncome = {
     id,
@@ -1256,7 +1257,7 @@ export async function deleteCategory(id: string): Promise<void> {
 export async function saveAccount(
   account: Partial<Account> & { name: string; type: Account['type']; currency: string; initial_balance: number }
 ): Promise<Account> {
-  const id = account.id || 'acc_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(account.id);
   const userId = account.user_id || getActiveUserId();
   const balanceNum = typeof account.initial_balance === 'number'
     ? account.initial_balance
@@ -1320,7 +1321,7 @@ export async function adjustAccountBalance(accountId: string, newInitialBalance:
  * Perfil de Usuario
  */
 export async function saveUserProfile(profile: Partial<UserProfile> & { name: string }): Promise<UserProfile> {
-  const id = profile.id || getActiveUserId() || 'usr_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(profile.id || getActiveUserId());
   const role = profile.role || 'user';
   const record: UserProfile = {
     id,
@@ -1341,9 +1342,18 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
-      const { error } = await supabase.from('profiles').upsert(payload);
+      const profilePayload = {
+        id,
+        cedula: record.cedula || '',
+        first_name: record.first_name || record.name?.split(' ')[0] || '',
+        last_name: record.last_name || record.name?.split(' ').slice(1).join(' ') || '',
+        role: record.role || 'user',
+        updated_at: new Date().toISOString(),
+      };
+      console.log('[Supabase Profiles Payload (db.ts)]:', profilePayload);
+      const { error } = await supabase.from('profiles').upsert(profilePayload);
       if (!error) record.sync_status = 'synced';
+      else console.error('[Supabase Profiles Upsert Error]:', error.message, error.details);
     } catch (e) {
       console.warn('Profile direct upsert notice:', e);
     }
@@ -1392,7 +1402,7 @@ export async function toggleMonthlyFixedOverride(
 export async function saveFixedExpense(
   expense: Partial<FixedExpense> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
 ): Promise<FixedExpense> {
-  const id = expense.id || 'fe_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(expense.id);
   const userId = expense.user_id || getActiveUserId();
   const record: FixedExpense = {
     id,
@@ -1448,7 +1458,7 @@ export async function deleteFixedExpense(id: string): Promise<void> {
 export async function saveDebt(
   debt: Partial<Debt> & { creditor: string; total_amount: number; payment_type: Debt['payment_type'] }
 ): Promise<Debt> {
-  const id = debt.id || 'debt_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = ensureUuid(debt.id);
   const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
   const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
@@ -1558,7 +1568,7 @@ export async function addDebtPayment(data: {
   }
 
   const paymentRecord: DebtPayment = {
-    id: 'pay_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
+    id: ensureUuid(),
     user_id: userId,
     debt_id: data.debt_id,
     amount: Number(data.amount),
@@ -1641,7 +1651,7 @@ export async function addTransaction(
     ...data,
     user_id: userId,
     amount: Number(data.amount),
-    id: 'tx_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
+    id: ensureUuid(),
     sync_status: 'pending',
     created_at: new Date().toISOString(),
   };

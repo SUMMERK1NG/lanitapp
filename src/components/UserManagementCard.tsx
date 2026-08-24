@@ -131,16 +131,17 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
     try {
       if (isSupabaseConfigured() && supabase) {
+        const profileUpdatePayload = {
+          cedula: fullCedula,
+          first_name: editFirstName.trim(),
+          last_name: editLastName.trim(),
+          role: editRole,
+          updated_at: new Date().toISOString(),
+        };
+        console.log('[Supabase Profiles Edit Payload]:', profileUpdatePayload);
         const { error } = await supabase
           .from('profiles')
-          .update({
-            cedula: fullCedula,
-            first_name: editFirstName.trim(),
-            last_name: editLastName.trim(),
-            name: fullName,
-            email: editEmail.trim().toLowerCase(),
-            role: editRole,
-          })
+          .update(profileUpdatePayload)
           .eq('id', editingUser.id);
 
         if (error) throw error;

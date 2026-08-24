@@ -25,6 +25,7 @@ import {
   getFortnightPeriodKey,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { ensureUuid, generateUuid } from '../utils/uuid.ts';
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
@@ -152,6 +153,26 @@ export interface FinanceStoreState {
   deleteTransaction: (id: string, userId: string) => Promise<void>;
 }
 
+/**
+ * Consulta segura a Supabase que captura errores 404 / schema cache sin romper la ejecución
+ */
+async function safeQuery<T = any>(
+  tableName: string,
+  queryFn: () => PromiseLike<{ data: T[] | null; error: any }>
+): Promise<T[]> {
+  try {
+    const res = await queryFn();
+    if (res.error) {
+      console.warn(`[Supabase Table Notice '${tableName}'] :`, res.error.message || res.error.details || res.error);
+      return [];
+    }
+    return (res.data as T[]) || [];
+  } catch (err: any) {
+    console.warn(`[Supabase Table Query Exception '${tableName}'] :`, err?.message || err);
+    return [];
+  }
+}
+
 export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   profiles: [],
   categories: DEFAULT_CATEGORIES,
@@ -246,7 +267,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   /**
-   * Carga inicial completa de las 14 tablas desde Supabase
+   * Carga inicial completa de las 14 tablas desde Supabase con manejo seguro de errores
    */
   fetchInitialData: async (userId: string) => {
     if (!userId) return;
@@ -263,45 +284,47 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       // 1. Vaciar cola pendiente previa
       await get().flushSyncQueue(userId);
 
-      // 2. Fetch en paralelo de las 14 tablas
+      console.log(`[Supabase Fetch Initial]: Consultando tablas oficiales para usuario ${userId}...`);
+
+      // 2. Fetch en paralelo de las 14 tablas oficiales
+      const client = supabase;
       const [
-        resProfiles,
-        resCategories,
-        resAccounts,
-        resFixedIncomes,
-        resMonthlyIncomeOverrides,
-        resVariableIncomes,
-        resFixedExpenses,
-        resMonthlyFixedOverrides,
-        resDebts,
-        resDebtPayments,
-        resSavingsGoals,
-        resSavingContributions,
-        resFortnightStates,
-        resTransactions,
+        rawProfiles,
+        rawCategories,
+        rawAccounts,
+        rawFixedIncomes,
+        rawIncomeOverrides,
+        rawVariableIncomes,
+        rawExpenses,
+        rawExpenseOverrides,
+        rawDebts,
+        rawDebtPayments,
+        rawSavings,
+        rawContribs,
+        rawStates,
+        rawTxs,
       ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId),
-        supabase.from('categories').select('*'),
-        supabase.from('accounts').select('*').eq('user_id', userId),
-        supabase.from('fixed_incomes').select('*').eq('user_id', userId),
-        supabase.from('monthly_fixed_income_overrides').select('*'),
-        supabase.from('variable_incomes').select('*').eq('user_id', userId),
-        supabase.from('fixed_expenses').select('*').eq('user_id', userId),
-        supabase.from('monthly_fixed_overrides').select('*'),
-        supabase.from('debts').select('*').eq('user_id', userId),
-        supabase.from('debt_payments').select('*').eq('user_id', userId),
-        supabase.from('savings_goals').select('*').eq('user_id', userId),
-        supabase.from('saving_contributions').select('*').eq('user_id', userId),
-        supabase.from('fortnight_item_states').select('*').eq('user_id', userId),
-        supabase.from('transactions').select('*').eq('user_id', userId),
+        safeQuery('profiles', () => client.from('profiles').select('*').eq('id', userId)),
+        safeQuery('categories', () => client.from('categories').select('*')),
+        safeQuery('accounts', () => client.from('accounts').select('*').eq('user_id', userId)),
+        safeQuery('fixed_incomes', () => client.from('fixed_incomes').select('*').eq('user_id', userId)),
+        safeQuery('monthly_fixed_income_overrides', () => client.from('monthly_fixed_income_overrides').select('*')),
+        safeQuery('variable_incomes', () => client.from('variable_incomes').select('*').eq('user_id', userId)),
+        safeQuery('fixed_expenses', () => client.from('fixed_expenses').select('*').eq('user_id', userId)),
+        safeQuery('monthly_fixed_overrides', () => client.from('monthly_fixed_overrides').select('*')),
+        safeQuery('debts', () => client.from('debts').select('*').eq('user_id', userId)),
+        safeQuery('debt_payments', () => client.from('debt_payments').select('*').eq('user_id', userId)),
+        safeQuery('savings_goals', () => client.from('savings_goals').select('*').eq('user_id', userId)),
+        safeQuery('saving_contributions', () => client.from('saving_contributions').select('*').eq('user_id', userId)),
+        safeQuery('fortnight_item_states', () => client.from('fortnight_item_states').select('*').eq('user_id', userId)),
+        safeQuery('transactions', () => client.from('transactions').select('*').eq('user_id', userId)),
       ]);
 
-      const profiles: UserProfile[] = resProfiles.data || [];
-      const categories: Category[] = resCategories.data && resCategories.data.length > 0 ? resCategories.data : DEFAULT_CATEGORIES;
+      const profiles: UserProfile[] = rawProfiles;
+      const categories: Category[] = rawCategories.length > 0 ? rawCategories : DEFAULT_CATEGORIES;
 
-      const rawAccounts = resAccounts.data || [];
       const accounts: Account[] = rawAccounts.map((a: any) => ({
-        id: a.id,
+        id: ensureUuid(a.id),
         user_id: a.user_id || userId,
         name: a.name,
         type: a.type || 'cash',
@@ -314,17 +337,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced' as SyncStatus,
       }));
 
-      const fixedIncomes: FixedIncome[] = (resFixedIncomes.data || []).map((i: any) => ({ ...i, sync_status: 'synced' }));
-      const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = (resMonthlyIncomeOverrides.data || []).map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const variableIncomes: VariableIncome[] = (resVariableIncomes.data || []).map((v: any) => ({ ...v, sync_status: 'synced' }));
-      const fixedExpenses: FixedExpense[] = (resFixedExpenses.data || []).map((e: any) => ({ ...e, sync_status: 'synced' }));
-      const monthlyFixedOverrides: MonthlyFixedOverride[] = (resMonthlyFixedOverrides.data || []).map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const debts: Debt[] = (resDebts.data || []).map((d: any) => ({ ...d, sync_status: 'synced' }));
-      const debtPayments: DebtPayment[] = (resDebtPayments.data || []).map((p: any) => ({ ...p, sync_status: 'synced' }));
-      const savingsGoals: SavingsGoal[] = (resSavingsGoals.data || []).map((s: any) => ({ ...s, sync_status: 'synced' }));
-      const savingContributions: SavingContribution[] = (resSavingContributions.data || []).map((c: any) => ({ ...c, sync_status: 'synced' }));
-      const fortnightItemStates: FortnightItemState[] = (resFortnightStates.data || []).map((st: any) => ({ ...st, sync_status: 'synced' }));
-      const transactions: Transaction[] = (resTransactions.data || []).map((t: any) => ({ ...t, sync_status: 'synced' }));
+      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({ ...i, id: ensureUuid(i.id), sync_status: 'synced' }));
+      const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureUuid(v.id), sync_status: 'synced' }));
+      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({ ...e, id: ensureUuid(e.id), sync_status: 'synced' }));
+      const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const debts: Debt[] = rawDebts.map((d: any) => ({ ...d, id: ensureUuid(d.id), sync_status: 'synced' }));
+      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureUuid(p.id), sync_status: 'synced' }));
+      const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({ ...s, id: ensureUuid(s.id), sync_status: 'synced' }));
+      const savingContributions: SavingContribution[] = rawContribs.map((c: any) => ({ ...c, id: ensureUuid(c.id), sync_status: 'synced' }));
+      const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => ({ ...st, id: ensureUuid(st.id), sync_status: 'synced' }));
+      const transactions: Transaction[] = rawTxs.map((t: any) => ({ ...t, id: ensureUuid(t.id), sync_status: 'synced' }));
 
       // Sincronizar Dexie en segundo plano
       await Promise.all([
@@ -402,7 +425,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     if (newRow?.user_id && newRow.user_id !== userId) return;
 
     const normalizeAcc = (row: any): Account => ({
-      id: row.id,
+      id: ensureUuid(row.id),
       user_id: row.user_id || userId,
       name: row.name,
       type: row.type || 'cash',
@@ -436,7 +459,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id) }));
           await db.fixed_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedIncome = { ...newRow, sync_status: 'synced' };
+          const item: FixedIncome = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
               ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
@@ -466,7 +489,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: VariableIncome = { ...newRow, sync_status: 'synced' };
+          const item: VariableIncome = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
               ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
@@ -481,7 +504,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
           await db.fixed_expenses.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedExpense = { ...newRow, sync_status: 'synced' };
+          const item: FixedExpense = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fixedExpenses: s.fixedExpenses.some((e) => e.id === item.id)
               ? s.fixedExpenses.map((e) => (e.id === item.id ? item : e))
@@ -511,7 +534,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debts: s.debts.filter((d) => d.id !== oldRow.id) }));
           await db.debts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: Debt = { ...newRow, sync_status: 'synced' };
+          const item: Debt = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             debts: s.debts.some((d) => d.id === item.id)
               ? s.debts.map((d) => (d.id === item.id ? item : d))
@@ -526,7 +549,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debtPayments: s.debtPayments.filter((p) => p.id !== oldRow.id) }));
           await db.debt_payments.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: DebtPayment = { ...newRow, sync_status: 'synced' };
+          const item: DebtPayment = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             debtPayments: s.debtPayments.some((p) => p.id === item.id)
               ? s.debtPayments.map((p) => (p.id === item.id ? item : p))
@@ -541,7 +564,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== oldRow.id) }));
           await db.savings_goals.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: SavingsGoal = { ...newRow, sync_status: 'synced' };
+          const item: SavingsGoal = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             savingsGoals: s.savingsGoals.some((g) => g.id === item.id)
               ? s.savingsGoals.map((g) => (g.id === item.id ? item : g))
@@ -556,7 +579,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingContributions: s.savingContributions.filter((c) => c.id !== oldRow.id) }));
           await db.saving_contributions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: SavingContribution = { ...newRow, sync_status: 'synced' };
+          const item: SavingContribution = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             savingContributions: s.savingContributions.some((c) => c.id === item.id)
               ? s.savingContributions.map((c) => (c.id === item.id ? item : c))
@@ -571,7 +594,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== oldRow.id) }));
           await db.fortnight_item_states.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FortnightItemState = { ...newRow, sync_status: 'synced' };
+          const item: FortnightItemState = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fortnightItemStates: s.fortnightItemStates.some((st) => st.id === item.id)
               ? s.fortnightItemStates.map((st) => (st.id === item.id ? item : st))
@@ -586,7 +609,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ transactions: s.transactions.filter((t) => t.id !== oldRow.id) }));
           await db.transactions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: Transaction = { ...newRow, sync_status: 'synced' };
+          const item: Transaction = { ...newRow, id: ensureUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             transactions: s.transactions.some((t) => t.id === item.id)
               ? s.transactions.map((t) => (t.id === item.id ? item : t))
@@ -617,15 +640,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     for (const item of queue) {
       try {
         if (item.action === 'upsert') {
+          console.log(`[Supabase Queue Flush]: Upserting on '${item.table}' ->`, item.payload);
           const { error } = await supabase.from(item.table).upsert(item.payload);
           if (error) {
-            console.error(`[Queue Flush Error on ${item.table}]:`, error);
+            console.error(`[Queue Flush Error on ${item.table}]:`, error.message, error.details);
             remaining.push(item);
           }
         } else if (item.action === 'delete') {
+          console.log(`[Supabase Queue Flush]: Deleting from '${item.table}' id ${item.payload.id}`);
           const { error } = await supabase.from(item.table).delete().eq('id', item.payload.id);
           if (error) {
-            console.error(`[Queue Delete Error on ${item.table}]:`, error);
+            console.error(`[Queue Delete Error on ${item.table}]:`, error.message, error.details);
             remaining.push(item);
           }
         }
@@ -638,11 +663,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   // -----------------------------------------------------------------
-  // OPTIMISTIC MUTATIONS (Immediate UI -> Dexie -> Supabase / Queue)
+  // OPTIMISTIC MUTATIONS (Pure UUIDs -> UI -> Dexie -> Supabase / Queue)
   // -----------------------------------------------------------------
 
   saveAccount: async (account, userId) => {
-    const id = account.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'acc_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(account.id);
     const balanceNum = typeof account.initial_balance === 'number'
       ? account.initial_balance
       : parseFloat(String(account.initial_balance || 0)) || 0;
@@ -669,6 +694,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.accounts.put(record);
 
     const payload = toSupabaseAccountPayload(record, userId);
+    console.log('[Supabase Accounts Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('accounts').upsert(payload);
@@ -676,18 +703,20 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           record.sync_status = 'synced';
           await db.accounts.update(id, { sync_status: 'synced' });
         } else {
-          set((s) => ({
-            syncQueue: [...s.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          console.error('[Supabase Accounts Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
           }));
         }
-      } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+      } catch (e) {
+        console.warn('Account upsert network catch:', e);
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     } else {
-      set((s) => ({
-        syncQueue: [...s.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+      set((state) => ({
+        syncQueue: [...state.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
       }));
     }
 
@@ -695,55 +724,62 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteAccount: async (id, userId) => {
-    set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id && a.id !== cleanId) }));
     await db.accounts.delete(id);
 
+    console.log(`[Supabase Accounts Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('accounts').delete().eq('id', id);
+        const { error } = await supabase.from('accounts').delete().eq('id', cleanId);
+        if (error) console.error('[Supabase Accounts Delete Error]:', error.message);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'accounts', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'accounts', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     } else {
-      set((s) => ({
-        syncQueue: [...s.syncQueue, { id, table: 'accounts', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+      set((state) => ({
+        syncQueue: [...state.syncQueue, { id: cleanId, table: 'accounts', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
       }));
     }
   },
 
   adjustAccountBalance: async (accountId, newInitialBalance, userId) => {
-    const existing = get().accounts.find((a) => a.id === accountId);
+    const cleanId = ensureUuid(accountId);
+    const existing = get().accounts.find((a) => a.id === accountId || a.id === cleanId);
     if (!existing) return;
 
     const updated: Account = {
       ...existing,
+      id: cleanId,
       initial_balance: Number(newInitialBalance),
       updated_at: new Date().toISOString(),
     };
 
-    set((s) => ({ accounts: s.accounts.map((a) => (a.id === accountId ? updated : a)) }));
+    set((s) => ({ accounts: s.accounts.map((a) => (a.id === existing.id ? updated : a)) }));
     await db.accounts.put(updated);
 
     const payload = toSupabaseAccountPayload(updated, userId);
+    console.log('[Supabase Accounts Adjust Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('accounts').upsert(payload);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id: accountId, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     } else {
-      set((s) => ({
-        syncQueue: [...s.syncQueue, { id: accountId, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+      set((state) => ({
+        syncQueue: [...state.syncQueue, { id: cleanId, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
       }));
     }
   },
 
   saveFixedIncome: async (income, userId) => {
-    const id = income.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'fi_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(income.id);
     const record: FixedIncome = {
       id,
       user_id: userId,
@@ -765,13 +801,22 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.fixed_incomes.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Fixed Incomes Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('fixed_incomes').upsert(payload);
-        if (!error) await db.fixed_incomes.update(id, { sync_status: 'synced' });
+        if (!error) {
+          await db.fixed_incomes.update(id, { sync_status: 'synced' });
+        } else {
+          console.error('[Supabase Fixed Incomes Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          }));
+        }
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -780,22 +825,27 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteFixedIncome: async (id, userId) => {
-    set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== id && i.id !== cleanId) }));
     await db.fixed_incomes.delete(id);
 
+    console.log(`[Supabase Fixed Incomes Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('fixed_incomes').delete().eq('id', id);
+        const { error } = await supabase.from('fixed_incomes').delete().eq('id', cleanId);
+        if (error) console.error('[Supabase Fixed Incomes Delete Error]:', error.message);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'fixed_incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'fixed_incomes', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
   },
 
   saveVariableIncome: async (income, userId) => {
-    const id = income.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'vi_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(income.id);
+    const resolvedAccountId = ensureUuid(income.account_id || get().accounts[0]?.id);
+
     const record: VariableIncome = {
       id,
       user_id: userId,
@@ -805,7 +855,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       month: income.month,
       fortnight: income.fortnight,
       category_id: income.category_id || 'cat_extras',
-      account_id: income.account_id || 'acc_bank_usd',
+      account_id: resolvedAccountId,
       currency: income.currency || 'USD',
       notes: income.notes || '',
       sync_status: 'pending',
@@ -821,12 +871,22 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.variable_incomes.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Variable Incomes Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('variable_incomes').upsert(payload);
+        const { error } = await supabase.from('variable_incomes').upsert(payload);
+        if (!error) {
+          await db.variable_incomes.update(id, { sync_status: 'synced' });
+        } else {
+          console.error('[Supabase Variable Incomes Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          }));
+        }
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -835,22 +895,25 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteVariableIncome: async (id, userId) => {
-    set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== id && v.id !== cleanId) }));
     await db.variable_incomes.delete(id);
 
+    console.log(`[Supabase Variable Incomes Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('variable_incomes').delete().eq('id', id);
+        const { error } = await supabase.from('variable_incomes').delete().eq('id', cleanId);
+        if (error) console.error('[Supabase Variable Incomes Delete Error]:', error.message);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'variable_incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'variable_incomes', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
   },
 
   saveFixedExpense: async (expense, userId) => {
-    const id = expense.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'fe_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(expense.id);
     const record: FixedExpense = {
       id,
       user_id: userId,
@@ -877,12 +940,22 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.fixed_expenses.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Fixed Expenses Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('fixed_expenses').upsert(payload);
+        const { error } = await supabase.from('fixed_expenses').upsert(payload);
+        if (!error) {
+          await db.fixed_expenses.update(id, { sync_status: 'synced' });
+        } else {
+          console.error('[Supabase Fixed Expenses Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'fixed_expenses', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          }));
+        }
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'fixed_expenses', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'fixed_expenses', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -891,22 +964,25 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteFixedExpense: async (id, userId) => {
-    set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== id && e.id !== cleanId) }));
     await db.fixed_expenses.delete(id);
 
+    console.log(`[Supabase Fixed Expenses Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('fixed_expenses').delete().eq('id', id);
+        const { error } = await supabase.from('fixed_expenses').delete().eq('id', cleanId);
+        if (error) console.error('[Supabase Fixed Expenses Delete Error]:', error.message);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'fixed_expenses', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'fixed_expenses', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
   },
 
   saveDebt: async (debt, userId) => {
-    const id = debt.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'debt_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(debt.id);
     const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
     const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
@@ -954,12 +1030,22 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.debts.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Debts Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('debts').upsert(payload);
+        const { error } = await supabase.from('debts').upsert(payload);
+        if (!error) {
+          await db.debts.update(id, { sync_status: 'synced' });
+        } else {
+          console.error('[Supabase Debts Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'debts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          }));
+        }
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'debts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'debts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -968,22 +1054,26 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteDebt: async (id, userId) => {
-    set((s) => ({ debts: s.debts.filter((d) => d.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ debts: s.debts.filter((d) => d.id !== id && d.id !== cleanId) }));
     await db.debts.delete(id);
 
+    console.log(`[Supabase Debts Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('debts').delete().eq('id', id);
+        const { error } = await supabase.from('debts').delete().eq('id', cleanId);
+        if (error) console.error('[Supabase Debts Delete Error]:', error.message);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'debts', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'debts', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
   },
 
   addDebtPayment: async (data, userId) => {
-    const debt = get().debts.find((d) => d.id === data.debt_id);
+    const debtId = ensureUuid(data.debt_id);
+    const debt = get().debts.find((d) => d.id === data.debt_id || d.id === debtId);
     if (!debt) throw new Error('Deuda no encontrada');
 
     const now = new Date();
@@ -995,9 +1085,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const fortnight: FortnightType = data.fortnight || (day <= 15 ? 'q1' : 'q2');
 
     const paymentRecord: DebtPayment = {
-      id: 'pay_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
+      id: generateUuid(),
       user_id: userId,
-      debt_id: data.debt_id,
+      debt_id: debt.id,
       amount: Number(data.amount),
       payment_date: paymentDate,
       year,
@@ -1031,6 +1121,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...payPayload } = paymentRecord;
     const { sync_status: s2, ...debtPayload } = updatedDebt;
 
+    console.log('[Supabase Debt Payments Payload]:', payPayload);
+    console.log('[Supabase Debts Update Payload]:', debtPayload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await Promise.all([
@@ -1038,9 +1131,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           supabase.from('debts').upsert(debtPayload),
         ]);
       } catch {
-        set((s) => ({
+        set((state) => ({
           syncQueue: [
-            ...s.syncQueue,
+            ...state.syncQueue,
             { id: paymentRecord.id, table: 'debt_payments', action: 'upsert', payload: payPayload, timestamp: new Date().toISOString() },
             { id: debt.id, table: 'debts', action: 'upsert', payload: debtPayload, timestamp: new Date().toISOString() },
           ],
@@ -1052,7 +1145,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveSavingsGoal: async (goal, userId) => {
-    const id = goal.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'save_' + Math.random().toString(36).substring(2, 9));
+    const id = ensureUuid(goal.id);
     const record: SavingsGoal = {
       id,
       user_id: userId,
@@ -1080,12 +1173,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.savings_goals.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Savings Goals Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('savings_goals').upsert(payload);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'savings_goals', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'savings_goals', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1094,28 +1189,31 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteSavingsGoal: async (id, userId) => {
-    set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== id && g.id !== cleanId) }));
     await db.savings_goals.delete(id);
 
+    console.log(`[Supabase Savings Goals Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('savings_goals').delete().eq('id', id);
+        await supabase.from('savings_goals').delete().eq('id', cleanId);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'savings_goals', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'savings_goals', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
   },
 
   addSavingContribution: async (data, userId) => {
-    const goal = get().savingsGoals.find((g) => g.id === data.goal_id);
+    const goalId = ensureUuid(data.goal_id);
+    const goal = get().savingsGoals.find((g) => g.id === data.goal_id || g.id === goalId);
     if (!goal) throw new Error('Meta no encontrada');
 
     const record: SavingContribution = {
-      id: 'sc_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
+      id: generateUuid(),
       user_id: userId,
-      goal_id: data.goal_id,
+      goal_id: goal.id,
       amount: Number(data.amount),
       year: data.year,
       month: data.month,
@@ -1146,6 +1244,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...scPayload } = record;
     const { sync_status: s2, ...goalPayload } = updatedGoal;
 
+    console.log('[Supabase Saving Contributions Payload]:', scPayload);
+    console.log('[Supabase Savings Goals Update Payload]:', goalPayload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await Promise.all([
@@ -1153,9 +1254,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           supabase.from('savings_goals').upsert(goalPayload),
         ]);
       } catch {
-        set((s) => ({
+        set((state) => ({
           syncQueue: [
-            ...s.syncQueue,
+            ...state.syncQueue,
             { id: record.id, table: 'saving_contributions', action: 'upsert', payload: scPayload, timestamp: new Date().toISOString() },
             { id: goal.id, table: 'savings_goals', action: 'upsert', payload: goalPayload, timestamp: new Date().toISOString() },
           ],
@@ -1168,8 +1269,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   setFortnightExpensePaid: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_expense_${params.expense.id}_${periodKey}`;
-    const txId = `tx_fe_${params.expense.id}_${periodKey}`;
+    const expenseId = ensureUuid(params.expense.id);
+    const stateId = generateUuid();
+    const txId = generateUuid();
+    const resolvedAccountId = ensureUuid(params.accountId || get().accounts[0]?.id);
 
     const txRecord: Transaction = {
       id: txId,
@@ -1178,7 +1281,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       type: 'expense',
       description: `Pago Gasto Fijo: ${params.expense.name} (${params.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
       category_id: params.expense.category_id || 'cat_services',
-      account_id: params.accountId || 'acc_cash',
+      account_id: resolvedAccountId,
       transaction_date: periodKey,
       sync_status: 'pending',
       created_at: new Date().toISOString(),
@@ -1187,7 +1290,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const stateRecord: FortnightItemState = {
       id: stateId,
       user_id: userId,
-      item_id: params.expense.id,
+      item_id: expenseId,
       item_type: 'fixed_expense',
       period_key: periodKey,
       year: params.year,
@@ -1201,8 +1304,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     };
 
     set((s) => ({
-      transactions: [...s.transactions.filter((t) => t.id !== txId), txRecord],
-      fortnightItemStates: [...s.fortnightItemStates.filter((st) => st.id !== stateId), stateRecord],
+      transactions: [...s.transactions, txRecord],
+      fortnightItemStates: [
+        ...s.fortnightItemStates.filter((st) => !(st.item_id === expenseId && st.period_key === periodKey)),
+        stateRecord,
+      ],
     }));
 
     await db.transactions.put(txRecord);
@@ -1211,6 +1317,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...txPayload } = txRecord;
     const { sync_status: s2, ...statePayload } = stateRecord;
 
+    console.log('[Supabase Transactions Paid Payload]:', txPayload);
+    console.log('[Supabase Fortnight Item States Paid Payload]:', statePayload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await Promise.all([
@@ -1218,9 +1327,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           supabase.from('fortnight_item_states').upsert(statePayload),
         ]);
       } catch {
-        set((s) => ({
+        set((state) => ({
           syncQueue: [
-            ...s.syncQueue,
+            ...state.syncQueue,
             { id: txId, table: 'transactions', action: 'upsert', payload: txPayload, timestamp: new Date().toISOString() },
             { id: stateId, table: 'fortnight_item_states', action: 'upsert', payload: statePayload, timestamp: new Date().toISOString() },
           ],
@@ -1231,44 +1340,48 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   unmarkFortnightExpensePaid: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
-    const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+    const expenseId = ensureUuid(params.expenseId);
 
-    set((s) => ({
-      transactions: s.transactions.filter((t) => t.id !== txId),
-      fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== stateId),
-    }));
+    const existingState = get().fortnightItemStates.find(
+      (st) => (st.item_id === params.expenseId || st.item_id === expenseId) && st.period_key === periodKey
+    );
 
-    await db.transactions.delete(txId);
-    await db.fortnight_item_states.delete(stateId);
+    if (existingState) {
+      const txId = existingState.transaction_id;
+      set((s) => ({
+        transactions: txId ? s.transactions.filter((t) => t.id !== txId) : s.transactions,
+        fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== existingState.id),
+      }));
 
-    if (navigator.onLine && isSupabaseConfigured() && supabase) {
-      try {
-        await Promise.all([
-          supabase.from('transactions').delete().eq('id', txId),
-          supabase.from('fortnight_item_states').delete().eq('id', stateId),
-        ]);
-      } catch {
-        set((s) => ({
-          syncQueue: [
-            ...s.syncQueue,
-            { id: txId, table: 'transactions', action: 'delete', payload: { id: txId, user_id: userId }, timestamp: new Date().toISOString() },
-            { id: stateId, table: 'fortnight_item_states', action: 'delete', payload: { id: stateId, user_id: userId }, timestamp: new Date().toISOString() },
-          ],
-        }));
+      if (txId) await db.transactions.delete(txId);
+      await db.fortnight_item_states.delete(existingState.id);
+
+      console.log(`[Supabase Fortnight States Delete]: id ${existingState.id}, txId ${txId}`);
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
+          if (txId) await supabase.from('transactions').delete().eq('id', txId);
+        } catch {
+          set((state) => ({
+            syncQueue: [
+              ...state.syncQueue,
+              { id: existingState.id, table: 'fortnight_item_states', action: 'delete', payload: { id: existingState.id, user_id: userId }, timestamp: new Date().toISOString() },
+            ],
+          }));
+        }
       }
     }
   },
 
   setFortnightExpenseSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
-    const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+    const expenseId = ensureUuid(params.expenseId);
+    const stateId = generateUuid();
 
     const stateRecord: FortnightItemState = {
       id: stateId,
       user_id: userId,
-      item_id: params.expenseId,
+      item_id: expenseId,
       item_type: 'fixed_expense',
       period_key: periodKey,
       year: params.year,
@@ -1280,60 +1393,62 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     };
 
     set((s) => ({
-      transactions: s.transactions.filter((t) => t.id !== txId),
-      fortnightItemStates: [...s.fortnightItemStates.filter((st) => st.id !== stateId), stateRecord],
+      fortnightItemStates: [
+        ...s.fortnightItemStates.filter((st) => !(st.item_id === expenseId && st.period_key === periodKey)),
+        stateRecord,
+      ],
     }));
 
-    await db.transactions.delete(txId);
     await db.fortnight_item_states.put(stateRecord);
 
     const { sync_status, ...payload } = stateRecord;
+    console.log('[Supabase Fortnight Expense Skipped Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await Promise.all([
-          supabase.from('transactions').delete().eq('id', txId),
-          supabase.from('fortnight_item_states').upsert(payload),
-        ]);
+        await supabase.from('fortnight_item_states').upsert(payload);
       } catch {
-        set((s) => ({
-          syncQueue: [
-            ...s.syncQueue,
-            { id: txId, table: 'transactions', action: 'delete', payload: { id: txId, user_id: userId }, timestamp: new Date().toISOString() },
-            { id: stateId, table: 'fortnight_item_states', action: 'upsert', payload, timestamp: new Date().toISOString() },
-          ],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: stateId, table: 'fortnight_item_states', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
-
-    return;
   },
 
   unmarkFortnightExpenseSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
+    const expenseId = ensureUuid(params.expenseId);
 
-    set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== stateId) }));
-    await db.fortnight_item_states.delete(stateId);
+    const existingState = get().fortnightItemStates.find(
+      (st) => (st.item_id === params.expenseId || st.item_id === expenseId) && st.period_key === periodKey
+    );
 
-    if (navigator.onLine && isSupabaseConfigured() && supabase) {
-      try {
-        await supabase.from('fortnight_item_states').delete().eq('id', stateId);
-      } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id: stateId, table: 'fortnight_item_states', action: 'delete', payload: { id: stateId, user_id: userId }, timestamp: new Date().toISOString() }],
-        }));
+    if (existingState) {
+      set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== existingState.id) }));
+      await db.fortnight_item_states.delete(existingState.id);
+
+      console.log(`[Supabase Fortnight Expense Unmark Skipped]: id ${existingState.id}`);
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
+        } catch {
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id: existingState.id, table: 'fortnight_item_states', action: 'delete', payload: { id: existingState.id, user_id: userId }, timestamp: new Date().toISOString() }],
+          }));
+        }
       }
     }
   },
 
   setFortnightDebtSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+    const debtId = ensureUuid(params.debtId);
+    const stateId = generateUuid();
 
     const stateRecord: FortnightItemState = {
       id: stateId,
       user_id: userId,
-      item_id: params.debtId,
+      item_id: debtId,
       item_type: 'debt',
       period_key: periodKey,
       year: params.year,
@@ -1344,16 +1459,24 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       sync_status: 'pending',
     };
 
-    set((s) => ({ fortnightItemStates: [...s.fortnightItemStates.filter((st) => st.id !== stateId), stateRecord] }));
+    set((s) => ({
+      fortnightItemStates: [
+        ...s.fortnightItemStates.filter((st) => !(st.item_id === debtId && st.period_key === periodKey)),
+        stateRecord,
+      ],
+    }));
+
     await db.fortnight_item_states.put(stateRecord);
 
     const { sync_status, ...payload } = stateRecord;
+    console.log('[Supabase Fortnight Debt Skipped Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('fortnight_item_states').upsert(payload);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id: stateId, table: 'fortnight_item_states', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: stateId, table: 'fortnight_item_states', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1361,28 +1484,38 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   unmarkFortnightDebtSkipped: async (params, userId) => {
     const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-    const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+    const debtId = ensureUuid(params.debtId);
 
-    set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== stateId) }));
-    await db.fortnight_item_states.delete(stateId);
+    const existingState = get().fortnightItemStates.find(
+      (st) => (st.item_id === params.debtId || st.item_id === debtId) && st.period_key === periodKey
+    );
 
-    if (navigator.onLine && isSupabaseConfigured() && supabase) {
-      try {
-        await supabase.from('fortnight_item_states').delete().eq('id', stateId);
-      } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id: stateId, table: 'fortnight_item_states', action: 'delete', payload: { id: stateId, user_id: userId }, timestamp: new Date().toISOString() }],
-        }));
+    if (existingState) {
+      set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== existingState.id) }));
+      await db.fortnight_item_states.delete(existingState.id);
+
+      console.log(`[Supabase Fortnight Debt Unmark Skipped]: id ${existingState.id}`);
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
+        } catch {
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id: existingState.id, table: 'fortnight_item_states', action: 'delete', payload: { id: existingState.id, user_id: userId }, timestamp: new Date().toISOString() }],
+          }));
+        }
       }
     }
   },
 
   addTransaction: async (txData, userId) => {
-    const id = 'tx_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+    const id = generateUuid();
+    const resolvedAccountId = ensureUuid(txData.account_id || get().accounts[0]?.id);
+
     const record: Transaction = {
       ...txData,
       id,
       user_id: userId,
+      account_id: resolvedAccountId,
       amount: Number(txData.amount),
       sync_status: 'pending',
       created_at: new Date().toISOString(),
@@ -1392,12 +1525,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.transactions.put(record);
 
     const { sync_status, ...payload } = record;
+    console.log('[Supabase Transactions Payload]:', payload);
+
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('transactions').upsert(payload);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'transactions', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id, table: 'transactions', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1406,15 +1541,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   deleteTransaction: async (id, userId) => {
-    set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+    const cleanId = ensureUuid(id);
+    set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id && t.id !== cleanId) }));
     await db.transactions.delete(id);
 
+    console.log(`[Supabase Transactions Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('transactions').delete().eq('id', id);
+        await supabase.from('transactions').delete().eq('id', cleanId);
       } catch {
-        set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'transactions', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+        set((state) => ({
+          syncQueue: [...state.syncQueue, { id: cleanId, table: 'transactions', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }

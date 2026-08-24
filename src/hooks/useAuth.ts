@@ -88,7 +88,15 @@ export function useAuth() {
             };
 
             try {
-              await supabase.from('profiles').upsert(newProfile);
+              const profilePayload = {
+                id: authUser.id,
+                cedula: authUser.user_metadata?.cedula || '',
+                first_name: authUser.user_metadata?.first_name || '',
+                last_name: authUser.user_metadata?.last_name || '',
+                role,
+                updated_at: new Date().toISOString(),
+              };
+              await supabase.from('profiles').upsert(profilePayload);
             } catch (e) {
               console.warn('Profile upsert notice:', e);
             }
@@ -379,21 +387,20 @@ export function useAuth() {
           created_at: new Date().toISOString(),
         };
 
-        // Insertar en public.profiles
-        await supabase.from('profiles').upsert({
+        const profilePayload = {
           id: userId,
-          email: cleanEmail,
           cedula: fullCedula,
           first_name: cleanFirstName,
           last_name: cleanLastName,
-          name: fullName,
           role: 'user',
-          avatar: '👤',
-          avatar_url: '👤',
-          currency: 'USD',
-          theme_mode: 'navy',
-          accent_color: '#147DF0',
-        });
+          updated_at: new Date().toISOString(),
+        };
+
+        console.log('[Supabase Profiles Payload]:', profilePayload);
+        const { error: profErr } = await supabase.from('profiles').upsert(profilePayload);
+        if (profErr) {
+          console.error('[Supabase Profiles Error]:', profErr.message, profErr.details);
+        }
 
         await saveUserProfile(userProfile);
         localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
@@ -497,14 +504,9 @@ export function useAuth() {
         await supabase
           .from('profiles')
           .update({
-            name: updated.name,
-            first_name: updated.first_name || updated.name,
-            last_name: updated.last_name || '',
-            avatar: avatarVal,
-            avatar_url: avatarVal,
-            theme_mode: updated.theme_mode,
-            accent_color: updated.accent_color,
-            currency: updated.currency,
+            first_name: updated.first_name || updated.name?.split(' ')[0] || '',
+            last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
+            updated_at: new Date().toISOString(),
           })
           .eq('id', currentUser.id);
       } catch (e) {
