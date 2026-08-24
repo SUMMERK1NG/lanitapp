@@ -6,6 +6,8 @@ import {
   deleteTransaction,
   DEFAULT_CATEGORIES,
   DEFAULT_ACCOUNTS,
+  fetchAndConsolidateUserCloudData,
+  subscribeToRealtimeChanges,
 } from './lib/db.ts';
 import { useNetworkStatus } from './hooks/useNetworkStatus.ts';
 import { useExchangeRates } from './hooks/useExchangeRates.ts';
@@ -126,6 +128,21 @@ export function App() {
 
   // Current active user ID
   const activeUserId = currentUser?.id || '';
+
+  // Cloud-First Initial Consolidation & Realtime Subscriptions
+  useEffect(() => {
+    if (!activeUserId) return;
+
+    // 1. Consolidate from cloud upon login/mount
+    fetchAndConsolidateUserCloudData(activeUserId);
+
+    // 2. Realtime listener for cross-device live updates
+    const unsubscribe = subscribeToRealtimeChanges(activeUserId);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [activeUserId]);
 
   // Reactive IndexedDB queries using Dexie
   const liveTransactions = useLiveQuery(() => db.transactions.toArray(), []) || [];
@@ -706,6 +723,7 @@ export function App() {
                 fixedIncomes={fixedIncomes}
                 debtPayments={debtPayments}
                 savingsGoals={savingsGoals}
+                rates={rates}
                 isOnline={isOnline}
                 isSyncing={isSyncing}
                 lastSyncTime={lastSyncTime}
