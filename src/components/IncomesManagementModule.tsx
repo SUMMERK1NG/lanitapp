@@ -74,7 +74,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const [varAmount, setVarAmount] = useState<number>(0);
   const [varFortnight, setVarFortnight] = useState<FortnightType>('q1');
   const [varCategoryId, setVarCategoryId] = useState<string>('cat_extras');
-  const [varAccountId, setVarAccountId] = useState<string>(accounts[0]?.id || 'acc_bank_usd');
+  const [varAccountId, setVarAccountId] = useState<string>(accounts[0]?.id || '');
   const [varNotes, setVarNotes] = useState<string>('');
 
   const incomeCategories = categories.filter((c) => c.type === 'income');
@@ -196,7 +196,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarAmount(0);
     setVarFortnight('q1');
     setVarCategoryId(incomeCategories.find(c => c.id === 'cat_extras')?.id || incomeCategories[0]?.id || 'cat_extras');
-    setVarAccountId(accounts[0]?.id || 'acc_bank_usd');
+    setVarAccountId(accounts[0]?.id || '');
     setVarNotes('');
     setIsVarModalOpen(true);
   };
@@ -207,7 +207,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarAmount(vi.amount || 0);
     setVarFortnight(vi.fortnight);
     setVarCategoryId(vi.category_id || 'cat_extras');
-    setVarAccountId(vi.account_id || accounts[0]?.id || 'acc_bank_usd');
+    setVarAccountId(vi.account_id || accounts[0]?.id || '');
     setVarNotes(vi.notes || '');
     setIsVarModalOpen(true);
   };

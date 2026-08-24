@@ -1154,6 +1154,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       frequency: goal.frequency,
       target_fortnight: goal.target_fortnight || 'q1',
       amount_per_period: Number(goal.amount_per_period),
+      start_date: goal.start_date || new Date().toISOString().split('T')[0],
       target_date: goal.target_date,
       icon: goal.icon || 'PiggyBank',
       color: goal.color || '#00C2C7',

@@ -212,6 +212,7 @@ export interface SavingsGoal {
   frequency: SavingFrequency; // 'fortnightly' (15 y 30) o 'monthly'
   target_fortnight?: 'q1' | 'q2' | 'both'; // Para mensual: en cuál quincena apartar
   amount_per_period: number; // Monto a apartar por quincena/mes
+  start_date?: string; // NUEVO: Fecha de inicio (ISO format)
   target_date?: string; // Fecha límite estimada
   icon?: string;
   color?: string;

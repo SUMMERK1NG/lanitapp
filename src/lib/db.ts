@@ -224,6 +224,7 @@ export async function refreshAccountsFromSupabase(userId?: string): Promise<void
         updated_at: a.updated_at,
         sync_status: 'synced' as SyncStatus,
       }));
+      await db.accounts.where('user_id').equals(currentUserId).delete();
       if (normalized.length > 0) {
         await db.accounts.bulkPut(normalized);
       }
@@ -537,6 +538,10 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Cuentas pendientes
     const pendingAccounts = await db.accounts.where('sync_status').equals('pending').toArray();
     for (const item of pendingAccounts.filter((a) => !a.user_id || a.user_id === targetUid)) {
+      if (['acc_cash', 'acc_bank_usd', 'acc_bank_ves', 'acc_savings'].includes(item.id)) {
+        await db.accounts.delete(item.id);
+        continue;
+      }
       const payload = toSupabaseAccountPayload(item, targetUid);
       const success = await upsertAccountToSupabase(payload);
       if (success) {
@@ -738,7 +743,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                   month: !isNaN(mo) ? mo - 1 : now.getMonth(),
                   fortnight: q,
                   category_id: newRow.category_id || 'cat_extras',
-                  account_id: newRow.account_id || 'acc_bank_usd',
+                  account_id: newRow.account_id || '',
                   currency: newRow.currency || 'USD',
                   notes: newRow.notes || '',
                   sync_status: 'synced',
@@ -894,6 +899,7 @@ export async function saveSavingsGoal(
     frequency: goal.frequency,
     target_fortnight: goal.target_fortnight || 'q1',
     amount_per_period: Number(goal.amount_per_period),
+    start_date: goal.start_date || new Date().toISOString().split('T')[0],
     target_date: goal.target_date,
     icon: goal.icon || 'PiggyBank',
     color: goal.color || '#00C2C7',
@@ -976,7 +982,7 @@ export async function addSavingContribution(data: {
     type: 'expense',
     description: `Aporte Ahorro: ${goal.name}`,
     category_id: 'cat_savings',
-    account_id: 'acc_savings',
+    account_id: (data as any).account_id || '',
     transaction_date: record.contribution_date,
     sync_status: 'pending',
     created_at: new Date().toISOString(),
@@ -1158,7 +1164,7 @@ export async function saveVariableIncome(
     month: income.month,
     fortnight: income.fortnight,
     category_id: income.category_id || 'cat_extras',
-    account_id: income.account_id || 'acc_bank_usd',
+    account_id: income.account_id || '',
     currency: income.currency || 'USD',
     notes: income.notes || '',
     sync_status: 'pending',
@@ -1173,7 +1179,7 @@ export async function saveVariableIncome(
     type: 'income',
     description: `${record.description} (${record.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: record.category_id || 'cat_extras',
-    account_id: record.account_id || 'acc_bank_usd',
+    account_id: record.account_id || '',
     transaction_date: new Date(record.year, record.month, record.fortnight === 'q1' ? 15 : 28).toISOString().split('T')[0],
     sync_status: 'pending',
     created_at: record.created_at,
@@ -1295,18 +1301,27 @@ export async function saveAccount(
 }
 
 export async function deleteAccount(id: string): Promise<void> {
+  const cleanId = ensureValidUuid(id);
   await db.accounts.delete(id);
+  if (cleanId !== id) {
+    await db.accounts.delete(cleanId);
+  }
+
+  const currentUserId = getActiveUserId();
+
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('accounts').delete().eq('id', id);
-      if (error) {
-        console.error('[Supabase Accounts Delete Error]:', error.message, error.details, error.hint);
+      console.log('[Supabase Accounts Delete Payload]:', { id, cleanId });
+      const { error: err1 } = await supabase.from('accounts').delete().eq('id', id);
+      if (err1 && cleanId !== id) {
+        await supabase.from('accounts').delete().eq('id', cleanId);
       }
-      await refreshAccountsFromSupabase(getActiveUserId());
     } catch (e) {
       console.warn('Delete remote account err:', e);
     }
   }
+
+  await refreshAccountsFromSupabase(currentUserId);
 }
 
 export async function adjustAccountBalance(accountId: string, newInitialBalance: number): Promise<void> {
@@ -1605,7 +1620,7 @@ export async function addDebtPayment(data: {
     type: 'expense',
     description: `Abono: ${debt.creditor} (${fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: 'cat_debt',
-    account_id: debt.payment_type === 'cash' ? 'acc_cash' : 'acc_bank_usd',
+    account_id: (data as any).account_id || '',
     transaction_date: paymentDate,
     sync_status: 'pending',
     created_at: new Date().toISOString(),
@@ -1782,7 +1797,7 @@ export async function setFortnightExpensePaid(params: {
     type: 'expense',
     description: `Pago Gasto Fijo: ${params.expense.name} (${params.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: params.expense.category_id || 'cat_services',
-    account_id: params.accountId || 'acc_cash',
+    account_id: params.accountId || '',
     transaction_date: periodKey,
     sync_status: 'pending',
     created_at: new Date().toISOString(),

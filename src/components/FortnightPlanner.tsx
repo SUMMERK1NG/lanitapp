@@ -392,7 +392,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         month: selectedMonth,
         fortnight: selectedFortnight,
         amount,
-        accountId: accounts[0]?.id || 'acc_cash',
+        accountId: accounts[0]?.id || '',
       });
     } catch (err) {
       console.error('Error marking expense as paid:', err);
@@ -547,7 +547,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         amount: newDebt.total_amount,
         description: `Préstamo recibido: ${newDebt.creditor}`,
         category_id: 'cat_salary',
-        account_id: accounts[0]?.id || 'acc_cash',
+        account_id: accounts[0]?.id || '',
         year: selectedYear,
         month: selectedMonth,
         fortnight: selectedFortnight,
