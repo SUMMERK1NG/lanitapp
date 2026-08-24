@@ -5,7 +5,6 @@ import {
   addTransaction,
   deleteTransaction,
   DEFAULT_CATEGORIES,
-  DEFAULT_ACCOUNTS,
   migrateLocalDataToCloud,
   subscribeToRealtimeChanges,
 } from './lib/db.ts';
@@ -174,8 +173,9 @@ export function App() {
 
   // System Categories & Accounts
   const categories: Category[] = liveCategories.length > 0 ? liveCategories : DEFAULT_CATEGORIES;
-  const rawAccounts = liveAccounts.filter((a) => !a.user_id || a.user_id === activeUserId);
-  const accounts: Account[] = rawAccounts.length > 0 ? rawAccounts : DEFAULT_ACCOUNTS;
+  const accounts: Account[] = activeUserId
+    ? liveAccounts.filter((a) => a.user_id === activeUserId)
+    : liveAccounts;
 
   // Datasets strictly bound to active user ID
   const transactions: Transaction[] = liveTransactions.filter(

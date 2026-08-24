@@ -57,12 +57,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat_extras', name: 'Extras & Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
 ];
 
-export const DEFAULT_ACCOUNTS: Account[] = [
-  { id: '11111111-1111-4111-8111-111111111111', name: 'Efectivo Cash (USD)', type: 'cash', currency: 'USD', initial_balance: 0 },
-  { id: '22222222-2222-4222-8222-222222222222', name: 'Cuenta Custodia USD', type: 'bank', currency: 'USD', initial_balance: 0 },
-  { id: '33333333-3333-4333-8333-333333333333', name: 'Banco Nacional (Bs)', type: 'bank', currency: 'VES', initial_balance: 0 },
-  { id: '44444444-4444-4444-8444-444444444444', name: 'Fondo de Ahorro', type: 'savings', currency: 'USD', initial_balance: 0 },
-];
+export const DEFAULT_ACCOUNTS: Account[] = [];
 
 export const DEFAULT_FIXED_INCOMES: FixedIncome[] = [];
 export const DEFAULT_VARIABLE_INCOMES: VariableIncome[] = [];
@@ -107,7 +102,6 @@ export class LanitappDatabase extends Dexie {
 
     this.on('populate', async () => {
       await this.categories.bulkAdd(DEFAULT_CATEGORIES);
-      await this.accounts.bulkAdd(DEFAULT_ACCOUNTS);
     });
   }
 }
@@ -146,14 +140,28 @@ export async function initializeDatabase(): Promise<void> {
       await db.transactions.bulkDelete(legacyTxIds);
     }
 
+    const legacyAccountIds = [
+      'acc_cash',
+      'acc_bank_usd',
+      'acc_bank_ves',
+      'acc_savings',
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+      '44444444-4444-4444-8444-444444444444',
+    ];
+    await db.accounts.bulkDelete(legacyAccountIds);
+
+    const unassignedAccounts = (await db.accounts.toArray())
+      .filter((a) => !a.user_id || legacyAccountIds.includes(a.id))
+      .map((a) => a.id);
+    if (unassignedAccounts.length > 0) {
+      await db.accounts.bulkDelete(unassignedAccounts);
+    }
+
     const categoriesCount = await db.categories.count();
     if (categoriesCount === 0) {
       await db.categories.bulkPut(DEFAULT_CATEGORIES);
-    }
-
-    const accountsCount = await db.accounts.count();
-    if (accountsCount === 0) {
-      await db.accounts.bulkPut(DEFAULT_ACCOUNTS);
     }
   } catch (err) {
     console.error('Database init / purge error:', err);
@@ -1742,7 +1750,6 @@ export async function resetDatabaseToZero(): Promise<void> {
   await db.fortnight_item_states.clear();
 
   await db.categories.bulkPut(DEFAULT_CATEGORIES);
-  await db.accounts.bulkPut(DEFAULT_ACCOUNTS);
 }
 
 export const resetDatabaseWithSamples = resetDatabaseToZero;

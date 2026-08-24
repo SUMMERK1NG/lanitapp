@@ -67,16 +67,19 @@ export const AccountsOverview: React.FC<AccountsOverviewProps> = ({
           <div className="w-10 h-10 rounded-2xl bg-primary-custom/15 text-primary-custom flex items-center justify-center mx-auto">
             <Wallet className="w-5 h-5" />
           </div>
-          <p className="text-xs text-[#9ba3af] max-w-xs mx-auto">
-            No tienes cuentas o fondos registrados aún.
-          </p>
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-white">Sin cuentas registradas</h4>
+            <p className="text-[11px] text-[#9ba3af] max-w-xs mx-auto">
+              Crea tu primera cuenta para comenzar a llevar el balance en tiempo real.
+            </p>
+          </div>
           {onNavigateToAccounts && (
             <button
               onClick={onNavigateToAccounts}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary-custom text-white text-xs font-bold hover:opacity-95 transition-all shadow-md cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Crear Cuenta / Fondo</span>
+              <span>Nueva Cuenta / Fondo</span>
             </button>
           )}
         </div>

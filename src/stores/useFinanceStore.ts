@@ -19,7 +19,6 @@ import type {
 } from '../types/index.ts';
 import {
   db,
-  DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
   toSupabaseAccountPayload,
   getFortnightPeriodKey,
@@ -176,7 +175,7 @@ async function safeQuery<T = any>(
 export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   profiles: [],
   categories: DEFAULT_CATEGORIES,
-  accounts: DEFAULT_ACCOUNTS,
+  accounts: [],
   fixedIncomes: [],
   monthlyIncomeOverrides: [],
   variableIncomes: [],
@@ -245,7 +244,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredTxs = userId ? transactions.filter((t) => t.user_id === userId) : transactions;
 
       set({
-        accounts: filteredAccounts.length > 0 ? filteredAccounts : DEFAULT_ACCOUNTS,
+        accounts: filteredAccounts,
         categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES,
         fixedIncomes: filteredFixedIncomes,
         monthlyIncomeOverrides,
@@ -391,7 +390,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       set({
         profiles,
         categories,
-        accounts: accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS,
+        accounts,
         fixedIncomes,
         monthlyIncomeOverrides,
         variableIncomes,

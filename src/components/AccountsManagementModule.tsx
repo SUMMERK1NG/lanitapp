@@ -320,7 +320,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
           </div>
           <div className="space-y-1.5">
             <h3 className="text-base font-bold text-app">
-              Comienza registrando tus fondos
+              Sin cuentas registradas
             </h3>
             <p className="text-xs text-muted max-w-sm mx-auto leading-relaxed">
               Agrega tus cuentas de efectivo, bancos o billeteras digitales para calcular tu balance disponible automáticamente.
@@ -330,9 +330,10 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
             <button
               type="button"
               onClick={handleOpenNewAccount}
-              className="px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold hover:opacity-95 transition-all shadow-md cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold hover:opacity-95 transition-all shadow-md cursor-pointer mx-auto"
             >
-              + Registrar Primera Cuenta
+              <Plus className="w-4 h-4" />
+              <span>Nueva Cuenta / Fondo</span>
             </button>
           </div>
         </div>
