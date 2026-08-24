@@ -164,6 +164,59 @@ initializeDatabase().catch((err) => console.error('Database init error:', err));
 // -------------------------------------------------------------
 
 /**
+ * Migra cualquier dato previo existente en LocalStorage o caché local hacia Supabase
+ * y recarga inmediatamente el estado global consolidado desde la nube.
+ */
+export async function migrateLocalDataToCloud(userId: string): Promise<void> {
+  if (!userId || !isSupabaseConfigured() || !supabase || !navigator.onLine) return;
+
+  try {
+    // 1. Verificar llaves previas en localStorage
+    const localAccounts = JSON.parse(localStorage.getItem('lanita_accounts') || localStorage.getItem('lanitapp_accounts') || '[]');
+    const localFixedExpenses = JSON.parse(localStorage.getItem('lanita_fixed_expenses') || localStorage.getItem('lanitapp_fixed_expenses') || '[]');
+    const localDebts = JSON.parse(localStorage.getItem('lanita_debts') || localStorage.getItem('lanitapp_debts') || '[]');
+    const localIncomes = JSON.parse(localStorage.getItem('lanita_incomes') || localStorage.getItem('lanitapp_incomes') || '[]');
+    const localTxs = JSON.parse(localStorage.getItem('lanita_transactions') || localStorage.getItem('lanitapp_transactions') || '[]');
+
+    if (Array.isArray(localAccounts) && localAccounts.length > 0) {
+      await supabase.from('accounts').upsert(localAccounts.map((a: any) => ({ ...a, user_id: userId })));
+      localStorage.removeItem('lanita_accounts');
+      localStorage.removeItem('lanitapp_accounts');
+    }
+    if (Array.isArray(localFixedExpenses) && localFixedExpenses.length > 0) {
+      await supabase.from('fixed_expenses').upsert(localFixedExpenses.map((f: any) => ({ ...f, user_id: userId })));
+      localStorage.removeItem('lanita_fixed_expenses');
+      localStorage.removeItem('lanitapp_fixed_expenses');
+    }
+    if (Array.isArray(localDebts) && localDebts.length > 0) {
+      await supabase.from('debts').upsert(localDebts.map((d: any) => ({ ...d, user_id: userId })));
+      localStorage.removeItem('lanita_debts');
+      localStorage.removeItem('lanitapp_debts');
+    }
+    if (Array.isArray(localIncomes) && localIncomes.length > 0) {
+      await supabase.from('fixed_incomes').upsert(localIncomes.map((i: any) => ({ ...i, user_id: userId })));
+      localStorage.removeItem('lanita_incomes');
+      localStorage.removeItem('lanitapp_incomes');
+    }
+    if (Array.isArray(localTxs) && localTxs.length > 0) {
+      await supabase.from('transactions').upsert(localTxs.map((t: any) => ({ ...t, user_id: userId })));
+      localStorage.removeItem('lanita_transactions');
+      localStorage.removeItem('lanitapp_transactions');
+    }
+
+    // 2. Subir también registros pendientes en Dexie
+    await pushPendingLocalRecords(userId);
+
+    // 3. Recargar estado completo directo desde Supabase (prioridad nube)
+    await fetchAndConsolidateUserCloudData(userId);
+  } catch (err) {
+    console.error('Error migrating data to cloud:', err);
+  }
+}
+
+export const fetchAllDataFromSupabase = fetchAndConsolidateUserCloudData;
+
+/**
  * Descarga y consolida en Dexie todos los datos del usuario desde Supabase.
  * Si el usuario no tiene registros, su estado local queda limpio ($0.00).
  */

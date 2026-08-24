@@ -202,7 +202,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Ej. 28322083"
+                  placeholder="Ej. 12345678"
                   value={loginCedula}
                   onChange={(e) => {
                     const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);
@@ -310,7 +310,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Ej. 28322083"
+                  placeholder="Ej. 12345678"
                   value={regCedula}
                   onChange={(e) => {
                     const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);

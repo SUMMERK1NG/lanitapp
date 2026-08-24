@@ -539,7 +539,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                   <input
                     type="text"
                     required
-                    placeholder="Ej. 28322083"
+                    placeholder="Ej. 12345678"
                     value={editCedulaNumber}
                     onChange={(e) => {
                       const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);

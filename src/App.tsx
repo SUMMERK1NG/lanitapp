@@ -6,7 +6,7 @@ import {
   deleteTransaction,
   DEFAULT_CATEGORIES,
   DEFAULT_ACCOUNTS,
-  fetchAndConsolidateUserCloudData,
+  migrateLocalDataToCloud,
   subscribeToRealtimeChanges,
 } from './lib/db.ts';
 import { useNetworkStatus } from './hooks/useNetworkStatus.ts';
@@ -133,10 +133,10 @@ export function App() {
   useEffect(() => {
     if (!activeUserId) return;
 
-    // 1. Consolidate from cloud upon login/mount
-    fetchAndConsolidateUserCloudData(activeUserId);
+    // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud
+    migrateLocalDataToCloud(activeUserId);
 
-    // 2. Realtime listener for cross-device live updates
+    // 2. Realtime listener para sincronización cruzada instantánea
     const unsubscribe = subscribeToRealtimeChanges(activeUserId);
 
     return () => {
