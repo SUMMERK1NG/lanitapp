@@ -669,7 +669,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
   }
 
   const client = supabase;
-  const channelName = `lanitapp_realtime_${userId}_${Math.random().toString(36).substring(2, 7)}`;
+  const channelName = `schema-db-changes-${userId}`;
 
   const tables = [
     'transactions',
@@ -692,40 +692,41 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
       'postgres_changes',
       { event: '*', schema: 'public', table: tableName },
       async (payload) => {
+        console.log(`[Realtime Change Detected on ${tableName}]:`, payload);
         try {
           const targetTable = (db as any)[tableName];
-          if (!targetTable) return;
-
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const row = payload.new;
-            if (!row.user_id || row.user_id === userId) {
-              if (tableName === 'accounts') {
-                const normAcc = {
-                  id: row.id,
-                  user_id: row.user_id || userId,
-                  name: row.name,
-                  type: row.type || 'cash',
-                  currency: row.currency || 'USD',
-                  initial_balance: typeof row.balance === 'number' ? row.balance : typeof row.initial_balance === 'number' ? row.initial_balance : parseFloat(row.balance || row.initial_balance || 0) || 0,
-                  color: row.color,
-                  notes: row.notes || '',
-                  created_at: row.created_at,
-                  updated_at: row.updated_at,
-                  sync_status: 'synced' as SyncStatus,
-                };
-                await targetTable.put(normAcc);
-              } else {
-                await targetTable.put({ ...row, sync_status: 'synced' });
+          if (targetTable) {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const row = payload.new;
+              if (!row.user_id || row.user_id === userId) {
+                if (tableName === 'accounts') {
+                  const normAcc = {
+                    id: row.id,
+                    user_id: row.user_id || userId,
+                    name: row.name,
+                    type: row.type || 'cash',
+                    currency: row.currency || 'USD',
+                    initial_balance: typeof row.balance === 'number' ? row.balance : typeof row.initial_balance === 'number' ? row.initial_balance : parseFloat(row.balance || row.initial_balance || 0) || 0,
+                    color: row.color,
+                    notes: row.notes || '',
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    sync_status: 'synced' as SyncStatus,
+                  };
+                  await targetTable.put(normAcc);
+                } else {
+                  await targetTable.put({ ...row, sync_status: 'synced' });
+                }
               }
-              if (onUpdate) onUpdate();
-            }
-          } else if (payload.eventType === 'DELETE') {
-            const oldId = payload.old?.id;
-            if (oldId) {
-              await targetTable.delete(oldId);
-              if (onUpdate) onUpdate();
+            } else if (payload.eventType === 'DELETE') {
+              const oldId = payload.old?.id;
+              if (oldId) {
+                await targetTable.delete(oldId);
+              }
             }
           }
+
+          if (onUpdate) onUpdate();
         } catch (e) {
           console.warn(`Realtime update handling error on ${tableName}:`, e);
         }
@@ -733,7 +734,9 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
     );
   });
 
-  channel.subscribe();
+  channel.subscribe((status) => {
+    console.log(`[Supabase Realtime Channel Status for ${userId}]:`, status);
+  });
 
   return () => {
     client.removeChannel(channel);
