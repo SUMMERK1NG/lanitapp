@@ -128,18 +128,30 @@ export function App() {
 
   // Current active user ID
   const activeUserId = currentUser?.id || '';
+  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(true);
 
   // Cloud-First Initial Consolidation & Realtime Subscriptions
   useEffect(() => {
-    if (!activeUserId) return;
+    if (!activeUserId) {
+      setIsCloudLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsCloudLoading(true);
 
     // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud
-    migrateLocalDataToCloud(activeUserId);
+    migrateLocalDataToCloud(activeUserId)
+      .catch((e) => console.error('Cloud migration error:', e))
+      .finally(() => {
+        if (isMounted) setIsCloudLoading(false);
+      });
 
     // 2. Realtime listener para sincronización cruzada instantánea
     const unsubscribe = subscribeToRealtimeChanges(activeUserId);
 
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, [activeUserId]);
@@ -342,8 +354,8 @@ export function App() {
     settings: 'Configuración & Backup',
   };
 
-  // Auth Loading Screen
-  if (authLoading) {
+  // Auth & Cloud Data Initial Loading Screen
+  if (authLoading || (isAuthenticated && currentUser && isCloudLoading)) {
     return (
       <div className="min-h-screen w-full bg-[#0B132B] flex flex-col items-center justify-center p-4 text-white">
         <div className="h-16 w-16 flex items-center justify-center mb-4 drop-shadow-md animate-pulse">
@@ -351,7 +363,7 @@ export function App() {
         </div>
         <p className="text-sm font-bold text-slate-300 flex items-center gap-2">
           <RefreshCw className="w-4 h-4 animate-spin text-[#147DF0]" />
-          Iniciando LANITAPP...
+          {authLoading ? 'Iniciando LANITAPP...' : 'Sincronizando con Supabase Cloud...'}
         </p>
       </div>
     );

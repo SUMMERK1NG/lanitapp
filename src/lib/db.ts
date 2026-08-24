@@ -16,6 +16,7 @@ import type {
   SyncResult,
   FortnightType,
   FortnightItemState,
+  SyncStatus,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
 
@@ -25,6 +26,7 @@ export function getActiveUserId(): string {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed?.id) return parsed.id;
+      if (parsed?.cedula) return parsed.cedula;
     }
   } catch {
     // fallback
@@ -160,6 +162,71 @@ export async function initializeDatabase(): Promise<void> {
 initializeDatabase().catch((err) => console.error('Database init error:', err));
 
 // -------------------------------------------------------------
+// Payload Sanitizers & Supabase Direct Handlers
+// -------------------------------------------------------------
+
+/**
+ * Sanitiza el payload de Cuenta para PostgreSQL (evita error HTTP 400 por columnas inexistentes)
+ */
+function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
+  const userId = acc.user_id || fallbackUserId || getActiveUserId();
+  const balanceNum = typeof acc.balance === 'number'
+    ? acc.balance
+    : typeof acc.initial_balance === 'number'
+    ? acc.initial_balance
+    : parseFloat(acc.balance || acc.initial_balance || 0) || 0;
+
+  const payload: Record<string, any> = {
+    id: acc.id,
+    user_id: userId,
+    name: (acc.name || '').trim(),
+    type: acc.type || 'cash',
+    currency: acc.currency || 'USD',
+    balance: balanceNum,
+    initial_balance: balanceNum,
+  };
+
+  if (acc.created_at) payload.created_at = acc.created_at;
+  if (acc.updated_at) payload.updated_at = acc.updated_at;
+
+  return payload;
+}
+
+/**
+ * Guarda o actualiza una cuenta en Supabase con tolerancia a nombres de columna
+ */
+export async function upsertAccountToSupabase(payload: Record<string, any>): Promise<boolean> {
+  if (!supabase || !navigator.onLine || !isSupabaseConfigured()) return false;
+
+  const cleanPayload = toSupabaseAccountPayload(payload);
+
+  // Intento 1: con ambos campos (balance e initial_balance)
+  const { error } = await supabase.from('accounts').upsert(cleanPayload);
+  if (!error) return true;
+
+  // Intento 2: si la columna 'initial_balance' no existe en Supabase, reintentar solo con 'balance'
+  if (error.message?.includes('initial_balance')) {
+    const { initial_balance, ...onlyBalancePayload } = cleanPayload;
+    const { error: err2 } = await supabase.from('accounts').upsert(onlyBalancePayload);
+    if (!err2) return true;
+    console.error('[Supabase Accounts Error (balance)]:', err2.message, err2.details, err2.hint);
+    return false;
+  }
+
+  // Intento 3: si la columna 'balance' no existe en Supabase, reintentar solo con 'initial_balance'
+  if (error.message?.includes('balance')) {
+    const { balance, ...onlyInitPayload } = cleanPayload;
+    const { error: err3 } = await supabase.from('accounts').upsert(onlyInitPayload);
+    if (!err3) return true;
+    console.error('[Supabase Accounts Error (initial_balance)]:', err3.message, err3.details, err3.hint);
+    return false;
+  }
+
+  console.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
+  return false;
+}
+
+// -------------------------------------------------------------
 // Cloud-First Auto-Sync & Realtime Subscriptions
 // -------------------------------------------------------------
 
@@ -179,27 +246,49 @@ export async function migrateLocalDataToCloud(userId: string): Promise<void> {
     const localTxs = JSON.parse(localStorage.getItem('lanita_transactions') || localStorage.getItem('lanitapp_transactions') || '[]');
 
     if (Array.isArray(localAccounts) && localAccounts.length > 0) {
-      await supabase.from('accounts').upsert(localAccounts.map((a: any) => ({ ...a, user_id: userId })));
+      for (const a of localAccounts) {
+        await upsertAccountToSupabase(toSupabaseAccountPayload(a, userId));
+      }
       localStorage.removeItem('lanita_accounts');
       localStorage.removeItem('lanitapp_accounts');
     }
     if (Array.isArray(localFixedExpenses) && localFixedExpenses.length > 0) {
-      await supabase.from('fixed_expenses').upsert(localFixedExpenses.map((f: any) => ({ ...f, user_id: userId })));
+      const sanitized = localFixedExpenses.map((f: any) => {
+        const { sync_status, isEditing, ...rest } = f;
+        return { ...rest, user_id: userId, amount: Number(f.amount || 0) };
+      });
+      const { error } = await supabase.from('fixed_expenses').upsert(sanitized);
+      if (error) console.error('[Supabase Fixed Expenses Migration Error]:', error.message, error.details);
       localStorage.removeItem('lanita_fixed_expenses');
       localStorage.removeItem('lanitapp_fixed_expenses');
     }
     if (Array.isArray(localDebts) && localDebts.length > 0) {
-      await supabase.from('debts').upsert(localDebts.map((d: any) => ({ ...d, user_id: userId })));
+      const sanitized = localDebts.map((d: any) => {
+        const { sync_status, isEditing, ...rest } = d;
+        return { ...rest, user_id: userId, total_amount: Number(d.total_amount || 0), current_balance: Number(d.current_balance || d.total_amount || 0) };
+      });
+      const { error } = await supabase.from('debts').upsert(sanitized);
+      if (error) console.error('[Supabase Debts Migration Error]:', error.message, error.details);
       localStorage.removeItem('lanita_debts');
       localStorage.removeItem('lanitapp_debts');
     }
     if (Array.isArray(localIncomes) && localIncomes.length > 0) {
-      await supabase.from('fixed_incomes').upsert(localIncomes.map((i: any) => ({ ...i, user_id: userId })));
+      const sanitized = localIncomes.map((i: any) => {
+        const { sync_status, isEditing, ...rest } = i;
+        return { ...rest, user_id: userId, amount: Number(i.amount || 0) };
+      });
+      const { error } = await supabase.from('fixed_incomes').upsert(sanitized);
+      if (error) console.error('[Supabase Incomes Migration Error]:', error.message, error.details);
       localStorage.removeItem('lanita_incomes');
       localStorage.removeItem('lanitapp_incomes');
     }
     if (Array.isArray(localTxs) && localTxs.length > 0) {
-      await supabase.from('transactions').upsert(localTxs.map((t: any) => ({ ...t, user_id: userId })));
+      const sanitized = localTxs.map((t: any) => {
+        const { sync_status, ...rest } = t;
+        return { ...rest, user_id: userId, amount: Number(t.amount || 0) };
+      });
+      const { error } = await supabase.from('transactions').upsert(sanitized);
+      if (error) console.error('[Supabase Transactions Migration Error]:', error.message, error.details);
       localStorage.removeItem('lanita_transactions');
       localStorage.removeItem('lanitapp_transactions');
     }
@@ -232,21 +321,21 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
 
     // 2. Cargar en paralelo todas las entidades asociadas al user_id
     const [
-      { data: remoteAccounts },
-      { data: remoteCategories },
-      { data: remoteIncomes },
-      { data: remoteIncomeOverrides },
-      { data: remoteVarIncomes },
-      { data: remoteExpenses },
-      { data: remoteExpenseOverrides },
-      { data: remoteDebts },
-      { data: remotePayments },
-      { data: remoteSavings },
-      { data: remoteContribs },
-      { data: remoteStates },
-      { data: remoteTxs },
+      resAccounts,
+      resCategories,
+      resIncomes,
+      resIncomeOverrides,
+      resVarIncomes,
+      resExpenses,
+      resExpenseOverrides,
+      resDebts,
+      resPayments,
+      resSavings,
+      resContribs,
+      resStates,
+      resTxs,
     ] = await Promise.all([
-      supabase.from('accounts').select('*').or(`user_id.eq.${activeUid},user_id.is.null`),
+      supabase.from('accounts').select('*').eq('user_id', activeUid),
       supabase.from('categories').select('*'),
       supabase.from('fixed_incomes').select('*').eq('user_id', activeUid),
       supabase.from('monthly_fixed_income_overrides').select('*'),
@@ -260,6 +349,81 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       supabase.from('fortnight_item_states').select('*').eq('user_id', activeUid),
       supabase.from('transactions').select('*').eq('user_id', activeUid),
     ]);
+
+    // Diagnóstico de respuestas de Supabase
+    if (resAccounts.error) {
+      console.error('[Supabase Accounts Error]:', resAccounts.error.message, resAccounts.error.details, resAccounts.error.hint);
+    }
+    if (resCategories.error) {
+      console.warn('[Supabase Categories Notice]:', resCategories.error.message);
+    }
+    if (resIncomes.error) {
+      console.warn('[Supabase Fixed Incomes Notice]:', resIncomes.error.message);
+    }
+    if (resVarIncomes.error) {
+      console.warn('[Supabase Variable Incomes Notice]:', resVarIncomes.error.message);
+    }
+    if (resExpenses.error) {
+      console.warn('[Supabase Fixed Expenses Notice]:', resExpenses.error.message);
+    }
+    if (resDebts.error) {
+      console.warn('[Supabase Debts Notice]:', resDebts.error.message);
+    }
+    if (resPayments.error) {
+      console.warn('[Supabase Payments Notice]:', resPayments.error.message);
+    }
+    if (resSavings.error) {
+      console.warn('[Supabase Savings Notice]:', resSavings.error.message);
+    }
+    if (resContribs.error) {
+      console.warn('[Supabase Contribs Notice]:', resContribs.error.message);
+    }
+    if (resStates.error) {
+      console.warn('[Supabase States Notice]:', resStates.error.message);
+    }
+    if (resTxs.error) {
+      console.warn('[Supabase Transactions Notice]:', resTxs.error.message);
+    }
+
+    let remoteIncomes = resIncomes.data;
+    // Si fixed_incomes no retornó datos o dio error, intentar fallback con tabla 'incomes'
+    if (!remoteIncomes || remoteIncomes.length === 0) {
+      try {
+        const { data: fallbackIncomes, error: fbErr } = await supabase.from('incomes').select('*').eq('user_id', activeUid);
+        if (!fbErr && fallbackIncomes && fallbackIncomes.length > 0) {
+          remoteIncomes = fallbackIncomes;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // Normalizar cuentas desde Supabase
+    const remoteAccounts = (resAccounts.data || []).map((a: any) => ({
+      id: a.id,
+      user_id: a.user_id || activeUid,
+      name: a.name,
+      type: a.type || 'cash',
+      currency: a.currency || 'USD',
+      initial_balance: typeof a.balance === 'number' ? a.balance : typeof a.initial_balance === 'number' ? a.initial_balance : parseFloat(a.balance || a.initial_balance || 0) || 0,
+      color: a.color,
+      notes: a.notes || '',
+      created_at: a.created_at,
+      updated_at: a.updated_at,
+      sync_status: 'synced' as SyncStatus,
+    }));
+
+    const remoteCategories = resCategories.data;
+    const remoteIncomeOverrides = resIncomeOverrides.data;
+    const remoteVarIncomes = resVarIncomes.data;
+    const remoteExpenses = resExpenses.data;
+    const remoteExpenseOverrides = resExpenseOverrides.data;
+    const remoteDebts = resDebts.data;
+    const remotePayments = resPayments.data;
+    const remoteSavings = resSavings.data;
+    const remoteContribs = resContribs.data;
+    const remoteStates = resStates.data;
+    const remoteTxs = resTxs.data;
 
     // 3. Limpiar registros locales previos del usuario y reemplazar con la verdad de la nube
     await Promise.all([
@@ -278,8 +442,8 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
     if (remoteCategories && remoteCategories.length > 0) {
       await db.categories.bulkPut(remoteCategories.map((c) => ({ ...c, sync_status: 'synced' })));
     }
-    if (remoteAccounts && remoteAccounts.length > 0) {
-      await db.accounts.bulkPut(remoteAccounts.map((a) => ({ ...a, sync_status: 'synced' })));
+    if (remoteAccounts.length > 0) {
+      await db.accounts.bulkPut(remoteAccounts);
     }
     if (remoteIncomes && remoteIncomes.length > 0) {
       await db.fixed_incomes.bulkPut(remoteIncomes.map((i) => ({ ...i, sync_status: 'synced' })));
@@ -330,93 +494,131 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
   let pushed = 0;
 
   try {
+    // Cuentas pendientes
+    const pendingAccounts = await db.accounts.where('sync_status').equals('pending').toArray();
+    for (const item of pendingAccounts.filter((a) => !a.user_id || a.user_id === targetUid)) {
+      const payload = toSupabaseAccountPayload(item, targetUid);
+      const success = await upsertAccountToSupabase(payload);
+      if (success) {
+        await db.accounts.update(item.id, { sync_status: 'synced' });
+        pushed++;
+      }
+    }
+
     // Transacciones
     const pendingTxs = await db.transactions.where('sync_status').equals('pending').toArray();
     for (const item of pendingTxs.filter((t) => !t.user_id || t.user_id === targetUid)) {
-      const { error } = await supabase.from('transactions').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('transactions').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.transactions.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Tx Error]:', error.message, error.details);
       }
     }
 
     // Ingresos Fijos
     const pendingIncomes = await db.fixed_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingIncomes.filter((i) => !i.user_id || i.user_id === targetUid)) {
-      const { error } = await supabase.from('fixed_incomes').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('fixed_incomes').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.fixed_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Income Error]:', error.message, error.details);
       }
     }
 
     // Ingresos Variables
     const pendingVarIncomes = await db.variable_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingVarIncomes.filter((v) => !v.user_id || v.user_id === targetUid)) {
-      const { error } = await supabase.from('variable_incomes').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('variable_incomes').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.variable_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Var Income Error]:', error.message, error.details);
       }
     }
 
     // Gastos Fijos
     const pendingExpenses = await db.fixed_expenses.where('sync_status').equals('pending').toArray();
     for (const item of pendingExpenses.filter((e) => !e.user_id || e.user_id === targetUid)) {
-      const { error } = await supabase.from('fixed_expenses').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('fixed_expenses').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.fixed_expenses.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Expense Error]:', error.message, error.details);
       }
     }
 
     // Deudas
     const pendingDebts = await db.debts.where('sync_status').equals('pending').toArray();
     for (const item of pendingDebts.filter((d) => !d.user_id || d.user_id === targetUid)) {
-      const { error } = await supabase.from('debts').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('debts').upsert({ ...rest, user_id: targetUid, total_amount: Number(item.total_amount), current_balance: Number(item.current_balance) });
       if (!error) {
         await db.debts.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Debt Error]:', error.message, error.details);
       }
     }
 
     // Abonos a Deudas
     const pendingPayments = await db.debt_payments.where('sync_status').equals('pending').toArray();
     for (const item of pendingPayments.filter((p) => !p.user_id || p.user_id === targetUid)) {
-      const { error } = await supabase.from('debt_payments').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('debt_payments').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.debt_payments.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Payment Error]:', error.message, error.details);
       }
     }
 
     // Metas de Ahorro
     const pendingSavings = await db.savings_goals.where('sync_status').equals('pending').toArray();
     for (const item of pendingSavings.filter((s) => !s.user_id || s.user_id === targetUid)) {
-      const { error } = await supabase.from('savings_goals').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('savings_goals').upsert({ ...rest, user_id: targetUid, target_amount: Number(item.target_amount), current_amount: Number(item.current_amount) });
       if (!error) {
         await db.savings_goals.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Savings Error]:', error.message, error.details);
       }
     }
 
     // Aportes de Ahorro
     const pendingContribs = await db.saving_contributions.where('sync_status').equals('pending').toArray();
     for (const item of pendingContribs.filter((c) => !c.user_id || c.user_id === targetUid)) {
-      const { error } = await supabase.from('saving_contributions').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('saving_contributions').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.saving_contributions.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending Contrib Error]:', error.message, error.details);
       }
     }
 
     // Estados Quincenales
     const pendingStates = await db.fortnight_item_states.where('sync_status').equals('pending').toArray();
     for (const item of pendingStates.filter((s) => !s.user_id || s.user_id === targetUid)) {
-      const { error } = await supabase.from('fortnight_item_states').upsert({ ...item, user_id: targetUid });
+      const { sync_status, ...rest } = item;
+      const { error } = await supabase.from('fortnight_item_states').upsert({ ...rest, user_id: targetUid });
       if (!error) {
         await db.fortnight_item_states.update(item.id, { sync_status: 'synced' });
         pushed++;
+      } else {
+        console.error('[Supabase Pending State Error]:', error.message, error.details);
       }
     }
   } catch (err) {
@@ -466,7 +668,24 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const row = payload.new;
             if (!row.user_id || row.user_id === userId) {
-              await targetTable.put({ ...row, sync_status: 'synced' });
+              if (tableName === 'accounts') {
+                const normAcc = {
+                  id: row.id,
+                  user_id: row.user_id || userId,
+                  name: row.name,
+                  type: row.type || 'cash',
+                  currency: row.currency || 'USD',
+                  initial_balance: typeof row.balance === 'number' ? row.balance : typeof row.initial_balance === 'number' ? row.initial_balance : parseFloat(row.balance || row.initial_balance || 0) || 0,
+                  color: row.color,
+                  notes: row.notes || '',
+                  created_at: row.created_at,
+                  updated_at: row.updated_at,
+                  sync_status: 'synced' as SyncStatus,
+                };
+                await targetTable.put(normAcc);
+              } else {
+                await targetTable.put({ ...row, sync_status: 'synced' });
+              }
               if (onUpdate) onUpdate();
             }
           } else if (payload.eventType === 'DELETE') {
@@ -551,10 +770,7 @@ export async function forceCloudSyncAndPurgeResiduals(userId?: string): Promise<
   }
 
   try {
-    // 1. Purgar datos de prueba o sin propietario
     await initializeDatabase();
-
-    // 2. Forzar refresco consolidado desde la nube
     await fetchAndConsolidateUserCloudData(targetUid);
 
     return {
@@ -585,11 +801,11 @@ export async function saveSavingsGoal(
     id,
     user_id: userId,
     name: goal.name,
-    target_amount: goal.target_amount,
-    current_amount: goal.current_amount !== undefined ? goal.current_amount : 0,
+    target_amount: Number(goal.target_amount),
+    current_amount: goal.current_amount !== undefined ? Number(goal.current_amount) : 0,
     frequency: goal.frequency,
     target_fortnight: goal.target_fortnight || 'q1',
-    amount_per_period: goal.amount_per_period,
+    amount_per_period: Number(goal.amount_per_period),
     target_date: goal.target_date,
     icon: goal.icon || 'PiggyBank',
     color: goal.color || '#00C2C7',
@@ -600,11 +816,15 @@ export async function saveSavingsGoal(
     updated_at: new Date().toISOString(),
   };
 
-  // Immediate Cloud Write
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('savings_goals').upsert(record);
-      if (!error) record.sync_status = 'synced';
+      const { sync_status, ...cloudPayload } = record;
+      const { error } = await supabase.from('savings_goals').upsert(cloudPayload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Savings Goal Error]:', error.message, error.details);
+      }
     } catch (e) {
       console.warn('Direct saving goal upsert notice:', e);
     }
@@ -647,7 +867,7 @@ export async function addSavingContribution(data: {
     id: 'sc_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
     user_id: userId,
     goal_id: data.goal_id,
-    amount: data.amount,
+    amount: Number(data.amount),
     year: data.year,
     month: data.month,
     fortnight: data.fortnight,
@@ -658,13 +878,13 @@ export async function addSavingContribution(data: {
     created_at: new Date().toISOString(),
   };
 
-  const newCurrent = goal.current_amount + data.amount;
-  const newStatus = newCurrent >= goal.target_amount ? 'completed' : goal.status;
+  const newCurrent = Number(goal.current_amount) + Number(data.amount);
+  const newStatus = newCurrent >= Number(goal.target_amount) ? 'completed' : goal.status;
 
   const txRecord: Transaction = {
     id: 'tx_' + record.id,
     user_id: userId,
-    amount: data.amount,
+    amount: Number(data.amount),
     type: 'expense',
     description: `Aporte Ahorro: ${goal.name}`,
     category_id: 'cat_savings',
@@ -674,17 +894,20 @@ export async function addSavingContribution(data: {
     created_at: new Date().toISOString(),
   };
 
-  // Immediate Cloud Write
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { sync_status: s1, ...scPayload } = record;
+      const { sync_status: s2, ...txPayload } = txRecord;
       const [res1, res2, res3] = await Promise.all([
-        supabase.from('saving_contributions').upsert(record),
+        supabase.from('saving_contributions').upsert(scPayload),
         supabase.from('savings_goals').update({ current_amount: newCurrent, status: newStatus, updated_at: new Date().toISOString() }).eq('id', goal.id),
-        supabase.from('transactions').upsert(txRecord),
+        supabase.from('transactions').upsert(txPayload),
       ]);
       if (!res1.error && !res2.error && !res3.error) {
         record.sync_status = 'synced';
         txRecord.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Saving Contribution Error]:', res1.error || res2.error || res3.error);
       }
     } catch (e) {
       console.warn('Direct saving contribution upsert notice:', e);
@@ -732,8 +955,13 @@ export async function skipSavingContributionPeriod(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('saving_contributions').upsert(record);
-      if (!error) record.sync_status = 'synced';
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('saving_contributions').upsert(payload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Skip Saving Error]:', error.message);
+      }
     } catch (e) {
       console.warn('Direct skip saving upsert notice:', e);
     }
@@ -755,7 +983,7 @@ export async function saveFixedIncome(
     id,
     user_id: userId,
     name: income.name,
-    amount: income.amount,
+    amount: Number(income.amount),
     currency: income.currency || 'USD',
     default_fortnight: income.default_fortnight,
     category_id: income.category_id || 'cat_salary',
@@ -766,8 +994,13 @@ export async function saveFixedIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('fixed_incomes').upsert(record);
-      if (!error) record.sync_status = 'synced';
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('fixed_incomes').upsert(payload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Fixed Income Error]:', error.message, error.details);
+      }
     } catch (e) {
       console.warn('Direct fixed income upsert notice:', e);
     }
@@ -781,7 +1014,8 @@ export async function deleteFixedIncome(id: string): Promise<void> {
   await db.fixed_incomes.delete(id);
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await supabase.from('fixed_incomes').delete().eq('id', id);
+      const { error } = await supabase.from('fixed_incomes').delete().eq('id', id);
+      if (error) console.error('[Supabase Fixed Income Delete Error]:', error.message);
     } catch (e) {
       console.warn('Delete remote fixed income err:', e);
     }
@@ -802,13 +1036,14 @@ export async function toggleMonthlyFixedIncomeOverride(
     year,
     month,
     is_active: isActive,
-    custom_amount: customAmount,
+    custom_amount: customAmount !== undefined ? Number(customAmount) : undefined,
     sync_status: 'pending',
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('monthly_fixed_income_overrides').upsert(record);
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('monthly_fixed_income_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
       console.warn('Override upsert notice:', e);
@@ -830,7 +1065,7 @@ export async function saveVariableIncome(
     id,
     user_id: userId,
     description: income.description,
-    amount: income.amount,
+    amount: Number(income.amount),
     year: income.year,
     month: income.month,
     fortnight: income.fortnight,
@@ -846,7 +1081,7 @@ export async function saveVariableIncome(
   const txRecord: Transaction = {
     id: 'tx_' + record.id,
     user_id: userId,
-    amount: record.amount,
+    amount: Number(record.amount),
     type: 'income',
     description: `${record.description} (${record.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: record.category_id || 'cat_extras',
@@ -858,13 +1093,17 @@ export async function saveVariableIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { sync_status: s1, ...varPayload } = record;
+      const { sync_status: s2, ...txPayload } = txRecord;
       const [res1, res2] = await Promise.all([
-        supabase.from('variable_incomes').upsert(record),
-        supabase.from('transactions').upsert(txRecord),
+        supabase.from('variable_incomes').upsert(varPayload),
+        supabase.from('transactions').upsert(txPayload),
       ]);
       if (!res1.error && !res2.error) {
         record.sync_status = 'synced';
         txRecord.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Variable Income Error]:', res1.error || res2.error);
       }
     } catch (e) {
       console.warn('Direct variable income upsert notice:', e);
@@ -909,7 +1148,8 @@ export async function saveCategory(category: Partial<Category> & { name: string;
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('categories').upsert(record);
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('categories').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
       console.warn('Category upsert notice:', e);
@@ -939,13 +1179,17 @@ export async function saveAccount(
 ): Promise<Account> {
   const id = account.id || 'acc_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
   const userId = account.user_id || getActiveUserId();
+  const balanceNum = typeof account.initial_balance === 'number'
+    ? account.initial_balance
+    : parseFloat(String(account.initial_balance || 0)) || 0;
+
   const record: Account = {
     id,
     user_id: userId,
     name: account.name.trim(),
     type: account.type || 'cash',
     currency: account.currency || 'USD',
-    initial_balance: account.initial_balance !== undefined ? account.initial_balance : 0,
+    initial_balance: balanceNum,
     color: account.color,
     notes: account.notes || '',
     sync_status: 'pending',
@@ -953,13 +1197,9 @@ export async function saveAccount(
     updated_at: new Date().toISOString(),
   };
 
-  if (navigator.onLine && isSupabaseConfigured() && supabase) {
-    try {
-      const { error } = await supabase.from('accounts').upsert(record);
-      if (!error) record.sync_status = 'synced';
-    } catch (e) {
-      console.warn('Account upsert notice:', e);
-    }
+  const success = await upsertAccountToSupabase(record);
+  if (success) {
+    record.sync_status = 'synced';
   }
 
   await db.accounts.put(record);
@@ -970,7 +1210,10 @@ export async function deleteAccount(id: string): Promise<void> {
   await db.accounts.delete(id);
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await supabase.from('accounts').delete().eq('id', id);
+      const { error } = await supabase.from('accounts').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase Accounts Delete Error]:', error.message, error.details, error.hint);
+      }
     } catch (e) {
       console.warn('Delete remote account err:', e);
     }
@@ -980,20 +1223,13 @@ export async function deleteAccount(id: string): Promise<void> {
 export async function adjustAccountBalance(accountId: string, newInitialBalance: number): Promise<void> {
   const existing = await db.accounts.get(accountId);
   if (existing) {
-    existing.initial_balance = newInitialBalance;
+    existing.initial_balance = Number(newInitialBalance);
     existing.updated_at = new Date().toISOString();
     existing.sync_status = 'pending';
 
-    if (navigator.onLine && isSupabaseConfigured() && supabase) {
-      try {
-        const { error } = await supabase.from('accounts').update({
-          initial_balance: newInitialBalance,
-          updated_at: existing.updated_at,
-        }).eq('id', accountId);
-        if (!error) existing.sync_status = 'synced';
-      } catch (e) {
-        console.warn('Account balance update notice:', e);
-      }
+    const success = await upsertAccountToSupabase(existing);
+    if (success) {
+      existing.sync_status = 'synced';
     }
 
     await db.accounts.put(existing);
@@ -1025,7 +1261,8 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('profiles').upsert(record);
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('profiles').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
       console.warn('Profile direct upsert notice:', e);
@@ -1054,14 +1291,15 @@ export async function toggleMonthlyFixedOverride(
     year,
     month,
     is_active: isActive,
-    custom_amount: customAmount,
+    custom_amount: customAmount !== undefined ? Number(customAmount) : undefined,
     assumed_by_third_party: assumedByThirdParty,
     sync_status: 'pending',
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('monthly_fixed_overrides').upsert(record);
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('monthly_fixed_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
       console.warn('Override upsert notice:', e);
@@ -1080,10 +1318,10 @@ export async function saveFixedExpense(
     id,
     user_id: userId,
     name: expense.name,
-    amount: expense.amount,
-    amount_usd: expense.amount_usd !== undefined ? expense.amount_usd : expense.amount,
-    original_amount: expense.original_amount !== undefined ? expense.original_amount : (expense.amount_in_ves || expense.amount),
-    amount_in_ves: expense.amount_in_ves,
+    amount: Number(expense.amount),
+    amount_usd: expense.amount_usd !== undefined ? Number(expense.amount_usd) : Number(expense.amount),
+    original_amount: expense.original_amount !== undefined ? Number(expense.original_amount) : Number(expense.amount_in_ves || expense.amount),
+    amount_in_ves: expense.amount_in_ves !== undefined ? Number(expense.amount_in_ves) : undefined,
     currency: expense.currency || 'USD',
     payment_mode: expense.payment_mode || 'ves_bcv',
     default_fortnight: expense.default_fortnight,
@@ -1096,8 +1334,13 @@ export async function saveFixedExpense(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('fixed_expenses').upsert(record);
-      if (!error) record.sync_status = 'synced';
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('fixed_expenses').upsert(payload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Fixed Expense Error]:', error.message, error.details);
+      }
     } catch (e) {
       console.warn('Direct fixed expense upsert notice:', e);
     }
@@ -1111,7 +1354,8 @@ export async function deleteFixedExpense(id: string): Promise<void> {
   await db.fixed_expenses.delete(id);
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await supabase.from('fixed_expenses').delete().eq('id', id);
+      const { error } = await supabase.from('fixed_expenses').delete().eq('id', id);
+      if (error) console.error('[Supabase Fixed Expense Delete Error]:', error.message);
     } catch (e) {
       console.warn('Delete remote fixed expense err:', e);
     }
@@ -1125,7 +1369,7 @@ export async function saveDebt(
   debt: Partial<Debt> & { creditor: string; total_amount: number; payment_type: Debt['payment_type'] }
 ): Promise<Debt> {
   const id = debt.id || 'debt_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
-  const current_balance = debt.current_balance !== undefined ? debt.current_balance : debt.total_amount;
+  const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
   const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
   const now = new Date();
@@ -1140,11 +1384,11 @@ export async function saveDebt(
     creditor: debt.creditor,
     platform: debt.platform || 'particular',
     debt_mode: debt.debt_mode || 'installments',
-    total_amount: debt.total_amount,
+    total_amount: Number(debt.total_amount),
     current_balance,
     total_installments: debt.total_installments,
     pending_installments: debt.pending_installments,
-    installment_amount: debt.installment_amount,
+    installment_amount: debt.installment_amount !== undefined ? Number(debt.installment_amount) : undefined,
     fortnight_due: debt.fortnight_due || 'q1',
     start_year,
     start_month,
@@ -1166,8 +1410,13 @@ export async function saveDebt(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('debts').upsert(record);
-      if (!error) record.sync_status = 'synced';
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('debts').upsert(payload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Debt Error]:', error.message, error.details);
+      }
     } catch (e) {
       console.warn('Direct debt upsert notice:', e);
     }
@@ -1221,10 +1470,10 @@ export async function addDebtPayment(data: {
   let loss_differential: number | undefined;
 
   if (data.rate_applied && data.rate_applied > 0) {
-    amount_in_bs = data.amount * data.rate_applied;
+    amount_in_bs = Number(data.amount) * data.rate_applied;
     if (data.parallel_rate && data.parallel_rate > 0) {
-      const realCostInUSD = (data.amount * data.rate_applied) / data.parallel_rate;
-      loss_differential = Number((data.amount - realCostInUSD).toFixed(2));
+      const realCostInUSD = (Number(data.amount) * data.rate_applied) / data.parallel_rate;
+      loss_differential = Number((Number(data.amount) - realCostInUSD).toFixed(2));
     }
   }
 
@@ -1232,7 +1481,7 @@ export async function addDebtPayment(data: {
     id: 'pay_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
     user_id: userId,
     debt_id: data.debt_id,
-    amount: data.amount,
+    amount: Number(data.amount),
     amount_in_bs,
     payment_date: paymentDate,
     year,
@@ -1246,14 +1495,14 @@ export async function addDebtPayment(data: {
     created_at: new Date().toISOString(),
   };
 
-  const newBalance = Math.max(0, debt.current_balance - data.amount);
+  const newBalance = Math.max(0, Number(debt.current_balance) - Number(data.amount));
   const newStatus = newBalance <= 0.01 ? 'paid' : 'active';
   const newPendingInstallments = debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined;
 
   const txRecord: Transaction = {
     id: 'tx_' + paymentRecord.id,
     user_id: userId,
-    amount: data.amount,
+    amount: Number(data.amount),
     type: 'expense',
     description: `Abono: ${debt.creditor} (${fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: 'cat_debt',
@@ -1263,22 +1512,25 @@ export async function addDebtPayment(data: {
     created_at: new Date().toISOString(),
   };
 
-  // Immediate Cloud Write
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { sync_status: s1, ...payPayload } = paymentRecord;
+      const { sync_status: s2, ...txPayload } = txRecord;
       const [res1, res2, res3] = await Promise.all([
-        supabase.from('debt_payments').upsert(paymentRecord),
+        supabase.from('debt_payments').upsert(payPayload),
         supabase.from('debts').update({
           current_balance: newBalance,
           pending_installments: newPendingInstallments,
           status: newStatus,
           updated_at: new Date().toISOString(),
         }).eq('id', debt.id),
-        supabase.from('transactions').upsert(txRecord),
+        supabase.from('transactions').upsert(txPayload),
       ]);
       if (!res1.error && !res2.error && !res3.error) {
         paymentRecord.sync_status = 'synced';
         txRecord.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Debt Payment Error]:', res1.error || res2.error || res3.error);
       }
     } catch (e) {
       console.warn('Direct debt payment upsert notice:', e);
@@ -1308,6 +1560,7 @@ export async function addTransaction(
   const newTransaction: Transaction = {
     ...data,
     user_id: userId,
+    amount: Number(data.amount),
     id: 'tx_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9)),
     sync_status: 'pending',
     created_at: new Date().toISOString(),
@@ -1315,8 +1568,13 @@ export async function addTransaction(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('transactions').upsert(newTransaction);
-      if (!error) newTransaction.sync_status = 'synced';
+      const { sync_status, ...payload } = newTransaction;
+      const { error } = await supabase.from('transactions').upsert(payload);
+      if (!error) {
+        newTransaction.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Transaction Error]:', error.message, error.details);
+      }
     } catch (e) {
       console.warn('Direct transaction upsert notice:', e);
     }
@@ -1330,7 +1588,8 @@ export async function deleteTransaction(id: string): Promise<void> {
   await db.transactions.delete(id);
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await supabase.from('transactions').delete().eq('id', id);
+      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      if (error) console.error('[Supabase Transaction Delete Error]:', error.message);
     } catch (e) {
       console.warn('Delete remote tx err:', e);
     }
@@ -1421,7 +1680,7 @@ export async function setFortnightExpensePaid(params: {
   const txRecord: Transaction = {
     id: txId,
     user_id: userId,
-    amount: params.amount,
+    amount: Number(params.amount),
     type: 'expense',
     description: `Pago Gasto Fijo: ${params.expense.name} (${params.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: params.expense.category_id || 'cat_services',
@@ -1441,7 +1700,7 @@ export async function setFortnightExpensePaid(params: {
     month: params.month,
     fortnight: params.fortnight,
     status: 'paid',
-    amount: params.amount,
+    amount: Number(params.amount),
     transaction_id: txId,
     updated_at: new Date().toISOString(),
     sync_status: 'pending',
@@ -1449,13 +1708,17 @@ export async function setFortnightExpensePaid(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { sync_status: s1, ...txPayload } = txRecord;
+      const { sync_status: s2, ...statePayload } = stateRecord;
       const [res1, res2] = await Promise.all([
-        supabase.from('transactions').upsert(txRecord),
-        supabase.from('fortnight_item_states').upsert(stateRecord),
+        supabase.from('transactions').upsert(txPayload),
+        supabase.from('fortnight_item_states').upsert(statePayload),
       ]);
       if (!res1.error && !res2.error) {
         txRecord.sync_status = 'synced';
         stateRecord.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Fortnight Paid Error]:', res1.error || res2.error);
       }
     } catch (e) {
       console.warn('Direct fortnight paid upsert notice:', e);
@@ -1520,9 +1783,10 @@ export async function setFortnightExpenseSkipped(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { sync_status, ...statePayload } = stateRecord;
       await Promise.all([
         supabase.from('transactions').delete().eq('id', txId),
-        supabase.from('fortnight_item_states').upsert(stateRecord),
+        supabase.from('fortnight_item_states').upsert(statePayload),
       ]);
       stateRecord.sync_status = 'synced';
     } catch (e) {
@@ -1579,8 +1843,13 @@ export async function setFortnightDebtSkipped(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { error } = await supabase.from('fortnight_item_states').upsert(stateRecord);
-      if (!error) stateRecord.sync_status = 'synced';
+      const { sync_status, ...payload } = stateRecord;
+      const { error } = await supabase.from('fortnight_item_states').upsert(payload);
+      if (!error) {
+        stateRecord.sync_status = 'synced';
+      } else {
+        console.error('[Supabase Skip Debt Error]:', error.message);
+      }
     } catch (e) {
       console.warn('Direct skip debt upsert notice:', e);
     }
