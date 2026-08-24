@@ -180,7 +180,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Seguro que deseas eliminar este gasto fijo de la plantilla?')) {
+    if (window.confirm('¿Seguro que deseas eliminar este gasto fijo?')) {
       await deleteFixedExpense(id);
     }
   };
@@ -212,24 +212,25 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Header & Period Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-surface border border-app shadow-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-surface border border-app shadow-md">
         <div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
               <Receipt className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-app">Plantilla de Gastos Fijos</h3>
+            <h3 className="text-base font-bold text-app">Gastos Fijos</h3>
           </div>
           <p className="text-xs text-muted mt-1">
             Periodo: <strong>{MONTH_NAMES[selectedMonth]} {selectedYear}</strong> • Activa, pausa o marca si fue asumido por un 3ro
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <MonthPicker
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             onChange={onChangePeriod}
+            className="w-full sm:w-auto justify-between sm:justify-start"
           />
 
           <button
@@ -243,36 +244,36 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
       </div>
 
       {/* KPI Cards: Resumen de Compromisos del Mes con Conversión Dual */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
         {/* Total General */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-muted">Compromiso Total del Mes</span>
-          <p className="text-xl sm:text-2xl font-black text-app">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] sm:text-xs font-semibold text-muted">Compromiso Total del Mes</span>
+          <p className="text-lg sm:text-2xl font-black text-app">
             {currency}{totalMonthlyCommitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted font-medium block">
+          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
             ≈ Bs. {(totalMonthlyCommitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV)
           </span>
         </div>
 
         {/* Quincena 15 */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-[#00C2C7]">Quincena 15 (1ra Mitad)</span>
-          <p className="text-xl sm:text-2xl font-black text-[#00C2C7]">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] sm:text-xs font-semibold text-[#00C2C7]">Quincena 15</span>
+          <p className="text-lg sm:text-2xl font-black text-[#00C2C7]">
             {currency}{q1Commitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted font-medium block">
+          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
             ≈ Bs. {(q1Commitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
 
         {/* Quincena 30 */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-xs font-semibold text-[#FF914D]">Quincena 30 (Fin de Mes)</span>
-          <p className="text-xl sm:text-2xl font-black text-[#FF914D]">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] sm:text-xs font-semibold text-[#FF914D]">Quincena 30</span>
+          <p className="text-lg sm:text-2xl font-black text-[#FF914D]">
             {currency}{q2Commitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted font-medium block">
+          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
             ≈ Bs. {(q2Commitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>

@@ -249,7 +249,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
                 <Briefcase className="w-4 h-4" />
               </div>
-              <h3 className="text-base font-bold text-app">Gestión Integral de Ingresos</h3>
+              <h3 className="text-base font-bold text-app">Gestión de Ingresos</h3>
             </div>
             <p className="text-xs text-muted mt-1">
               Periodo: <strong>{MONTH_NAMES[selectedMonth]} {selectedYear}</strong> • Fijos y variables por quincena
@@ -260,85 +260,86 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             onChange={onChangePeriod}
+            className="w-full sm:w-auto justify-between sm:justify-start"
           />
         </div>
 
-        {/* Sub-Navigation Tabs (Only the 2 operational tabs) */}
-        <div className="flex p-1 bg-card rounded-2xl border border-app">
+        {/* Sub-Navigation Tabs Responsivos y Claros */}
+        <div className="w-full grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
           <button
             onClick={() => setActiveTab('fixed')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'fixed'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Ingresos Fijos (Plantilla Mensual)</span>
+            <span>Ingresos Fijos</span>
           </button>
 
           <button
             onClick={() => setActiveTab('variable')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'variable'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Ingresos Variables / Extras ({currentMonthVariables.length})</span>
+            <span>Ingresos Variables ({currentMonthVariables.length})</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Cards Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Total Ingresos del Mes</span>
-          <p className="text-xl sm:text-2xl font-black text-primary-custom tracking-tight">
-            {currency}{totalCombinedIncome.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+      {/* KPI Cards Summary Responsivo */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Total Mes</span>
+          <p className="text-base sm:text-2xl font-black text-primary-custom tracking-tight">
+            {currency}{totalCombinedIncome.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">En {MONTH_NAMES[selectedMonth]} {selectedYear}</span>
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">En {MONTH_NAMES[selectedMonth]} {selectedYear}</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Ingresos Fijos Base</span>
-          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
-            {currency}{totalMonthlyFixed.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Ingresos Fijos</span>
+          <p className="text-base sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+            {currency}{totalMonthlyFixed.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">Sueldo, tickets, etc.</span>
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">Sueldo, tickets, etc.</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Ingresos Extras / Variables</span>
-          <p className="text-xl sm:text-2xl font-black text-[#FF914D] tracking-tight">
-            {currency}{totalMonthlyVariable.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Ingresos Variables</span>
+          <p className="text-base sm:text-2xl font-black text-[#FF914D] tracking-tight">
+            {currency}{totalMonthlyVariable.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">Bonos, freelance, extras</span>
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">Bonos, freelance, extras</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Por Quincena</span>
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Por Quincena</span>
           <div className="text-xs space-y-0.5 pt-0.5">
-            <div className="flex justify-between">
-              <span className="text-muted">Quincena 15:</span>
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-muted">Q15:</span>
               <strong className="text-app font-bold">{currency}{totalQ1.toFixed(0)}</strong>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Quincena 30:</span>
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-muted">Q30:</span>
               <strong className="text-app font-bold">{currency}{totalQ2.toFixed(0)}</strong>
             </div>
           </div>
         </div>
       </div>
 
-      {/* TAB 1: INGRESOS FIJOS (PLANTILLA) */}
+      {/* TAB 1: INGRESOS FIJOS */}
       {activeTab === 'fixed' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-app flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary-custom" />
-              Plantilla Mensual Recurrente ({processedFixedIncomes.length})
+              Ingresos Fijos Recurrentes ({processedFixedIncomes.length})
             </h4>
             <button
               onClick={handleOpenAddFixed}

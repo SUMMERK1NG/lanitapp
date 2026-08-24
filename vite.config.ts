@@ -10,25 +10,23 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo.png', 'favicon.png'],
+      includeAssets: ['icon.png', 'logo.png', 'favicon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'Lanitapp - Gestor Financiero por Quincenas y Deudas',
-        short_name: 'Lanitapp',
-        description: 'Gestor financiero personal y control de deudas con cálculo de tasas en vivo',
-        theme_color: '#147DF0',
-        background_color: '#0B132B',
-        display: 'standalone',
-        orientation: 'portrait',
+        name: 'LANITAPP',
+        short_name: 'LANITAPP',
         start_url: '/',
+        display: 'standalone',
+        background_color: '#0b132b',
+        theme_color: '#0b132b',
         icons: [
           {
-            src: '/logo.png',
+            src: '/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/logo.png',
+            src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

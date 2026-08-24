@@ -62,26 +62,34 @@ export const Header: React.FC<HeaderProps> = ({
   );
 
   return (
-    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-app px-3 sm:px-6 py-2.5 transition-colors">
+    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-app px-2.5 sm:px-6 py-2 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Side: Active View Title (Mobile shows miniature logo + title, Desktop shows view title only) */}
+        {/* Left Side: Active View Title (Mobile shows miniature icon only, Desktop shows view title) */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <div className="lg:hidden w-8 h-8 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img
               src="/icon.png"
               alt="LANITAPP"
               className="h-full w-full object-contain drop-shadow-sm"
             />
           </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-black tracking-tight text-app leading-tight">
-              {activeViewTitle}
-            </h2>
+          <h2 className="hidden sm:block text-sm sm:text-base font-black tracking-tight text-app leading-tight">
+            {activeViewTitle}
+          </h2>
+        </div>
+
+        {/* Mobile-Only Compact BCV Rate Pill */}
+        <div className="sm:hidden flex items-center justify-center shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 border border-slate-700/60 text-xs whitespace-nowrap">
+            <span className="text-orange-400 font-bold">$</span>
+            <span className="text-white font-semibold">
+              {rates.bcvDollar ? `Bs. ${rates.bcvDollar.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Cargando...'}
+            </span>
           </div>
         </div>
 
-        {/* Live BCV & Parallel Rates Widget in Header */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+        {/* Desktop Live BCV & Parallel Rates Widget */}
+        <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-0.5">
           {/* Dólar BCV */}
           <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-xl bg-card border border-app shrink-0">
             <div className="w-4 h-4 rounded-md bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold text-[9px]">

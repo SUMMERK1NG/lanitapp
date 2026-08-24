@@ -236,98 +236,99 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   return (
     <div className="space-y-4">
       {/* Month & Period Selector Bar con Dropdown */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-surface border border-app shadow-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-surface border border-app shadow-md">
         <MonthPicker
           selectedYear={selectedYear}
           selectedMonth={selectedMonth}
           onChange={onChangePeriod}
+          className="w-full sm:w-auto justify-between sm:justify-start"
         />
 
-        {/* Quincena 15 vs 30 Selector con nombres claros */}
-        <div className="flex p-1 bg-card rounded-2xl border border-app">
+        {/* Quincena 15 vs 30 Selector con nombres concisos y diseño responsivo */}
+        <div className="w-full sm:w-auto grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
           <button
             onClick={() => setSelectedFortnight('q1')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
               selectedFortnight === 'q1'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
-            Quincena 15 de {monthName}
+            Quincena 15
           </button>
           <button
             onClick={() => setSelectedFortnight('q2')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
               selectedFortnight === 'q2'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
-            Quincena 30 de {monthName}
+            Quincena 30
           </button>
         </div>
       </div>
 
       {/* Fortnight Key Metrics Summary (Hero Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         {/* Total Available Card */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Total Ingresos</span>
+            <span className="text-[11px] sm:text-xs font-semibold">Total Ingresos</span>
             <div className="w-6 h-6 rounded-lg bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
               <DollarSign className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+          <p className="text-base sm:text-2xl font-black text-[#00C2C7] tracking-tight">
             {currency}{totalAvailable.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">
             {activeFortnightFixedIncomes.length} fijos + {activeFortnightVariables.length} extras
           </span>
         </div>
 
         {/* Total Committed Card (Expenses + Debts) */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Gastos & Cuotas</span>
+            <span className="text-[11px] sm:text-xs font-semibold">Gastos & Cuotas</span>
             <div className="w-6 h-6 rounded-lg bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold">
               <Receipt className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-black text-[#FF914D] tracking-tight">
+          <p className="text-base sm:text-2xl font-black text-[#FF914D] tracking-tight">
             {currency}{totalCommitted.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">
             Fijos ({currency}{totalFixedCost.toFixed(0)}) + Deudas ({currency}{effectiveDebtCost.toFixed(0)})
           </span>
         </div>
 
         {/* Planned Savings Card */}
-        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Ahorro Programado</span>
+            <span className="text-[11px] sm:text-xs font-semibold">Ahorro Planificado</span>
             <div className="w-6 h-6 rounded-lg bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
               <PiggyBank className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+          <p className="text-base sm:text-2xl font-black text-[#00C2C7] tracking-tight">
             {currency}{plannedSavingsTotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">
             En {fortnightSavingsGoals.length} metas de ahorro
           </span>
         </div>
 
         {/* Dinero Libre Real Card */}
         <div
-          className={`p-4 rounded-2xl border shadow-sm space-y-1 ${
+          className={`p-3 sm:p-4 rounded-2xl border shadow-sm space-y-1 ${
             netRemaining >= 0
               ? 'bg-gradient-to-br from-surface to-primary-custom/20 border-[#00C2C7]/40'
               : 'bg-gradient-to-br from-surface to-[#ef4444]/20 border-[#ef4444]/40'
           }`}
         >
           <div className="flex items-center justify-between text-xs">
-            <span className="text-app font-bold">Dinero Libre Real</span>
+            <span className="text-[11px] sm:text-xs text-app font-bold">Dinero Libre</span>
             {netRemaining >= 0 ? (
               <CheckCircle2 className="w-4 h-4 text-[#00C2C7]" />
             ) : (
@@ -335,13 +336,13 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             )}
           </div>
           <p
-            className={`text-xl sm:text-2xl font-black tracking-tight ${
+            className={`text-base sm:text-2xl font-black tracking-tight ${
               netRemaining >= 0 ? 'text-app' : 'text-[#ef4444]'
             }`}
           >
             {currency}{netRemaining.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className="text-[11px] text-muted block">
+          <span className="text-[10px] sm:text-[11px] text-muted block truncate">
             {netRemaining >= 0 ? 'Disponible para libre uso' : '¡Déficit en este corte!'}
           </span>
         </div>

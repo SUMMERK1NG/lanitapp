@@ -772,6 +772,8 @@ export function App() {
         activeView={activeView}
         onChangeView={setActiveView}
         onOpenQuickAction={() => setIsQuickActionOpen(true)}
+        onOpenConverter={() => setIsConverterOpen(true)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
         pendingCount={pendingCount}
       />
     </div>

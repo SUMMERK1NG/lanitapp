@@ -68,29 +68,29 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
       </div>
 
       {/* Income & Expense Split Cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
         {/* Income Card */}
-        <div className="bg-[#203657] border border-[#2a4365] p-4 rounded-2xl shadow-sm hover:border-[#00c2c7]/40 transition-all">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 rounded-lg bg-[#00c2c7]/20 border border-[#00c2c7]/30 flex items-center justify-center text-[#00c2c7]">
-              <ArrowDownLeft className="w-4 h-4" />
+        <div className="bg-[#203657] border border-[#2a4365] p-3.5 sm:p-4 rounded-2xl shadow-sm hover:border-[#00c2c7]/40 transition-all">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#00c2c7]/20 border border-[#00c2c7]/30 flex items-center justify-center text-[#00c2c7]">
+              <ArrowDownLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
             <span className="text-xs font-semibold text-[#9ba3af]">Ingresos</span>
           </div>
-          <p className="text-lg sm:text-xl font-black text-[#00c2c7]">
+          <p className="text-base sm:text-xl font-black text-[#00c2c7]">
             +{formatCurrency(totalIncome)}
           </p>
         </div>
 
         {/* Expense Card */}
-        <div className="bg-[#203657] border border-[#2a4365] p-4 rounded-2xl shadow-sm hover:border-[#ff914d]/40 transition-all">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 rounded-lg bg-[#ff914d]/20 border border-[#ff914d]/30 flex items-center justify-center text-[#ff914d]">
-              <ArrowUpRight className="w-4 h-4" />
+        <div className="bg-[#203657] border border-[#2a4365] p-3.5 sm:p-4 rounded-2xl shadow-sm hover:border-[#ff914d]/40 transition-all">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#ff914d]/20 border border-[#ff914d]/30 flex items-center justify-center text-[#ff914d]">
+              <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
             <span className="text-xs font-semibold text-[#9ba3af]">Gastos & Pagos</span>
           </div>
-          <p className="text-lg sm:text-xl font-black text-[#ff914d]">
+          <p className="text-base sm:text-xl font-black text-[#ff914d]">
             -{formatCurrency(totalExpense)}
           </p>
         </div>
