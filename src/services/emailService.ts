@@ -14,7 +14,7 @@ export interface BiweeklyEmailPayload {
 export const sendBiweeklyReportEmail = async (payload: BiweeklyEmailPayload) => {
   const apiKey = import.meta.env.VITE_RESEND_API_KEY;
   if (!apiKey) {
-    throw new Error('Clave VITE_RESEND_API_KEY no configurada');
+    throw new Error('No se pudo conectar con el servicio de correo. Verifica la configuración de Resend.');
   }
 
   const htmlContent = `
@@ -83,23 +83,65 @@ export const sendBiweeklyReportEmail = async (payload: BiweeklyEmailPayload) => 
     </html>
   `;
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      from: 'LANITAPP <onboarding@resend.dev>',
-      to: [payload.to],
-      subject: `📊 Resumen Quincena ${payload.quincena} - LANITAPP`,
-      html: htmlContent,
-    }),
-  });
+  const emailPayload = {
+    from: 'LANITAPP <onboarding@resend.dev>',
+    to: [payload.to],
+    subject: `📊 Resumen Quincena ${payload.quincena} - LANITAPP`,
+    html: htmlContent,
+    apiKey,
+  };
 
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.message || 'Error al enviar email');
+  // 1. Intentar envío a través del endpoint local/worker intermediario (/api/send-email)
+  try {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(emailPayload),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    if (response.status !== 404) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || 'Error al enviar email');
+    }
+  } catch (err: any) {
+    if (err?.message && !err.message.includes('404') && !err.message.includes('Failed to fetch')) {
+      throw err;
+    }
   }
-  return await response.json();
+
+  // 2. Si no hay backend intermediario en la ruta /api/send-email, intentar endpoint directo de Resend con captura de CORS
+  try {
+    const directResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from: emailPayload.from,
+        to: emailPayload.to,
+        subject: emailPayload.subject,
+        html: emailPayload.html,
+      }),
+    });
+
+    if (!directResponse.ok) {
+      const err = await directResponse.json().catch(() => ({}));
+      throw new Error(err.message || 'Error al enviar email');
+    }
+    return await directResponse.json();
+  } catch (directErr: any) {
+    const msg = directErr?.message || '';
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('CORS')) {
+      throw new Error('No se pudo conectar con el servicio de correo. Verifica la configuración de Resend.');
+    }
+    throw directErr;
+  }
 };
