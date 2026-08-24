@@ -672,17 +672,18 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
   const channelName = `schema-db-changes-${userId}`;
 
   const tables = [
-    'transactions',
     'accounts',
     'categories',
-    'fixed_incomes',
-    'variable_incomes',
-    'fixed_expenses',
     'debts',
     'debt_payments',
-    'savings_goals',
-    'saving_contributions',
+    'fixed_expenses',
     'fortnight_item_states',
+    'incomes',
+    'profiles',
+    'saving_contributions',
+    'savings_goals',
+    'transactions',
+    'user_profiles',
   ];
 
   let channel = client.channel(channelName);
@@ -693,35 +694,79 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
       { event: '*', schema: 'public', table: tableName },
       async (payload) => {
         console.log(`[Realtime Change Detected on ${tableName}]:`, payload);
+        const newRow: any = payload.new;
+        const oldRow: any = payload.old;
         try {
-          const targetTable = (db as any)[tableName];
-          if (targetTable) {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const row = payload.new;
-              if (!row.user_id || row.user_id === userId) {
-                if (tableName === 'accounts') {
-                  const normAcc = {
-                    id: row.id,
-                    user_id: row.user_id || userId,
-                    name: row.name,
-                    type: row.type || 'cash',
-                    currency: row.currency || 'USD',
-                    initial_balance: typeof row.balance === 'number' ? row.balance : typeof row.initial_balance === 'number' ? row.initial_balance : parseFloat(row.balance || row.initial_balance || 0) || 0,
-                    color: row.color,
-                    notes: row.notes || '',
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    sync_status: 'synced' as SyncStatus,
-                  };
-                  await targetTable.put(normAcc);
-                } else {
-                  await targetTable.put({ ...row, sync_status: 'synced' });
-                }
+          if (tableName === 'incomes') {
+            if (payload.eventType === 'DELETE' && oldRow?.id) {
+              await db.fixed_incomes.delete(oldRow.id);
+              await db.variable_incomes.delete(oldRow.id);
+            } else if (newRow?.id) {
+              const isFijo = newRow.income_type === 'fijo';
+              const q: FortnightType = newRow.quincena === 15 ? 'q1' : 'q2';
+              if (isFijo) {
+                await db.fixed_incomes.put({
+                  id: newRow.id,
+                  user_id: newRow.user_id || userId,
+                  name: newRow.description || 'Ingreso Fijo',
+                  amount: Number(newRow.amount || 0),
+                  currency: newRow.currency || 'USD',
+                  default_fortnight: q,
+                  category_id: newRow.category_id || 'cat_salary',
+                  is_active: newRow.is_active !== undefined ? newRow.is_active : true,
+                  notes: newRow.notes || '',
+                  sync_status: 'synced',
+                });
+              } else {
+                const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
+                const now = new Date();
+                await db.variable_incomes.put({
+                  id: newRow.id,
+                  user_id: newRow.user_id || userId,
+                  description: newRow.description || 'Ingreso Variable',
+                  amount: Number(newRow.amount || 0),
+                  year: !isNaN(yr) ? yr : now.getFullYear(),
+                  month: !isNaN(mo) ? mo - 1 : now.getMonth(),
+                  fortnight: q,
+                  category_id: newRow.category_id || 'cat_extras',
+                  account_id: newRow.account_id || 'acc_bank_usd',
+                  currency: newRow.currency || 'USD',
+                  notes: newRow.notes || '',
+                  sync_status: 'synced',
+                  created_at: newRow.created_at || new Date().toISOString(),
+                  updated_at: newRow.updated_at || new Date().toISOString(),
+                });
               }
-            } else if (payload.eventType === 'DELETE') {
-              const oldId = payload.old?.id;
-              if (oldId) {
-                await targetTable.delete(oldId);
+            }
+          } else {
+            const targetTable = (db as any)[tableName];
+            if (targetTable) {
+              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                if (!newRow.user_id || newRow.user_id === userId) {
+                  if (tableName === 'accounts') {
+                    const normAcc = {
+                      id: newRow.id,
+                      user_id: newRow.user_id || userId,
+                      name: newRow.name,
+                      type: newRow.type || 'cash',
+                      currency: newRow.currency || 'USD',
+                      initial_balance: typeof newRow.balance === 'number' ? newRow.balance : typeof newRow.initial_balance === 'number' ? newRow.initial_balance : parseFloat(newRow.balance || newRow.initial_balance || 0) || 0,
+                      color: newRow.color,
+                      notes: newRow.notes || '',
+                      created_at: newRow.created_at,
+                      updated_at: newRow.updated_at,
+                      sync_status: 'synced' as SyncStatus,
+                    };
+                    await targetTable.put(normAcc);
+                  } else {
+                    await targetTable.put({ ...newRow, sync_status: 'synced' });
+                  }
+                }
+              } else if (payload.eventType === 'DELETE') {
+                const oldId = oldRow?.id;
+                if (oldId) {
+                  await targetTable.delete(oldId);
+                }
               }
             }
           }
