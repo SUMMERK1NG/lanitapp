@@ -84,21 +84,26 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     return { fortnight, label, day, monthName, year };
   };
 
+  const todayStr = new Date().toLocaleDateString('en-CA');
+
   // Cambio de frecuencia con reseteo de quincena objetivo
   const handleFrequencyChange = (newFreq: 'fortnightly' | 'monthly') => {
     setFrequency(newFreq);
     if (newFreq === 'fortnightly') {
       setTargetFortnight('both');
     } else {
-      const info = getFortnightInfoFromDate(startDate);
+      const info = getFortnightInfoFromDate(startDate || todayStr);
       setTargetFortnight(targetFortnight === 'both' ? info.fortnight : (targetFortnight || 'q1'));
     }
   };
 
-  // Cambio de fecha de inicio con recalculo automático
+  // Cambio de fecha de inicio con validación y recalculo automático
   const handleStartDateChange = (val: string) => {
     setStartDate(val);
-    const info = getFortnightInfoFromDate(val);
+    if (targetDate && val && targetDate < val) {
+      setTargetDate('');
+    }
+    const info = getFortnightInfoFromDate(val || todayStr);
     if (frequency === 'fortnightly') {
       setTargetFortnight('both');
     } else {
@@ -186,7 +191,6 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setTargetAmount(0);
     setFrequency('fortnightly');
     setTargetFortnight('both');
-    const todayStr = new Date().toISOString().split('T')[0];
     setStartDate(todayStr);
     setAmountPerPeriod(0);
     setTargetDate('');
@@ -199,7 +203,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setName(goal.name);
     setTargetAmount(goal.target_amount || 0);
     setFrequency(goal.frequency);
-    const initDate = goal.start_date || goal.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+    const initDate = goal.start_date || goal.created_at?.split('T')[0] || todayStr;
     setStartDate(initDate);
     setTargetFortnight(goal.frequency === 'fortnightly' ? 'both' : (goal.target_fortnight || getFortnightInfoFromDate(initDate).fortnight));
     setAmountPerPeriod(goal.amount_per_period || 0);
@@ -594,33 +598,43 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
               </div>
 
               {/* Fechas: Inicio (Obligatorio, solo futuras) y Límite (Opcional, posterior a inicio) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Fecha de Inicio <span className="text-[#00C2C7] font-bold">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    value={startDate}
-                    onChange={(e) => handleStartDateChange(e.target.value)}
-                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
-                  />
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted mb-1">
+                      Fecha de Inicio <span className="text-[#00C2C7] font-bold">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={todayStr}
+                      value={startDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted mb-1">
+                      Fecha Límite Estimada <span className="text-[10px] text-muted">(Opcional)</span>
+                    </label>
+                    <input
+                      type="date"
+                      min={startDate && startDate >= todayStr ? startDate : todayStr}
+                      value={targetDate}
+                      onChange={(e) => setTargetDate(e.target.value)}
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Fecha Límite Estimada <span className="text-[10px] text-muted">(Opcional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    min={startDate || new Date().toISOString().split('T')[0]}
-                    value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
-                  />
-                </div>
+                {/* Aviso para metas editadas cuya fecha original ya pasó */}
+                {editingGoal && editingGoal.start_date && editingGoal.start_date < todayStr && (
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-[11px] text-amber-400">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>La fecha de inicio ({editingGoal.start_date}) ya pasó. La meta se considera activa desde hoy.</span>
+                  </div>
+                )}
               </div>
 
               {/* Cálculo Inteligente de Cuotas */}
@@ -653,26 +667,26 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 </div>
               )}
 
-              {/* Indicador compacto de quincena */}
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-app text-xs">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-[#00C2C7]" />
-                  <span className="text-xs font-medium text-muted">
-                    {frequency === 'fortnightly'
-                      ? 'Aporte activo en ambas quincenas (15 y 30)'
-                      : `Aporte mensual en ${targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}`}
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded-lg bg-[#00C2C7]/15 text-[#00C2C7] text-[10px] font-bold">
-                  {frequency === 'fortnightly' ? 'Ambas (15 y 30)' : targetFortnight === 'q2' ? 'Quincena 30' : 'Quincena 15'}
-                </span>
-              </div>
-
+              {/* Frecuencia de Ahorro y Quincena Específica con Chip Badge */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Frecuencia de Ahorro
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-muted">
+                      Frecuencia de Ahorro
+                    </label>
+                    <span
+                      title={
+                        frequency === 'fortnightly'
+                          ? 'Se apartará en ambas quincenas (15 y 30) de cada mes'
+                          : targetFortnight === 'q2'
+                          ? 'Se apartará en Quincena 30 de cada mes'
+                          : 'Se apartará en Quincena 15 de cada mes'
+                      }
+                      className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-[10px] font-extrabold border border-cyan-500/30 cursor-help"
+                    >
+                      {frequency === 'fortnightly' ? 'Q15+Q30' : targetFortnight === 'q2' ? 'Q30' : 'Q15'}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
                     {[
                       { id: 'fortnightly' as const, label: 'Quincenal' },
@@ -720,9 +734,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col justify-center text-xs text-muted px-2">
-                    <span className="text-[11px] font-medium leading-relaxed">
-                      Se apartará en <strong className="text-app">ambas quincenas (15 y 30)</strong> a partir de la fecha de inicio.
+                  <div className="flex flex-col justify-center text-xs text-muted px-1">
+                    <span className="text-[11px] font-medium text-muted leading-relaxed">
+                      Se apartará automáticamente en <strong className="text-app">ambas quincenas (15 y 30)</strong>.
                     </span>
                   </div>
                 )}
