@@ -969,6 +969,9 @@ export async function addSavingContribution(data: {
   month: number;
   fortnight: FortnightType;
   notes?: string;
+  source_type?: 'account' | 'variable_income';
+  account_id?: string;
+  income_description?: string;
 }): Promise<SavingContribution> {
   const goal = await db.savings_goals.get(data.goal_id);
   if (!goal) throw new Error('Meta de ahorro no encontrada');
@@ -992,14 +995,50 @@ export async function addSavingContribution(data: {
   const newCurrent = Number(goal.current_amount) + Number(data.amount);
   const newStatus = newCurrent >= Number(goal.target_amount) ? 'completed' : goal.status;
 
-  const txRecord: Transaction = {
-    id: 'tx_' + record.id,
+  let varIncomeRecord: VariableIncome | null = null;
+  let txIncomeRecord: Transaction | null = null;
+
+  if (data.source_type === 'variable_income') {
+    const varId = ensureValidUuid();
+    varIncomeRecord = {
+      id: varId,
+      user_id: userId,
+      description: data.income_description || `Ingreso extra para ahorro: ${goal.name}`,
+      amount: Number(data.amount),
+      year: data.year,
+      month: data.month,
+      fortnight: data.fortnight,
+      category_id: 'cat_extras',
+      account_id: data.account_id || '',
+      currency: 'USD',
+      notes: `Destinado a meta de ahorro: ${goal.name}`,
+      sync_status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    txIncomeRecord = {
+      id: 'tx_inc_' + record.id,
+      user_id: userId,
+      amount: Number(data.amount),
+      type: 'income',
+      description: `${varIncomeRecord.description} (${data.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
+      category_id: 'cat_extras',
+      account_id: data.account_id || '',
+      transaction_date: record.contribution_date,
+      sync_status: 'pending',
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  const txExpenseRecord: Transaction = {
+    id: 'tx_exp_' + record.id,
     user_id: userId,
     amount: Number(data.amount),
     type: 'expense',
-    description: `Aporte Ahorro: ${goal.name}`,
+    description: `Aporte Ahorro: ${goal.name}${data.source_type === 'variable_income' ? ' (desde ingreso variable)' : ''}`,
     category_id: 'cat_savings',
-    account_id: (data as any).account_id || '',
+    account_id: data.account_id || '',
     transaction_date: record.contribution_date,
     sync_status: 'pending',
     created_at: new Date().toISOString(),
@@ -1008,17 +1047,27 @@ export async function addSavingContribution(data: {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { sync_status: s1, ...scPayload } = record;
-      const { sync_status: s2, ...txPayload } = txRecord;
-      const [res1, res2, res3] = await Promise.all([
-        supabase.from('saving_contributions').upsert(scPayload),
-        supabase.from('savings_goals').update({ current_amount: newCurrent, status: newStatus, updated_at: new Date().toISOString() }).eq('id', goal.id),
-        supabase.from('transactions').upsert(txPayload),
-      ]);
-      if (!res1.error && !res2.error && !res3.error) {
+      const { sync_status: s2, ...txExpPayload } = txExpenseRecord;
+      const promises = [
+        Promise.resolve(supabase.from('saving_contributions').upsert(scPayload)),
+        Promise.resolve(supabase.from('savings_goals').update({ current_amount: newCurrent, status: newStatus, updated_at: new Date().toISOString() }).eq('id', goal.id)),
+        Promise.resolve(supabase.from('transactions').upsert(txExpPayload)),
+      ];
+
+      if (varIncomeRecord && txIncomeRecord) {
+        const { sync_status: s3, ...varPayload } = varIncomeRecord;
+        const { sync_status: s4, ...txIncPayload } = txIncomeRecord;
+        promises.push(Promise.resolve(supabase.from('variable_incomes').upsert(varPayload)));
+        promises.push(Promise.resolve(supabase.from('transactions').upsert(txIncPayload)));
+      }
+
+      const results = await Promise.all(promises);
+      const hasError = results.some((r) => r.error);
+      if (!hasError) {
         record.sync_status = 'synced';
-        txRecord.sync_status = 'synced';
-      } else {
-        console.error('[Supabase Saving Contribution Error]:', res1.error || res2.error || res3.error);
+        txExpenseRecord.sync_status = 'synced';
+        if (varIncomeRecord) varIncomeRecord.sync_status = 'synced';
+        if (txIncomeRecord) txIncomeRecord.sync_status = 'synced';
       }
     } catch (e) {
       console.warn('Direct saving contribution upsert notice:', e);
@@ -1032,7 +1081,12 @@ export async function addSavingContribution(data: {
     sync_status: 'synced',
     updated_at: new Date().toISOString(),
   });
-  await db.transactions.put(txRecord);
+  await db.transactions.put(txExpenseRecord);
+
+  if (varIncomeRecord && txIncomeRecord) {
+    await db.variable_incomes.put(varIncomeRecord);
+    await db.transactions.put(txIncomeRecord);
+  }
 
   return record;
 }

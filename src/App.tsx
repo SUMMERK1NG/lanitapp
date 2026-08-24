@@ -620,6 +620,7 @@ export function App() {
               <SavingsModule
                 savingsGoals={savingsGoals}
                 savingContributions={savingContributions}
+                accounts={accounts}
               />
             </div>
           )}

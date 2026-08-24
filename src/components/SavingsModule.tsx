@@ -12,14 +12,18 @@ import {
   Layers,
   X,
   Sparkles,
+  Wallet,
+  TrendingUp,
 } from 'lucide-react';
-import type { SavingsGoal, SavingContribution, FortnightType } from '../types/index.ts';
-import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution, skipSavingContributionPeriod } from '../lib/db.ts';
+import type { SavingsGoal, SavingContribution, FortnightType, Account } from '../types/index.ts';
+import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 
 interface SavingsModuleProps {
   savingsGoals: SavingsGoal[];
   savingContributions: SavingContribution[];
+  accounts?: Account[];
   currency?: string;
 }
 
@@ -31,8 +35,12 @@ const MONTH_NAMES = [
 export const SavingsModule: React.FC<SavingsModuleProps> = ({
   savingsGoals,
   savingContributions,
+  accounts = [],
   currency = '$',
 }) => {
+  const { accounts: storeAccounts } = useFinanceStore();
+  const availableAccounts = accounts && accounts.length > 0 ? accounts : storeAccounts;
+
   // Modal states
   const [isGoalModalOpen, setIsGoalModalOpen] = useState<boolean>(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
@@ -42,11 +50,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const [selectedGoalForContrib, setSelectedGoalForContrib] = useState<SavingsGoal | null>(null);
   const [contribAmount, setContribAmount] = useState<number>(0);
   const [contribNotes, setContribNotes] = useState<string>('');
-
-  // Skip period modal
-  const [isSkipModalOpen, setIsSkipModalOpen] = useState<boolean>(false);
-  const [selectedGoalForSkip, setSelectedGoalForSkip] = useState<SavingsGoal | null>(null);
-  const [skipReason, setSkipReason] = useState<string>('');
+  const [sourceType, setSourceType] = useState<'account' | 'variable_income'>('account');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [variableIncomeDescription, setVariableIncomeDescription] = useState<string>('');
 
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
 
@@ -263,6 +269,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     setSelectedGoalForContrib(goal);
     setContribAmount(goal.amount_per_period || 0);
     setContribNotes(`Aporte Quincena ${currentFortnight === 'q1' ? '15' : '30'} de ${MONTH_NAMES[currentMonth]}`);
+    setSourceType('account');
+    setSelectedAccountId(availableAccounts[0]?.id || '');
+    setVariableIncomeDescription(`Ingreso extra para meta: ${goal.name}`);
     setIsContributionModalOpen(true);
   };
 
@@ -271,6 +280,11 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     const num = contribAmount;
     if (!selectedGoalForContrib || isNaN(num) || num <= 0) return;
 
+    if (sourceType === 'account' && availableAccounts.length > 0 && !selectedAccountId) {
+      alert('Por favor selecciona una cuenta de origen');
+      return;
+    }
+
     await addSavingContribution({
       goal_id: selectedGoalForContrib.id,
       amount: num,
@@ -278,30 +292,12 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
       month: currentMonth,
       fortnight: currentFortnight,
       notes: contribNotes,
+      source_type: sourceType,
+      account_id: sourceType === 'account' ? selectedAccountId : undefined,
+      income_description: sourceType === 'variable_income' ? (variableIncomeDescription || `Ingreso extra para meta: ${selectedGoalForContrib.name}`) : undefined,
     });
 
     setIsContributionModalOpen(false);
-  };
-
-  const handleOpenSkipModal = (goal: SavingsGoal) => {
-    setSelectedGoalForSkip(goal);
-    setSkipReason('Imprevisto médico / gastos de emergencia');
-    setIsSkipModalOpen(true);
-  };
-
-  const handleConfirmSkip = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedGoalForSkip) return;
-
-    await skipSavingContributionPeriod({
-      goal_id: selectedGoalForSkip.id,
-      year: currentYear,
-      month: currentMonth,
-      fortnight: currentFortnight,
-      reason: skipReason,
-    });
-
-    setIsSkipModalOpen(false);
   };
 
   return (
@@ -483,32 +479,22 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                   </div>
                 </div>
 
-                {/* Actions: Aportar Ahora & Omitir este periodo */}
+                {/* Action: Aportar Ahora */}
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-app text-xs">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleOpenContribModal(goal)}
-                      className="px-3 py-1.5 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
-                    >
-                      <DollarSign className="w-3.5 h-3.5" />
-                      Aportar Ahora
-                    </button>
-
-                    <button
-                      onClick={() => handleOpenSkipModal(goal)}
-                      className="px-2.5 py-1.5 rounded-xl bg-card hover:bg-[#FF914D]/20 text-muted hover:text-[#FF914D] border border-app font-bold transition-all cursor-pointer"
-                      title="Omitir el aporte de esta quincena por imprevisto"
-                    >
-                      Omitir Periodo
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleOpenContribModal(goal)}
+                    className="px-3.5 py-2 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>Aportar Ahora</span>
+                  </button>
 
                   <button
                     onClick={() => setExpandedGoalId(isExpanded ? null : goal.id)}
                     className="text-[11px] font-bold text-muted hover:text-app flex items-center gap-1 cursor-pointer"
                   >
                     <Layers className="w-3.5 h-3.5" />
-                    {contributions.length} aportes
+                    {contributions.length} {contributions.length === 1 ? 'aporte' : 'aportes'}
                   </button>
                 </div>
 
@@ -785,23 +771,23 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
         </div>
       )}
 
-      {/* Modal Aportar Ahora */}
+      {/* Modal Aportar Ahora a Meta */}
       {isContributionModalOpen && selectedGoalForContrib && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
-                  <DollarSign className="w-4 h-4" />
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
+                  <PiggyBank className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-app">Registrar Aporte de Ahorro</h3>
-                  <p className="text-[11px] text-muted">{selectedGoalForContrib.name}</p>
+                  <p className="text-[11px] text-muted">Meta: {selectedGoalForContrib.name}</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsContributionModalOpen(false)}
-                className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app"
+                className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -810,7 +796,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
             <form onSubmit={handleSaveContribution} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Monto a Aportar ($ USD)
+                  Monto a Aportar ($ USD) <span className="text-[#00C2C7] font-bold">*</span>
                 </label>
                 <MoneyInput
                   value={contribAmount}
@@ -821,15 +807,89 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 />
               </div>
 
+              {/* Selector de Origen de Fondos */}
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1.5">
+                  Origen de los Fondos
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-xl border border-app">
+                  <button
+                    type="button"
+                    onClick={() => setSourceType('account')}
+                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      sourceType === 'account'
+                        ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
+                        : 'text-muted hover:text-app'
+                    }`}
+                  >
+                    <Wallet className="w-3.5 h-3.5" />
+                    <span>Desde Cuenta</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceType('variable_income')}
+                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      sourceType === 'variable_income'
+                        ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
+                        : 'text-muted hover:text-app'
+                    }`}
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Ingreso Variable</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Campos condicionales según el origen */}
+              {sourceType === 'account' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Cuenta / Fondo de Origen
+                  </label>
+                  {availableAccounts.length === 0 ? (
+                    <p className="text-xs text-amber-400 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                      No tienes cuentas registradas. El aporte se registrará sin cuenta asociada.
+                    </p>
+                  ) : (
+                    <select
+                      value={selectedAccountId}
+                      onChange={(e) => setSelectedAccountId(e.target.value)}
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    >
+                      {availableAccounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.currency}) - Saldo: ${acc.initial_balance ?? 0}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Descripción del Ingreso Variable <span className="text-[#00C2C7] font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. Bono de producción, Venta garage, Trabajo extra..."
+                    value={variableIncomeDescription}
+                    onChange={(e) => setVariableIncomeDescription(e.target.value)}
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Nota / Referencia
+                  Nota / Referencia <span className="text-[10px] text-muted">(Opcional)</span>
                 </label>
                 <input
                   type="text"
                   value={contribNotes}
                   onChange={(e) => setContribNotes(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
+                  placeholder="Detalles sobre este aporte..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
                 />
               </div>
 
@@ -837,75 +897,15 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsContributionModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold"
+                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-md hover:opacity-95"
+                  className="flex-1 py-2.5 rounded-xl bg-[#00C2C7] text-slate-900 font-extrabold shadow-md hover:opacity-95 transition-all cursor-pointer"
                 >
                   Confirmar Aporte
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Omitir Periodo */}
-      {isSkipModalOpen && selectedGoalForSkip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold">
-                  <AlertCircle className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-app">Omitir Aporte en esta Quincena</h3>
-                  <p className="text-[11px] text-muted">{selectedGoalForSkip.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsSkipModalOpen(false)}
-                className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmSkip} className="space-y-3.5">
-              <p className="text-xs text-muted">
-                Al omitir este periodo, el sistema registrará que no pudiste apartar este ahorro por imprevistos sin afectar negativamente tu balance actual.
-              </p>
-
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Motivo de la Omisión
-                </label>
-                <input
-                  type="text"
-                  value={skipReason}
-                  onChange={(e) => setSkipReason(e.target.value)}
-                  placeholder="Ej. Gasto médico imprevisto, reparación de auto..."
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setIsSkipModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#FF914D] text-white font-extrabold shadow-md hover:opacity-95"
-                >
-                  Confirmar Omisión
                 </button>
               </div>
             </form>
