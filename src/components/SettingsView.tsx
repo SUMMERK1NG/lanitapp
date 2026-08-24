@@ -47,6 +47,7 @@ interface SettingsViewProps {
   currentThemeMode: ThemeMode;
   currentAccentColor: AccentColor;
   currentUserId?: string;
+  initialTab?: 'themes' | 'categories' | 'users' | 'backup';
   onChangeThemeMode: (mode: ThemeMode) => void;
   onChangeAccentColor: (color: AccentColor) => void;
   onSync: () => void;
@@ -67,13 +68,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   currentThemeMode,
   currentAccentColor,
   currentUserId,
+  initialTab = 'themes',
   onChangeThemeMode,
   onChangeAccentColor,
   onSync,
 }) => {
-  const [activeTab, setActiveTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
+  const [activeTab, setActiveTab] = useState<'themes' | 'categories' | 'users' | 'backup'>(initialTab);
   const [resetting, setResetting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const handleExportJSON = () => {
     const backupData = {

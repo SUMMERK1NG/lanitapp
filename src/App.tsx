@@ -89,7 +89,13 @@ export function App() {
   const [transactionModalType, setTransactionModalType] = useState<TransactionType>('expense');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [preselectedDebtForPayment, setPreselectedDebtForPayment] = useState<string | undefined>(undefined);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleNavigateToSettings = (tab: 'themes' | 'categories' | 'users' | 'backup' = 'themes') => {
+    setSettingsInitialTab(tab);
+    setActiveView('settings');
+  };
 
   // Detect Password Recovery URL / Events
   useEffect(() => {
@@ -514,6 +520,8 @@ export function App() {
                 savingsGoals={savingsGoals}
                 savingContributions={savingContributions}
                 rates={rates}
+                userEmail={currentUser?.email}
+                userName={currentUser?.name}
                 onOpenQuickPayment={handleOpenPaymentModal}
                 onNavigateToIncomes={() => setActiveView('incomes')}
                 onNavigateToSavings={() => setActiveView('savings')}
@@ -700,6 +708,7 @@ export function App() {
                 currentThemeMode={themeMode}
                 currentAccentColor={accentColor}
                 currentUserId={currentUser?.id}
+                initialTab={settingsInitialTab}
                 onChangeThemeMode={setThemeMode}
                 onChangeAccentColor={setAccentColor}
                 onSync={syncNow}
@@ -714,12 +723,14 @@ export function App() {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         profile={currentUser}
+        isAdmin={isAdmin}
         currentThemeMode={themeMode}
         currentAccentColor={accentColor}
         onChangeThemeMode={setThemeMode}
         onChangeAccentColor={setAccentColor}
         onUpdateProfile={updateProfile}
         onShowToast={showToast}
+        onNavigateToSettings={handleNavigateToSettings}
         onSignOut={signOut}
       />
 
@@ -774,6 +785,8 @@ export function App() {
         onOpenQuickAction={() => setIsQuickActionOpen(true)}
         onOpenConverter={() => setIsConverterOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        onNavigateToSettings={handleNavigateToSettings}
+        isAdmin={isAdmin}
         pendingCount={pendingCount}
       />
     </div>

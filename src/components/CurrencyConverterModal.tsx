@@ -48,7 +48,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         badge: 'Oficial BCV',
         badgeColor: 'bg-[#147df0]/20 text-[#147df0] border-[#147df0]/40',
         amountFormatted: `Bs. ${formatCurrencyVE(vesBcv)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(bcvUsd)} / USD`,
+        subtext: `Tasa Oficial BCV: Bs. ${formatCurrencyVE(bcvUsd)}`,
       },
       {
         key: 'ves_par',
@@ -56,7 +56,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         badge: 'Paralelo / Cash',
         badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
         amountFormatted: `Bs. ${formatCurrencyVE(vesPar)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(parallelUsd)} / USD`,
+        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)}`,
       },
       {
         key: 'eur_bcv',
@@ -64,7 +64,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         badge: 'Euro BCV',
         badgeColor: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
         amountFormatted: `€ ${formatCurrencyVE(eurBcv)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(bcvEur)} / EUR`,
+        subtext: `Tasa Euro BCV: Bs. ${formatCurrencyVE(bcvEur)}`,
       },
     ];
   } else if (fromCurrency === 'VES') {
@@ -79,15 +79,15 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         badge: 'Oficial BCV',
         badgeColor: 'bg-[#147df0]/20 text-[#147df0] border-[#147df0]/40',
         amountFormatted: `$ ${formatCurrencyVE(usdBcv)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(bcvUsd)} / USD`,
+        subtext: `Tasa Oficial BCV: Bs. ${formatCurrencyVE(bcvUsd)}`,
       },
       {
         key: 'usd_par',
-        label: 'Dólares Paralelo / Cash',
+        label: 'Dólares Paralelo',
         badge: 'Paralelo / Cash',
         badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
         amountFormatted: `$ ${formatCurrencyVE(usdPar)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(parallelUsd)} / USD`,
+        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)}`,
       },
       {
         key: 'eur_bcv',
@@ -95,7 +95,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         badge: 'Euro BCV',
         badgeColor: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
         amountFormatted: `€ ${formatCurrencyVE(eurBcv)}`,
-        subtext: `Tasa: Bs. ${formatCurrencyVE(bcvEur)} / EUR`,
+        subtext: `Tasa Euro BCV: Bs. ${formatCurrencyVE(bcvEur)}`,
       },
     ];
   } else {
@@ -114,20 +114,20 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         subtext: `Tasa Euro BCV: Bs. ${formatCurrencyVE(bcvEur)}`,
       },
       {
+        key: 'ves_par',
+        label: 'Bolívares Paralelo',
+        badge: 'Paralelo / Cash',
+        badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
+        amountFormatted: `Bs. ${formatCurrencyVE(vesPar)}`,
+        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)} / USD`,
+      },
+      {
         key: 'usd_bcv',
-        label: 'Dólares (USD)',
+        label: 'Dólares Equivalentes',
         badge: 'Dólar BCV',
         badgeColor: 'bg-[#00c2c7]/20 text-[#00c2c7] border-[#00c2c7]/40',
         amountFormatted: `$ ${formatCurrencyVE(usdBcv)}`,
         subtext: `Tasa Dólar BCV: Bs. ${formatCurrencyVE(bcvUsd)}`,
-      },
-      {
-        key: 'ves_par',
-        label: 'Bolívares Paralelo (vía USD)',
-        badge: 'Paralelo / Cash',
-        badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
-        amountFormatted: `Bs. ${formatCurrencyVE(vesPar)}`,
-        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)}`,
       },
     ];
   }

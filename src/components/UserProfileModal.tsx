@@ -28,6 +28,8 @@ interface UserProfileModalProps {
   onChangeAccentColor: (color: AccentColor) => void;
   onUpdateProfile?: (updates: Partial<UserProfile>) => Promise<void>;
   onShowToast?: (msg: string) => void;
+  onNavigateToSettings?: (tab?: 'themes' | 'categories' | 'users' | 'backup') => void;
+  isAdmin?: boolean;
   onSignOut?: () => void;
 }
 
@@ -43,6 +45,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onChangeAccentColor,
   onUpdateProfile,
   onShowToast,
+  onNavigateToSettings,
+  isAdmin: propIsAdmin,
   onSignOut,
 }) => {
   const [name, setName] = useState<string>(profile?.name || 'Usuario');
@@ -50,6 +54,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     return profile?.avatar_url || profile?.avatar || (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) || '👨‍💻';
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const isAdmin = propIsAdmin ?? (profile?.role === 'admin' || (typeof localStorage !== 'undefined' && localStorage.getItem('user_role') === 'admin'));
 
   React.useEffect(() => {
     if (profile) {
@@ -141,7 +147,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           setAvatar(dataUrl);
           localStorage.setItem('user_avatar', dataUrl);
           if (onUpdateProfile) {
-            await onUpdateProfile({ avatar: dataUrl, avatar_url: dataUrl }).catch((err) =>
+            await onUpdateProfile({ avatar: dataUrl, avatar_url: dataUrl }).catch((err: any) =>
               console.warn('Profile image instant update error:', err)
             );
           }
@@ -382,6 +388,57 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               })}
             </div>
           </div>
+
+          {/* Accesos Rápidos de Administrador */}
+          {isAdmin && (
+            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-app uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
+                  Herramientas de Administrador
+                </span>
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                  ADMIN
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onNavigateToSettings) {
+                      onNavigateToSettings('users');
+                    }
+                  }}
+                  className="flex items-center gap-2.5 p-2.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs font-bold transition-all text-left cursor-pointer"
+                >
+                  <span className="text-base">👑</span>
+                  <div>
+                    <span className="block text-white">Gestionar Usuarios</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Roles y accesos</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onNavigateToSettings) {
+                      onNavigateToSettings('backup');
+                    }
+                  }}
+                  className="flex items-center gap-2.5 p-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-bold transition-all text-left cursor-pointer"
+                >
+                  <span className="text-base">💾</span>
+                  <div>
+                    <span className="block text-white">Respaldar Base de Datos</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Exportar JSON / Reset</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Actions: Guardar Cambios & Cerrar Sesión */}
           <div className="space-y-2 pt-3 border-t border-app">

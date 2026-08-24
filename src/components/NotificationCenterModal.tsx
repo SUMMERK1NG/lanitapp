@@ -166,12 +166,12 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <>
-      {/* Backdrop para cerrar al hacer clic afuera */}
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+      {/* Backdrop click to close */}
+      <div className="fixed inset-0" onClick={onClose} />
 
-      {/* Floating Notification Panel Dropdown */}
-      <div className="absolute right-0 top-12 z-50 w-80 md:w-96 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 text-app max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+      {/* Main Centered Modal Window */}
+      <div className="relative z-10 w-full max-w-md bg-[#162032] border border-slate-700/70 rounded-2xl p-5 sm:p-6 shadow-2xl text-white max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -290,6 +290,6 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };

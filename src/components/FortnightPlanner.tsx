@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   DollarSign,
   Briefcase,
@@ -10,6 +10,10 @@ import {
   Sparkles,
   PiggyBank,
   ArrowRight,
+  Mail,
+  Send,
+  RefreshCw,
+  X,
 } from 'lucide-react';
 import type {
   FortnightType,
@@ -25,6 +29,7 @@ import type {
   ExchangeRatesData,
 } from '../types/index.ts';
 import { MonthPicker } from './MonthPicker.tsx';
+import { sendBiweeklyReportEmail } from '../services/emailService.ts';
 
 interface FortnightPlannerProps {
   selectedYear: number;
@@ -41,6 +46,8 @@ interface FortnightPlannerProps {
   savingContributions: SavingContribution[];
   rates?: ExchangeRatesData;
   currency?: string;
+  userEmail?: string;
+  userName?: string;
   onOpenQuickPayment?: (debtId?: string) => void;
   onNavigateToIncomes?: () => void;
   onNavigateToSavings?: () => void;
@@ -66,11 +73,23 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   savingContributions,
   rates,
   currency = '$',
+  userEmail = '',
+  userName = 'Usuario',
   onOpenQuickPayment,
   onNavigateToIncomes,
   onNavigateToSavings,
 }) => {
   const [selectedFortnight, setSelectedFortnight] = useState<FortnightType>('q1');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
+  const [emailRecipient, setEmailRecipient] = useState<string>(userEmail);
+  const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (userEmail) {
+      setEmailRecipient(userEmail);
+    }
+  }, [userEmail]);
 
   const monthName = MONTH_NAMES[selectedMonth];
   const fortnightLabel = selectedFortnight === 'q1'
@@ -233,6 +252,38 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   // Dinero Libre Real (after expenses, debts, and planned savings)
   const netRemaining = totalAvailable - (totalCommitted + plannedSavingsTotal);
 
+  const handleSendReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailRecipient.trim()) return;
+
+    setIsSendingEmail(true);
+    setEmailStatus(null);
+    try {
+      const bcvRate = rates?.bcvDollar || 1;
+      await sendBiweeklyReportEmail({
+        to: emailRecipient.trim(),
+        userName: userName || 'Usuario',
+        quincena: selectedFortnight === 'q1' ? '15' : '30',
+        mes: `${monthName} ${selectedYear}`,
+        ingresosTotal: totalAvailable,
+        gastosFijos: totalFixedCost,
+        deudasTotal: effectiveDebtCost,
+        dineroLibre: netRemaining,
+        dineroLibreVES: netRemaining * bcvRate,
+        bcvRate: bcvRate,
+      });
+      setEmailStatus({ type: 'success', message: `¡Reporte enviado exitosamente a ${emailRecipient}!` });
+      setTimeout(() => {
+        setIsEmailModalOpen(false);
+        setEmailStatus(null);
+      }, 2500);
+    } catch (err: any) {
+      setEmailStatus({ type: 'error', message: err.message || 'Error al enviar el reporte por correo' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Month & Period Selector Bar con Dropdown */}
@@ -244,27 +295,40 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           className="w-full sm:w-auto justify-between sm:justify-start"
         />
 
-        {/* Quincena 15 vs 30 Selector con nombres concisos y diseño responsivo */}
-        <div className="w-full sm:w-auto grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          {/* Quincena 15 vs 30 Selector con nombres concisos y diseño responsivo */}
+          <div className="w-full sm:w-auto grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
+            <button
+              onClick={() => setSelectedFortnight('q1')}
+              className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
+                selectedFortnight === 'q1'
+                  ? 'bg-primary-custom text-white shadow-md'
+                  : 'text-muted hover:text-app'
+              }`}
+            >
+              Quincena 15
+            </button>
+            <button
+              onClick={() => setSelectedFortnight('q2')}
+              className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
+                selectedFortnight === 'q2'
+                  ? 'bg-primary-custom text-white shadow-md'
+                  : 'text-muted hover:text-app'
+              }`}
+            >
+              Quincena 30
+            </button>
+          </div>
+
+          {/* Enviar Resumen por Correo */}
           <button
-            onClick={() => setSelectedFortnight('q1')}
-            className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
-              selectedFortnight === 'q1'
-                ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
-            }`}
+            type="button"
+            onClick={() => setIsEmailModalOpen(true)}
+            className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+            title="Enviar Resumen Quincenal por Correo (Resend)"
           >
-            Quincena 15
-          </button>
-          <button
-            onClick={() => setSelectedFortnight('q2')}
-            className={`py-2 px-3 sm:py-1.5 sm:px-4 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
-              selectedFortnight === 'q2'
-                ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
-            }`}
-          >
-            Quincena 30
+            <Mail className="w-3.5 h-3.5 text-primary-custom" />
+            <span className="text-xs">Enviar Reporte</span>
           </button>
         </div>
       </div>
@@ -557,6 +621,102 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Email Report Modal */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setIsEmailModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-md bg-[#162032] border border-slate-700/70 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">Enviar Reporte Quincenal</h3>
+                  <p className="text-[10px] text-slate-400">Vía correo electrónico con Resend</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {emailStatus && (
+              <div
+                className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                  emailStatus.type === 'success'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-[#ef4444]/20 text-[#ef4444] border border-[#ef4444]/30'
+                }`}
+              >
+                {emailStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{emailStatus.message}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSendReport} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Correo Electrónico Destino
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={emailRecipient}
+                  onChange={(e) => setEmailRecipient(e.target.value)}
+                  placeholder="ejemplo@correo.com"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-primary-custom transition-all"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-1 text-slate-300">
+                <p className="font-bold text-white">Periodo a Enviar:</p>
+                <p className="text-[11px] text-slate-400">
+                  {selectedFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'} - {monthName} {selectedYear}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Dinero Libre Estimado: <strong className="text-[#38bdf8]">${netRemaining.toFixed(2)}</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingEmail}
+                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Enviar Reporte</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
