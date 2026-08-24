@@ -21,6 +21,7 @@ import {
   db,
   DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
+  toSupabaseAccountPayload,
   getFortnightPeriodKey,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
@@ -36,7 +37,7 @@ export interface SyncQueueItem {
 }
 
 export interface FinanceStoreState {
-  // 12 Supabase Entities
+  // 14 Supabase Entities
   profiles: UserProfile[];
   categories: Category[];
   accounts: Account[];
@@ -51,7 +52,6 @@ export interface FinanceStoreState {
   savingContributions: SavingContribution[];
   fortnightItemStates: FortnightItemState[];
   transactions: Transaction[];
-  userProfiles: UserProfile[];
 
   // Sync state
   syncStatus: RealtimeSyncStatus;
@@ -167,7 +167,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   savingContributions: [],
   fortnightItemStates: [],
   transactions: [],
-  userProfiles: [],
 
   syncStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'syncing' : 'offline',
   lastSyncTime: null,
@@ -247,7 +246,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   /**
-   * Carga inicial completa de las 12 tablas desde Supabase
+   * Carga inicial completa de las 14 tablas desde Supabase
    */
   fetchInitialData: async (userId: string) => {
     if (!userId) return;
@@ -264,43 +263,42 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       // 1. Vaciar cola pendiente previa
       await get().flushSyncQueue(userId);
 
-      // 2. Fetch en paralelo de todas las tablas
+      // 2. Fetch en paralelo de las 14 tablas
       const [
         resProfiles,
         resCategories,
         resAccounts,
-        resIncomes,
+        resFixedIncomes,
+        resMonthlyIncomeOverrides,
+        resVariableIncomes,
         resFixedExpenses,
+        resMonthlyFixedOverrides,
         resDebts,
         resDebtPayments,
         resSavingsGoals,
         resSavingContributions,
         resFortnightStates,
         resTransactions,
-        resUserProfiles,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId),
         supabase.from('categories').select('*'),
         supabase.from('accounts').select('*').eq('user_id', userId),
-        supabase.from('incomes').select('*').eq('user_id', userId),
+        supabase.from('fixed_incomes').select('*').eq('user_id', userId),
+        supabase.from('monthly_fixed_income_overrides').select('*'),
+        supabase.from('variable_incomes').select('*').eq('user_id', userId),
         supabase.from('fixed_expenses').select('*').eq('user_id', userId),
+        supabase.from('monthly_fixed_overrides').select('*'),
         supabase.from('debts').select('*').eq('user_id', userId),
         supabase.from('debt_payments').select('*').eq('user_id', userId),
         supabase.from('savings_goals').select('*').eq('user_id', userId),
         supabase.from('saving_contributions').select('*').eq('user_id', userId),
         supabase.from('fortnight_item_states').select('*').eq('user_id', userId),
         supabase.from('transactions').select('*').eq('user_id', userId),
-        supabase.from('user_profiles').select('*'),
       ]);
 
-      // Mapear profiles
       const profiles: UserProfile[] = resProfiles.data || [];
-      const userProfiles: UserProfile[] = resUserProfiles.data || [];
-
-      // Mapear categorías globales
       const categories: Category[] = resCategories.data && resCategories.data.length > 0 ? resCategories.data : DEFAULT_CATEGORIES;
 
-      // Mapear cuentas
       const rawAccounts = resAccounts.data || [];
       const accounts: Account[] = rawAccounts.map((a: any) => ({
         id: a.id,
@@ -316,203 +314,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced' as SyncStatus,
       }));
 
-      // Mapear tabla 'incomes' (fijo vs variable)
-      const rawIncomes = resIncomes.data || [];
-      const fixedIncomes: FixedIncome[] = [];
-      const variableIncomes: VariableIncome[] = [];
-
-      rawIncomes.forEach((inc: any) => {
-        const isFijo = inc.income_type === 'fijo' || inc.type === 'fijo';
-        const q: FortnightType = inc.quincena === 15 ? 'q1' : 'q2';
-
-        if (isFijo) {
-          fixedIncomes.push({
-            id: inc.id,
-            user_id: inc.user_id || userId,
-            name: inc.description || inc.name || 'Ingreso Fijo',
-            amount: Number(inc.amount || 0),
-            currency: inc.currency || 'USD',
-            default_fortnight: q,
-            category_id: inc.category_id || 'cat_salary',
-            is_active: inc.is_active !== undefined ? inc.is_active : true,
-            notes: inc.notes || '',
-            sync_status: 'synced',
-          });
-        } else {
-          const [yr, mo] = (inc.month_year || '').split('-').map(Number);
-          const now = new Date();
-          variableIncomes.push({
-            id: inc.id,
-            user_id: inc.user_id || userId,
-            description: inc.description || 'Ingreso Variable',
-            amount: Number(inc.amount || 0),
-            year: !isNaN(yr) ? yr : now.getFullYear(),
-            month: !isNaN(mo) ? mo - 1 : now.getMonth(),
-            fortnight: q,
-            category_id: inc.category_id || 'cat_extras',
-            account_id: inc.account_id || 'acc_bank_usd',
-            currency: inc.currency || 'USD',
-            notes: inc.notes || '',
-            sync_status: 'synced',
-            created_at: inc.created_at || new Date().toISOString(),
-            updated_at: inc.updated_at || new Date().toISOString(),
-          });
-        }
-      });
-
-      // Mapear gastos fijos
-      const rawExpenses = resFixedExpenses.data || [];
-      const fixedExpenses: FixedExpense[] = rawExpenses.map((exp: any) => ({
-        id: exp.id,
-        user_id: exp.user_id || userId,
-        name: exp.name,
-        amount: Number(exp.amount || 0),
-        amount_usd: exp.amount_usd !== undefined ? Number(exp.amount_usd) : Number(exp.amount || 0),
-        original_amount: exp.original_amount !== undefined ? Number(exp.original_amount) : Number(exp.amount || 0),
-        amount_in_ves: exp.amount_in_ves !== undefined ? Number(exp.amount_in_ves) : undefined,
-        currency: exp.currency || 'USD',
-        payment_mode: exp.payment_mode || 'ves_bcv',
-        default_fortnight: exp.default_quincena === 30 ? 'q2' : exp.default_fortnight || 'q1',
-        category_id: exp.category_id || 'cat_services',
-        is_active: exp.is_active !== undefined ? exp.is_active : true,
-        assumed_by_third_party: exp.assumed_by_third_party || false,
-        notes: exp.notes || '',
-        sync_status: 'synced',
-      }));
-
-      // Mapear deudas
-      const rawDebts = resDebts.data || [];
-      const debts: Debt[] = rawDebts.map((d: any) => ({
-        id: d.id,
-        user_id: d.user_id || userId,
-        creditor: d.creditor_name || d.creditor || 'Particular',
-        platform: d.platform || 'particular',
-        debt_mode: d.debt_mode || 'installments',
-        total_amount: Number(d.original_amount ?? d.total_amount ?? 0),
-        current_balance: Number(d.remaining_amount ?? d.current_balance ?? d.original_amount ?? 0),
-        total_installments: d.total_installments,
-        pending_installments: d.current_installment ? Math.max(0, (d.total_installments || 1) - d.current_installment) : d.pending_installments,
-        installment_amount: d.installment_amount !== undefined ? Number(d.installment_amount) : undefined,
-        fortnight_due: d.fortnight_due || 'q1',
-        start_year: d.start_year,
-        start_month: d.start_month,
-        start_fortnight: d.start_fortnight,
-        currency: d.currency_type || d.currency || 'USD',
-        payment_type: d.payment_type || 'cash',
-        has_interest: d.has_interest || (d.interest_rate && d.interest_rate > 0),
-        interest_rate: d.interest_rate || 0,
-        interest_amount: d.interest_amount || 0,
-        interest_frequency: d.interest_frequency,
-        interest_fortnight: d.interest_fortnight,
-        due_date: d.due_date,
-        status: d.status || 'active',
-        priority: d.priority || 'medium',
-        notes: d.notes || '',
-        sync_status: 'synced',
-        created_at: d.created_at || new Date().toISOString(),
-        updated_at: d.updated_at || new Date().toISOString(),
-      }));
-
-      // Mapear abonos deudas
-      const rawDebtPayments = resDebtPayments.data || [];
-      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => {
-        const dateObj = p.payment_date ? new Date(p.payment_date) : new Date();
-        return {
-          id: p.id,
-          user_id: p.user_id || userId,
-          debt_id: p.debt_id,
-          amount: Number(p.amount_paid ?? p.amount ?? 0),
-          payment_date: p.payment_date || dateObj.toISOString().split('T')[0],
-          year: p.year !== undefined ? p.year : dateObj.getFullYear(),
-          month: p.month !== undefined ? p.month : dateObj.getMonth(),
-          fortnight: p.quincena === 30 ? 'q2' : p.fortnight || (dateObj.getDate() <= 15 ? 'q1' : 'q2'),
-          rate_applied: p.rate_applied,
-          parallel_rate: p.parallel_rate,
-          loss_differential: p.loss_differential,
-          notes: p.notes || '',
-          sync_status: 'synced',
-          created_at: p.created_at || new Date().toISOString(),
-        };
-      });
-
-      // Mapear metas de ahorro
-      const rawSavings = resSavingsGoals.data || [];
-      const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({
-        id: s.id,
-        user_id: s.user_id || userId,
-        name: s.title || s.name || 'Meta de Ahorro',
-        target_amount: Number(s.target_amount || 0),
-        current_amount: Number(s.current_saved ?? s.current_amount ?? 0),
-        frequency: s.frequency || 'quincenal',
-        target_fortnight: s.target_quincena === 30 ? 'q2' : s.target_fortnight || 'q1',
-        amount_per_period: Number(s.amount_per_period || 0),
-        target_date: s.target_date,
-        icon: s.icon || 'PiggyBank',
-        color: s.color || '#00C2C7',
-        status: s.is_active === false ? 'completed' : s.status || 'active',
-        notes: s.notes || '',
-        sync_status: 'synced',
-        created_at: s.created_at || new Date().toISOString(),
-        updated_at: s.updated_at || new Date().toISOString(),
-      }));
-
-      // Mapear aportes de ahorro
-      const rawContribs = resSavingContributions.data || [];
-      const savingContributions: SavingContribution[] = rawContribs.map((c: any) => {
-        const dateObj = c.period_date ? new Date(c.period_date) : new Date();
-        return {
-          id: c.id,
-          user_id: c.user_id || userId,
-          goal_id: c.goal_id,
-          amount: Number(c.amount || 0),
-          year: c.year !== undefined ? c.year : dateObj.getFullYear(),
-          month: c.month !== undefined ? c.month : dateObj.getMonth(),
-          fortnight: c.fortnight || (dateObj.getDate() <= 15 ? 'q1' : 'q2'),
-          is_skipped: c.status === 'skipped' || c.is_skipped,
-          contribution_date: c.period_date || dateObj.toISOString().split('T')[0],
-          notes: c.notes || '',
-          sync_status: 'synced',
-          created_at: c.created_at || new Date().toISOString(),
-        };
-      });
-
-      // Mapear estados de quincenas
-      const rawStates = resFortnightStates.data || [];
-      const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => {
-        const parts = (st.period_key || '').split('-');
-        const yr = parseInt(parts[0], 10) || new Date().getFullYear();
-        const mo = (parseInt(parts[1], 10) || 1) - 1;
-        const day = parseInt(parts[2], 10) || 15;
-        return {
-          id: st.id,
-          user_id: st.user_id || userId,
-          item_id: st.item_id,
-          item_type: st.item_type || 'fixed_expense',
-          period_key: st.period_key,
-          year: yr,
-          month: mo,
-          fortnight: day <= 15 ? 'q1' : 'q2',
-          status: st.status || 'pending',
-          amount: st.amount ? Number(st.amount) : undefined,
-          updated_at: st.updated_at || new Date().toISOString(),
-          sync_status: 'synced',
-        };
-      });
-
-      // Mapear transacciones
-      const rawTxs = resTransactions.data || [];
-      const transactions: Transaction[] = rawTxs.map((t: any) => ({
-        id: t.id,
-        user_id: t.user_id || userId,
-        amount: Number(t.amount || 0),
-        type: t.type || 'expense',
-        description: t.description || 'Movimiento',
-        category_id: t.category_id || 'cat_services',
-        account_id: t.account_id || 'acc_cash',
-        transaction_date: t.transaction_date || new Date().toISOString().split('T')[0],
-        sync_status: 'synced',
-        created_at: t.created_at || new Date().toISOString(),
-      }));
+      const fixedIncomes: FixedIncome[] = (resFixedIncomes.data || []).map((i: any) => ({ ...i, sync_status: 'synced' }));
+      const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = (resMonthlyIncomeOverrides.data || []).map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const variableIncomes: VariableIncome[] = (resVariableIncomes.data || []).map((v: any) => ({ ...v, sync_status: 'synced' }));
+      const fixedExpenses: FixedExpense[] = (resFixedExpenses.data || []).map((e: any) => ({ ...e, sync_status: 'synced' }));
+      const monthlyFixedOverrides: MonthlyFixedOverride[] = (resMonthlyFixedOverrides.data || []).map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const debts: Debt[] = (resDebts.data || []).map((d: any) => ({ ...d, sync_status: 'synced' }));
+      const debtPayments: DebtPayment[] = (resDebtPayments.data || []).map((p: any) => ({ ...p, sync_status: 'synced' }));
+      const savingsGoals: SavingsGoal[] = (resSavingsGoals.data || []).map((s: any) => ({ ...s, sync_status: 'synced' }));
+      const savingContributions: SavingContribution[] = (resSavingContributions.data || []).map((c: any) => ({ ...c, sync_status: 'synced' }));
+      const fortnightItemStates: FortnightItemState[] = (resFortnightStates.data || []).map((st: any) => ({ ...st, sync_status: 'synced' }));
+      const transactions: Transaction[] = (resTransactions.data || []).map((t: any) => ({ ...t, sync_status: 'synced' }));
 
       // Sincronizar Dexie en segundo plano
       await Promise.all([
@@ -523,12 +335,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         db.fixed_incomes.where('user_id').equals(userId).delete().then(() => {
           if (fixedIncomes.length > 0) db.fixed_incomes.bulkPut(fixedIncomes);
         }),
+        db.monthly_fixed_income_overrides.bulkPut(monthlyIncomeOverrides),
         db.variable_incomes.where('user_id').equals(userId).delete().then(() => {
           if (variableIncomes.length > 0) db.variable_incomes.bulkPut(variableIncomes);
         }),
         db.fixed_expenses.where('user_id').equals(userId).delete().then(() => {
           if (fixedExpenses.length > 0) db.fixed_expenses.bulkPut(fixedExpenses);
         }),
+        db.monthly_fixed_overrides.bulkPut(monthlyFixedOverrides),
         db.debts.where('user_id').equals(userId).delete().then(() => {
           if (debts.length > 0) db.debts.bulkPut(debts);
         }),
@@ -553,12 +367,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
       set({
         profiles,
-        userProfiles,
         categories,
         accounts: accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS,
         fixedIncomes,
+        monthlyIncomeOverrides,
         variableIncomes,
         fixedExpenses,
+        monthlyFixedOverrides,
         debts,
         debtPayments,
         savingsGoals,
@@ -578,7 +393,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   /**
-   * Manejador de eventos Realtime de Supabase (Merge por ID)
+   * Manejador de eventos Realtime de Supabase (Smart Merge por ID)
    */
   handleRealtimePayload: async (table: string, payload: any, userId: string) => {
     const { eventType, new: newRow, old: oldRow } = payload;
@@ -586,25 +401,27 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     if (newRow?.user_id && newRow.user_id !== userId) return;
 
+    const normalizeAcc = (row: any): Account => ({
+      id: row.id,
+      user_id: row.user_id || userId,
+      name: row.name,
+      type: row.type || 'cash',
+      currency: row.currency || 'USD',
+      initial_balance: typeof row.initial_balance === 'number' ? row.initial_balance : typeof row.balance === 'number' ? row.balance : parseFloat(row.initial_balance || row.balance || 0) || 0,
+      color: row.color,
+      notes: row.notes || '',
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      sync_status: 'synced',
+    });
+
     switch (table) {
       case 'accounts': {
         if (eventType === 'DELETE' && oldRow?.id) {
           set((s) => ({ accounts: s.accounts.filter((a) => a.id !== oldRow.id) }));
           await db.accounts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const acc: Account = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            name: newRow.name,
-            type: newRow.type || 'cash',
-            currency: newRow.currency || 'USD',
-            initial_balance: typeof newRow.initial_balance === 'number' ? newRow.initial_balance : typeof newRow.balance === 'number' ? newRow.balance : parseFloat(newRow.initial_balance || newRow.balance || 0) || 0,
-            color: newRow.color,
-            notes: newRow.notes || '',
-            created_at: newRow.created_at,
-            updated_at: newRow.updated_at,
-            sync_status: 'synced',
-          };
+          const acc = normalizeAcc(newRow);
           set((s) => ({
             accounts: s.accounts.some((a) => a.id === acc.id)
               ? s.accounts.map((a) => (a.id === acc.id ? acc : a))
@@ -614,63 +431,48 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         }
         break;
       }
-      case 'incomes': {
+      case 'fixed_incomes': {
         if (eventType === 'DELETE' && oldRow?.id) {
-          set((s) => ({
-            fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id),
-            variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id),
-          }));
+          set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id) }));
           await db.fixed_incomes.delete(oldRow.id);
+        } else if (newRow?.id) {
+          const item: FixedIncome = { ...newRow, sync_status: 'synced' };
+          set((s) => ({
+            fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
+              ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
+              : [...s.fixedIncomes, item],
+          }));
+          await db.fixed_incomes.put(item);
+        }
+        break;
+      }
+      case 'monthly_fixed_income_overrides': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({ monthlyIncomeOverrides: s.monthlyIncomeOverrides.filter((o) => o.id !== oldRow.id) }));
+          await db.monthly_fixed_income_overrides.delete(oldRow.id);
+        } else if (newRow?.id) {
+          const item: MonthlyFixedIncomeOverride = { ...newRow, sync_status: 'synced' };
+          set((s) => ({
+            monthlyIncomeOverrides: s.monthlyIncomeOverrides.some((o) => o.id === item.id)
+              ? s.monthlyIncomeOverrides.map((o) => (o.id === item.id ? item : o))
+              : [...s.monthlyIncomeOverrides, item],
+          }));
+          await db.monthly_fixed_income_overrides.put(item);
+        }
+        break;
+      }
+      case 'variable_incomes': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const isFijo = newRow.income_type === 'fijo';
-          const q: FortnightType = newRow.quincena === 15 ? 'q1' : 'q2';
-
-          if (isFijo) {
-            const fi: FixedIncome = {
-              id: newRow.id,
-              user_id: newRow.user_id || userId,
-              name: newRow.description || 'Ingreso Fijo',
-              amount: Number(newRow.amount || 0),
-              currency: newRow.currency || 'USD',
-              default_fortnight: q,
-              category_id: newRow.category_id || 'cat_salary',
-              is_active: newRow.is_active !== undefined ? newRow.is_active : true,
-              notes: newRow.notes || '',
-              sync_status: 'synced',
-            };
-            set((s) => ({
-              fixedIncomes: s.fixedIncomes.some((i) => i.id === fi.id)
-                ? s.fixedIncomes.map((i) => (i.id === fi.id ? fi : i))
-                : [...s.fixedIncomes, fi],
-            }));
-            await db.fixed_incomes.put(fi);
-          } else {
-            const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
-            const now = new Date();
-            const vi: VariableIncome = {
-              id: newRow.id,
-              user_id: newRow.user_id || userId,
-              description: newRow.description || 'Ingreso Variable',
-              amount: Number(newRow.amount || 0),
-              year: !isNaN(yr) ? yr : now.getFullYear(),
-              month: !isNaN(mo) ? mo - 1 : now.getMonth(),
-              fortnight: q,
-              category_id: newRow.category_id || 'cat_extras',
-              account_id: newRow.account_id || 'acc_bank_usd',
-              currency: newRow.currency || 'USD',
-              notes: newRow.notes || '',
-              sync_status: 'synced',
-              created_at: newRow.created_at || new Date().toISOString(),
-              updated_at: newRow.updated_at || new Date().toISOString(),
-            };
-            set((s) => ({
-              variableIncomes: s.variableIncomes.some((v) => v.id === vi.id)
-                ? s.variableIncomes.map((v) => (v.id === vi.id ? vi : v))
-                : [...s.variableIncomes, vi],
-            }));
-            await db.variable_incomes.put(vi);
-          }
+          const item: VariableIncome = { ...newRow, sync_status: 'synced' };
+          set((s) => ({
+            variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
+              ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
+              : [...s.variableIncomes, item],
+          }));
+          await db.variable_incomes.put(item);
         }
         break;
       }
@@ -679,23 +481,28 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
           await db.fixed_expenses.delete(oldRow.id);
         } else if (newRow?.id) {
-          const exp: FixedExpense = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            name: newRow.name,
-            amount: Number(newRow.amount || 0),
-            currency: newRow.currency || 'USD',
-            default_fortnight: newRow.default_quincena === 30 ? 'q2' : 'q1',
-            category_id: newRow.category_id || 'cat_services',
-            is_active: newRow.is_active !== undefined ? newRow.is_active : true,
-            sync_status: 'synced',
-          };
+          const item: FixedExpense = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            fixedExpenses: s.fixedExpenses.some((e) => e.id === exp.id)
-              ? s.fixedExpenses.map((e) => (e.id === exp.id ? exp : e))
-              : [...s.fixedExpenses, exp],
+            fixedExpenses: s.fixedExpenses.some((e) => e.id === item.id)
+              ? s.fixedExpenses.map((e) => (e.id === item.id ? item : e))
+              : [...s.fixedExpenses, item],
           }));
-          await db.fixed_expenses.put(exp);
+          await db.fixed_expenses.put(item);
+        }
+        break;
+      }
+      case 'monthly_fixed_overrides': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({ monthlyFixedOverrides: s.monthlyFixedOverrides.filter((o) => o.id !== oldRow.id) }));
+          await db.monthly_fixed_overrides.delete(oldRow.id);
+        } else if (newRow?.id) {
+          const item: MonthlyFixedOverride = { ...newRow, sync_status: 'synced' };
+          set((s) => ({
+            monthlyFixedOverrides: s.monthlyFixedOverrides.some((o) => o.id === item.id)
+              ? s.monthlyFixedOverrides.map((o) => (o.id === item.id ? item : o))
+              : [...s.monthlyFixedOverrides, item],
+          }));
+          await db.monthly_fixed_overrides.put(item);
         }
         break;
       }
@@ -704,31 +511,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debts: s.debts.filter((d) => d.id !== oldRow.id) }));
           await db.debts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const d: Debt = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            creditor: newRow.creditor_name || newRow.creditor || 'Particular',
-            platform: newRow.platform || 'particular',
-            debt_mode: 'installments',
-            total_amount: Number(newRow.original_amount ?? newRow.total_amount ?? 0),
-            current_balance: Number(newRow.remaining_amount ?? newRow.current_balance ?? 0),
-            total_installments: newRow.total_installments,
-            pending_installments: newRow.current_installment ? Math.max(0, (newRow.total_installments || 1) - newRow.current_installment) : newRow.pending_installments,
-            currency: newRow.currency_type || newRow.currency || 'USD',
-            payment_type: 'cash',
-            interest_rate: newRow.interest_rate || 0,
-            priority: newRow.priority || 'medium',
-            status: newRow.status || 'active',
-            sync_status: 'synced',
-            created_at: newRow.created_at || new Date().toISOString(),
-            updated_at: newRow.updated_at || new Date().toISOString(),
-          };
+          const item: Debt = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            debts: s.debts.some((item) => item.id === d.id)
-              ? s.debts.map((item) => (item.id === d.id ? d : item))
-              : [...s.debts, d],
+            debts: s.debts.some((d) => d.id === item.id)
+              ? s.debts.map((d) => (d.id === item.id ? item : d))
+              : [...s.debts, item],
           }));
-          await db.debts.put(d);
+          await db.debts.put(item);
         }
         break;
       }
@@ -737,26 +526,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debtPayments: s.debtPayments.filter((p) => p.id !== oldRow.id) }));
           await db.debt_payments.delete(oldRow.id);
         } else if (newRow?.id) {
-          const dateObj = newRow.payment_date ? new Date(newRow.payment_date) : new Date();
-          const p: DebtPayment = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            debt_id: newRow.debt_id,
-            amount: Number(newRow.amount_paid ?? newRow.amount ?? 0),
-            payment_date: newRow.payment_date || dateObj.toISOString().split('T')[0],
-            year: dateObj.getFullYear(),
-            month: dateObj.getMonth(),
-            fortnight: newRow.quincena === 30 ? 'q2' : 'q1',
-            notes: newRow.notes || '',
-            sync_status: 'synced',
-            created_at: newRow.created_at || new Date().toISOString(),
-          };
+          const item: DebtPayment = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            debtPayments: s.debtPayments.some((item) => item.id === p.id)
-              ? s.debtPayments.map((item) => (item.id === p.id ? p : item))
-              : [...s.debtPayments, p],
+            debtPayments: s.debtPayments.some((p) => p.id === item.id)
+              ? s.debtPayments.map((p) => (p.id === item.id ? item : p))
+              : [...s.debtPayments, item],
           }));
-          await db.debt_payments.put(p);
+          await db.debt_payments.put(item);
         }
         break;
       }
@@ -765,27 +541,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== oldRow.id) }));
           await db.savings_goals.delete(oldRow.id);
         } else if (newRow?.id) {
-          const g: SavingsGoal = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            name: newRow.title || newRow.name || 'Meta de Ahorro',
-            target_amount: Number(newRow.target_amount || 0),
-            current_amount: Number(newRow.current_saved ?? newRow.current_amount ?? 0),
-            frequency: newRow.frequency || 'quincenal',
-            target_fortnight: newRow.target_quincena === 30 ? 'q2' : 'q1',
-            amount_per_period: Number(newRow.amount_per_period || 0),
-            target_date: newRow.target_date,
-            status: newRow.is_active === false ? 'completed' : 'active',
-            sync_status: 'synced',
-            created_at: newRow.created_at || new Date().toISOString(),
-            updated_at: newRow.updated_at || new Date().toISOString(),
-          };
+          const item: SavingsGoal = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            savingsGoals: s.savingsGoals.some((item) => item.id === g.id)
-              ? s.savingsGoals.map((item) => (item.id === g.id ? g : item))
-              : [...s.savingsGoals, g],
+            savingsGoals: s.savingsGoals.some((g) => g.id === item.id)
+              ? s.savingsGoals.map((g) => (g.id === item.id ? item : g))
+              : [...s.savingsGoals, item],
           }));
-          await db.savings_goals.put(g);
+          await db.savings_goals.put(item);
         }
         break;
       }
@@ -794,27 +556,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingContributions: s.savingContributions.filter((c) => c.id !== oldRow.id) }));
           await db.saving_contributions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const dateObj = newRow.period_date ? new Date(newRow.period_date) : new Date();
-          const c: SavingContribution = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            goal_id: newRow.goal_id,
-            amount: Number(newRow.amount || 0),
-            year: dateObj.getFullYear(),
-            month: dateObj.getMonth(),
-            fortnight: dateObj.getDate() <= 15 ? 'q1' : 'q2',
-            is_skipped: newRow.status === 'skipped',
-            contribution_date: newRow.period_date || dateObj.toISOString().split('T')[0],
-            notes: newRow.notes || '',
-            sync_status: 'synced',
-            created_at: newRow.created_at || new Date().toISOString(),
-          };
+          const item: SavingContribution = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            savingContributions: s.savingContributions.some((item) => item.id === c.id)
-              ? s.savingContributions.map((item) => (item.id === c.id ? c : item))
-              : [...s.savingContributions, c],
+            savingContributions: s.savingContributions.some((c) => c.id === item.id)
+              ? s.savingContributions.map((c) => (c.id === item.id ? item : c))
+              : [...s.savingContributions, item],
           }));
-          await db.saving_contributions.put(c);
+          await db.saving_contributions.put(item);
         }
         break;
       }
@@ -823,29 +571,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== oldRow.id) }));
           await db.fortnight_item_states.delete(oldRow.id);
         } else if (newRow?.id) {
-          const parts = (newRow.period_key || '').split('-');
-          const yr = parseInt(parts[0], 10) || new Date().getFullYear();
-          const mo = (parseInt(parts[1], 10) || 1) - 1;
-          const day = parseInt(parts[2], 10) || 15;
-          const st: FortnightItemState = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            item_id: newRow.item_id,
-            item_type: newRow.item_type || 'fixed_expense',
-            period_key: newRow.period_key,
-            year: yr,
-            month: mo,
-            fortnight: day <= 15 ? 'q1' : 'q2',
-            status: newRow.status || 'pending',
-            updated_at: newRow.updated_at || new Date().toISOString(),
-            sync_status: 'synced',
-          };
+          const item: FortnightItemState = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            fortnightItemStates: s.fortnightItemStates.some((item) => item.id === st.id)
-              ? s.fortnightItemStates.map((item) => (item.id === st.id ? st : item))
-              : [...s.fortnightItemStates, st],
+            fortnightItemStates: s.fortnightItemStates.some((st) => st.id === item.id)
+              ? s.fortnightItemStates.map((st) => (st.id === item.id ? item : st))
+              : [...s.fortnightItemStates, item],
           }));
-          await db.fortnight_item_states.put(st);
+          await db.fortnight_item_states.put(item);
         }
         break;
       }
@@ -854,24 +586,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ transactions: s.transactions.filter((t) => t.id !== oldRow.id) }));
           await db.transactions.delete(oldRow.id);
         } else if (newRow?.id) {
-          const t: Transaction = {
-            id: newRow.id,
-            user_id: newRow.user_id || userId,
-            amount: Number(newRow.amount || 0),
-            type: newRow.type || 'expense',
-            description: newRow.description || 'Movimiento',
-            category_id: newRow.category_id || 'cat_services',
-            account_id: newRow.account_id || 'acc_cash',
-            transaction_date: newRow.transaction_date || new Date().toISOString().split('T')[0],
-            sync_status: 'synced',
-            created_at: newRow.created_at || new Date().toISOString(),
-          };
+          const item: Transaction = { ...newRow, sync_status: 'synced' };
           set((s) => ({
-            transactions: s.transactions.some((item) => item.id === t.id)
-              ? s.transactions.map((item) => (item.id === t.id ? t : item))
-              : [...s.transactions, t],
+            transactions: s.transactions.some((t) => t.id === item.id)
+              ? s.transactions.map((t) => (t.id === item.id ? item : t))
+              : [...s.transactions, item],
           }));
-          await db.transactions.put(t);
+          await db.transactions.put(item);
         }
         break;
       }
@@ -947,16 +668,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.accounts.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      name: record.name,
-      type: record.type,
-      currency: record.currency,
-      initial_balance: record.initial_balance,
-      updated_at: record.updated_at,
-    };
-
+    const payload = toSupabaseAccountPayload(record, userId);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('accounts').upsert(payload);
@@ -1014,16 +726,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ accounts: s.accounts.map((a) => (a.id === accountId ? updated : a)) }));
     await db.accounts.put(updated);
 
-    const payload = {
-      id: accountId,
-      user_id: userId,
-      name: updated.name,
-      type: updated.type,
-      currency: updated.currency,
-      initial_balance: updated.initial_balance,
-      updated_at: updated.updated_at,
-    };
-
+    const payload = toSupabaseAccountPayload(updated, userId);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('accounts').upsert(payload);
@@ -1061,24 +764,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      description: record.name,
-      amount: record.amount,
-      income_type: 'fijo',
-      quincena: record.default_fortnight === 'q2' ? 30 : 15,
-      month_year: new Date().toISOString().slice(0, 7),
-      updated_at: new Date().toISOString(),
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        const { error } = await supabase.from('incomes').upsert(payload);
+        const { error } = await supabase.from('fixed_incomes').upsert(payload);
         if (!error) await db.fixed_incomes.update(id, { sync_status: 'synced' });
       } catch {
         set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          syncQueue: [...s.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1092,10 +785,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('incomes').delete().eq('id', id);
+        await supabase.from('fixed_incomes').delete().eq('id', id);
       } catch {
         set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+          syncQueue: [...s.syncQueue, { id, table: 'fixed_incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1127,23 +820,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.variable_incomes.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      description: record.description,
-      amount: record.amount,
-      income_type: 'variable',
-      quincena: record.fortnight === 'q2' ? 30 : 15,
-      month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
-      updated_at: record.updated_at,
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('incomes').upsert(payload);
+        await supabase.from('variable_incomes').upsert(payload);
       } catch {
         set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          syncQueue: [...s.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1157,10 +840,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await supabase.from('incomes').delete().eq('id', id);
+        await supabase.from('variable_incomes').delete().eq('id', id);
       } catch {
         set((s) => ({
-          syncQueue: [...s.syncQueue, { id, table: 'incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
+          syncQueue: [...s.syncQueue, { id, table: 'variable_incomes', action: 'delete', payload: { id, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
       }
     }
@@ -1173,10 +856,15 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       user_id: userId,
       name: expense.name,
       amount: Number(expense.amount),
+      amount_usd: expense.amount_usd !== undefined ? Number(expense.amount_usd) : Number(expense.amount),
+      original_amount: expense.original_amount !== undefined ? Number(expense.original_amount) : Number(expense.amount_in_ves || expense.amount),
+      amount_in_ves: expense.amount_in_ves !== undefined ? Number(expense.amount_in_ves) : undefined,
       currency: expense.currency || 'USD',
+      payment_mode: expense.payment_mode || 'ves_bcv',
       default_fortnight: expense.default_fortnight,
       category_id: expense.category_id || 'cat_services',
       is_active: expense.is_active !== undefined ? expense.is_active : true,
+      assumed_by_third_party: expense.assumed_by_third_party || false,
       notes: expense.notes || '',
       sync_status: 'pending',
     };
@@ -1188,17 +876,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_expenses.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      name: record.name,
-      amount: record.amount,
-      currency: record.currency,
-      default_quincena: record.default_fortnight === 'q2' ? 30 : 15,
-      is_active: record.is_active,
-      updated_at: new Date().toISOString(),
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('fixed_expenses').upsert(payload);
@@ -1232,21 +910,36 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
     const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
 
+    const now = new Date();
+    const start_year = debt.start_year !== undefined ? debt.start_year : now.getFullYear();
+    const start_month = debt.start_month !== undefined ? debt.start_month : now.getMonth();
+    const start_fortnight = debt.start_fortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
+
     const record: Debt = {
       id,
       user_id: userId,
       creditor: debt.creditor,
       platform: debt.platform || 'particular',
-      debt_mode: 'installments',
+      debt_mode: debt.debt_mode || 'installments',
       total_amount: Number(debt.total_amount),
       current_balance,
-      total_installments: debt.total_installments || 1,
+      total_installments: debt.total_installments,
       pending_installments: debt.pending_installments,
+      installment_amount: debt.installment_amount !== undefined ? Number(debt.installment_amount) : undefined,
+      fortnight_due: debt.fortnight_due || 'q1',
+      start_year,
+      start_month,
+      start_fortnight,
       currency: debt.currency || 'USD',
       payment_type: debt.payment_type,
+      has_interest: debt.has_interest,
       interest_rate: debt.interest_rate || 0,
-      priority: debt.priority || 'medium',
+      interest_amount: debt.interest_amount || 0,
+      interest_frequency: debt.interest_frequency,
+      interest_fortnight: debt.interest_fortnight,
+      due_date: debt.due_date,
       status,
+      priority: debt.priority || 'medium',
       notes: debt.notes || '',
       sync_status: 'pending',
       created_at: debt.created_at || new Date().toISOString(),
@@ -1260,22 +953,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.debts.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      creditor_name: record.creditor,
-      original_amount: record.total_amount,
-      remaining_amount: record.current_balance,
-      currency_type: record.currency,
-      interest_rate: record.interest_rate,
-      priority: record.priority,
-      status: record.status,
-      platform: record.platform,
-      total_installments: record.total_installments,
-      current_installment: record.total_installments && record.pending_installments ? Math.max(1, record.total_installments - record.pending_installments) : 1,
-      updated_at: record.updated_at,
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('debts').upsert(payload);
@@ -1350,26 +1028,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.debt_payments.add(paymentRecord);
     await db.debts.put(updatedDebt);
 
-    const payPayload = {
-      id: paymentRecord.id,
-      debt_id: paymentRecord.debt_id,
-      user_id: userId,
-      amount_paid: paymentRecord.amount,
-      payment_date: paymentRecord.payment_date,
-      quincena: paymentRecord.fortnight === 'q2' ? 30 : 15,
-      notes: paymentRecord.notes,
-      updated_at: new Date().toISOString(),
-    };
-
-    const debtPayload = {
-      id: debt.id,
-      user_id: userId,
-      creditor_name: updatedDebt.creditor,
-      original_amount: updatedDebt.total_amount,
-      remaining_amount: updatedDebt.current_balance,
-      status: updatedDebt.status,
-      updated_at: updatedDebt.updated_at,
-    };
+    const { sync_status: s1, ...payPayload } = paymentRecord;
+    const { sync_status: s2, ...debtPayload } = updatedDebt;
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1419,20 +1079,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.savings_goals.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      title: record.name,
-      target_amount: record.target_amount,
-      current_saved: record.current_amount,
-      target_date: record.target_date || null,
-      frequency: record.frequency,
-      target_quincena: record.target_fortnight === 'q2' ? 30 : 15,
-      amount_per_period: record.amount_per_period,
-      is_active: record.status !== 'completed',
-      updated_at: record.updated_at,
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('savings_goals').upsert(payload);
@@ -1496,26 +1143,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.saving_contributions.add(record);
     await db.savings_goals.put(updatedGoal);
 
-    const scPayload = {
-      id: record.id,
-      goal_id: record.goal_id,
-      user_id: userId,
-      amount: record.amount,
-      period_date: record.contribution_date,
-      status: 'completed',
-      notes: record.notes,
-      updated_at: new Date().toISOString(),
-    };
-
-    const goalPayload = {
-      id: goal.id,
-      user_id: userId,
-      title: updatedGoal.name,
-      target_amount: updatedGoal.target_amount,
-      current_saved: updatedGoal.current_amount,
-      is_active: updatedGoal.status !== 'completed',
-      updated_at: updatedGoal.updated_at,
-    };
+    const { sync_status: s1, ...scPayload } = record;
+    const { sync_status: s2, ...goalPayload } = updatedGoal;
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1579,27 +1208,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.transactions.put(txRecord);
     await db.fortnight_item_states.put(stateRecord);
 
-    const txPayload = {
-      id: txId,
-      user_id: userId,
-      account_id: txRecord.account_id,
-      category_id: txRecord.category_id,
-      amount: txRecord.amount,
-      type: txRecord.type,
-      description: txRecord.description,
-      transaction_date: txRecord.transaction_date,
-      updated_at: new Date().toISOString(),
-    };
-
-    const statePayload = {
-      id: stateId,
-      user_id: userId,
-      period_key: stateRecord.period_key,
-      item_id: stateRecord.item_id,
-      item_type: stateRecord.item_type,
-      status: stateRecord.status,
-      updated_at: stateRecord.updated_at,
-    };
+    const { sync_status: s1, ...txPayload } = txRecord;
+    const { sync_status: s2, ...statePayload } = stateRecord;
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1677,16 +1287,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.transactions.delete(txId);
     await db.fortnight_item_states.put(stateRecord);
 
-    const payload = {
-      id: stateId,
-      user_id: userId,
-      period_key: stateRecord.period_key,
-      item_id: stateRecord.item_id,
-      item_type: stateRecord.item_type,
-      status: stateRecord.status,
-      updated_at: stateRecord.updated_at,
-    };
-
+    const { sync_status, ...payload } = stateRecord;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await Promise.all([
@@ -1703,6 +1304,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         }));
       }
     }
+
+    return;
   },
 
   unmarkFortnightExpenseSkipped: async (params, userId) => {
@@ -1744,16 +1347,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ fortnightItemStates: [...s.fortnightItemStates.filter((st) => st.id !== stateId), stateRecord] }));
     await db.fortnight_item_states.put(stateRecord);
 
-    const payload = {
-      id: stateId,
-      user_id: userId,
-      period_key: stateRecord.period_key,
-      item_id: stateRecord.item_id,
-      item_type: stateRecord.item_type,
-      status: stateRecord.status,
-      updated_at: stateRecord.updated_at,
-    };
-
+    const { sync_status, ...payload } = stateRecord;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('fortnight_item_states').upsert(payload);
@@ -1797,18 +1391,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ transactions: [record, ...s.transactions] }));
     await db.transactions.put(record);
 
-    const payload = {
-      id,
-      user_id: userId,
-      account_id: record.account_id,
-      category_id: record.category_id,
-      amount: record.amount,
-      type: record.type,
-      description: record.description,
-      transaction_date: record.transaction_date,
-      updated_at: new Date().toISOString(),
-    };
-
+    const { sync_status, ...payload } = record;
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('transactions').upsert(payload);

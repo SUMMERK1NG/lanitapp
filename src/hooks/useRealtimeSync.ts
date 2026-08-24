@@ -3,19 +3,21 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { useFinanceStore, type RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-const SYNCED_TABLES = [
+export const SYNCED_TABLES = [
   'profiles',
   'categories',
   'accounts',
-  'incomes',
+  'fixed_incomes',
+  'monthly_fixed_income_overrides',
+  'variable_incomes',
   'fixed_expenses',
+  'monthly_fixed_overrides',
   'debts',
   'debt_payments',
   'savings_goals',
   'saving_contributions',
   'fortnight_item_states',
   'transactions',
-  'user_profiles',
 ] as const;
 
 export function useRealtimeSync(userId: string | null) {
@@ -36,13 +38,13 @@ export function useRealtimeSync(userId: string | null) {
 
   const isSyncing = syncStatus === 'syncing';
 
-  // Manual trigger
+  // Manual Trigger
   const syncNow = useCallback(async () => {
     if (!userId || !navigator.onLine) return;
     await fetchInitialData(userId);
   }, [userId, fetchInitialData]);
 
-  // Online / Offline Window Detection
+  // Online / Offline Detection
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -79,7 +81,7 @@ export function useRealtimeSync(userId: string | null) {
 
     let isMounted = true;
 
-    // 1. Carga inmediata desde Dexie (IndexedDB) para no bloquear la UI
+    // 1. Carga inmediata desde Dexie (IndexedDB) para no bloquear UI
     loadFromLocalCache(userId);
 
     if (!isOnline || !isSupabaseConfigured() || !supabase) {
@@ -93,21 +95,19 @@ export function useRealtimeSync(userId: string | null) {
       if (isMounted) setSyncStatus('error');
     });
 
-    // 3. Crear Canal Realtime Unificado para las 12 tablas
+    // 3. Crear Canal Realtime Unificado para las 14 tablas oficiales
     const channelName = `realtime-sync-${userId}-${Math.random().toString(36).substring(2, 7)}`;
     let channel = supabase.channel(channelName);
 
     SYNCED_TABLES.forEach((table) => {
-      // Filtrar tablas privadas por user_id, profiles por id, y categorías/user_profiles globales
-      let filterConfig: { event: '*' | 'INSERT' | 'UPDATE' | 'DELETE'; schema: string; table: string; filter?: string } = {
+      // Filtrar por user_id en todas las tablas excepto en 'categories' (catálogo global)
+      const filterConfig: { event: '*' | 'INSERT' | 'UPDATE' | 'DELETE'; schema: string; table: string; filter?: string } = {
         event: '*',
         schema: 'public',
         table,
       };
 
-      if (table === 'profiles') {
-        filterConfig.filter = `id=eq.${userId}`;
-      } else if (table !== 'categories' && table !== 'user_profiles') {
+      if (table !== 'categories') {
         filterConfig.filter = `user_id=eq.${userId}`;
       }
 
