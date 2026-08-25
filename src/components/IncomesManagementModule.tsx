@@ -9,6 +9,8 @@ import {
   Layers,
   Sparkles,
   ChevronDown,
+  Wallet,
+  X,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import type {
@@ -17,6 +19,7 @@ import type {
   VariableIncome,
   Category,
   Account,
+  AccountType,
   FortnightType,
   ExchangeRatesData,
   FixedExpensePaymentMode,
@@ -27,6 +30,7 @@ import {
   toggleMonthlyFixedIncomeOverride,
   saveVariableIncome,
   deleteVariableIncome,
+  saveAccount,
 } from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
@@ -132,6 +136,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const [isVarCategoryDropdownOpen, setIsVarCategoryDropdownOpen] = useState<boolean>(false);
   const [isVarPaymentDropdownOpen, setIsVarPaymentDropdownOpen] = useState<boolean>(false);
   const [isVarAccountDropdownOpen, setIsVarAccountDropdownOpen] = useState<boolean>(false);
+
+  // Quick Account Creation
+  const [isQuickAccountModalOpen, setIsQuickAccountModalOpen] = useState<boolean>(false);
+  const [newAccountName, setNewAccountName] = useState<string>('');
+  const [newAccountType, setNewAccountType] = useState<AccountType>('cash');
+  const [newAccountCurrency, setNewAccountCurrency] = useState<'USD' | 'VES' | 'EUR'>('USD');
+  const [newAccountBalance, setNewAccountBalance] = useState<number>(0);
+  const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
 
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
@@ -371,6 +383,31 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const handleDeleteVar = async (id: string) => {
     if (window.confirm('¿Deseas eliminar este registro de ingreso variable?')) {
       await deleteVariableIncome(id);
+    }
+  };
+
+  // Quick create account action
+  const handleQuickCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAccountName.trim()) return;
+    setIsCreatingAccount(true);
+    try {
+      const created = await saveAccount({
+        name: newAccountName.trim(),
+        type: newAccountType,
+        currency: newAccountCurrency,
+        initial_balance: Number(newAccountBalance) || 0,
+        notes: 'Creada desde Gestión de Ingresos',
+      });
+      setVarAccountId(created.id);
+      setIsQuickAccountModalOpen(false);
+      setNewAccountName('');
+      setNewAccountBalance(0);
+      setIsVarAccountDropdownOpen(false);
+    } catch (err) {
+      console.error('Error creating account:', err);
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
@@ -1234,7 +1271,21 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 {isVarAccountDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setIsVarAccountDropdownOpen(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-60 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {/* Botón rápido Crear Nueva Cuenta */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsQuickAccountModalOpen(true);
+                          setIsVarAccountDropdownOpen(false);
+                        }}
+                        className="w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2 bg-primary-custom/15 text-primary-custom hover:bg-primary-custom hover:text-white transition-all cursor-pointer border border-primary-custom/30"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>+ Nueva Cuenta / Fondo</span>
+                      </button>
+
+                      {/* Opción Ninguna */}
                       <button
                         type="button"
                         onClick={() => {
@@ -1252,6 +1303,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                           <span>Ninguna (No abonar a cuenta)</span>
                         </div>
                       </button>
+
+                      {/* Lista de Cuentas */}
                       {accounts && accounts.length > 0 ? (
                         accounts.map((acc) => (
                           <button
@@ -1312,6 +1365,107 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
                 >
                   Guardar Ingreso Extra
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Create Account Sub-Modal */}
+      {isQuickAccountModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+              <h4 className="text-sm font-bold text-app flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-primary-custom" />
+                Nueva Cuenta / Fondo
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsQuickAccountModalOpen(false)}
+                className="p-1 rounded-lg text-muted hover:text-app"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickCreateAccount} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Nombre de la Cuenta
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ej. Banesco, Zelle, Efectivo USD..."
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Tipo
+                  </label>
+                  <select
+                    value={newAccountType}
+                    onChange={(e) => setNewAccountType(e.target.value as AccountType)}
+                    className="w-full bg-card border border-app rounded-xl px-2.5 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  >
+                    <option value="cash">💵 Efectivo</option>
+                    <option value="bank">🏛️ Banco</option>
+                    <option value="wallet">📱 Billetera Digital</option>
+                    <option value="savings">🐖 Ahorros</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Moneda
+                  </label>
+                  <select
+                    value={newAccountCurrency}
+                    onChange={(e) => setNewAccountCurrency(e.target.value as 'USD' | 'VES' | 'EUR')}
+                    className="w-full bg-card border border-app rounded-xl px-2.5 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="VES">VES (Bs)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Saldo Inicial
+                </label>
+                <MoneyInput
+                  value={newAccountBalance}
+                  onChange={setNewAccountBalance}
+                  currencySymbol={newAccountCurrency === 'VES' ? 'Bs' : newAccountCurrency === 'EUR' ? '€' : '$'}
+                  placeholder="0,00"
+                  className="!py-2 !text-xs font-bold"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAccountModalOpen(false)}
+                  className="flex-1 py-2 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingAccount || !newAccountName.trim()}
+                  className="flex-1 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isCreatingAccount ? 'Creando...' : 'Crear y Seleccionar'}
                 </button>
               </div>
             </form>
