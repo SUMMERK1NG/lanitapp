@@ -1286,7 +1286,18 @@ export async function saveVariableIncome(
   income: Partial<VariableIncome> & { description: string; amount: number; year: number; month: number; fortnight: FortnightType }
 ): Promise<VariableIncome> {
   const id = ensureValidUuid(income.id);
-  const userId = income.user_id || getActiveUserId();
+  let userId = income.user_id || getActiveUserId();
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        userId = user.id;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
   const record: VariableIncome = {
     id,
     user_id: userId,
@@ -1304,32 +1315,15 @@ export async function saveVariableIncome(
     updated_at: new Date().toISOString(),
   };
 
-  const txRecord: Transaction = {
-    id: 'tx_' + record.id,
-    user_id: userId,
-    amount: Number(record.amount),
-    type: 'income',
-    description: `${record.description} (${record.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
-    category_id: record.category_id || 'cat_extras',
-    account_id: record.account_id || '',
-    transaction_date: new Date(record.year, record.month, record.fortnight === 'q1' ? 15 : 28).toISOString().split('T')[0],
-    sync_status: 'pending',
-    created_at: record.created_at,
-  };
-
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status: s1, ...varPayload } = record;
-      const { sync_status: s2, ...txPayload } = txRecord;
-      const [res1, res2] = await Promise.all([
-        supabase.from('variable_incomes').upsert(varPayload),
-        supabase.from('transactions').upsert(txPayload),
-      ]);
-      if (!res1.error && !res2.error) {
+      const { sync_status, ...varPayload } = record;
+      if (!varPayload.account_id) delete (varPayload as any).account_id;
+      const { error } = await supabase.from('variable_incomes').upsert(varPayload);
+      if (!error) {
         record.sync_status = 'synced';
-        txRecord.sync_status = 'synced';
       } else {
-        console.error('[Supabase Variable Income Error]:', res1.error || res2.error);
+        console.error('[Supabase Variable Income Error]:', error.message, error.details);
       }
     } catch (e) {
       console.warn('Direct variable income upsert notice:', e);
@@ -1337,8 +1331,6 @@ export async function saveVariableIncome(
   }
 
   await db.variable_incomes.put(record);
-  await db.transactions.put(txRecord);
-
   return record;
 }
 

@@ -919,18 +919,28 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   saveVariableIncome: async (income, userId) => {
     const id = ensureValidUuid(income.id);
-    const resolvedAccountId = ensureValidUuid(income.account_id || get().accounts[0]?.id);
+    let supabaseUserId = userId || getActiveUserId();
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          supabaseUserId = user.id;
+        }
+      } catch (e) {
+        console.warn('Could not get Supabase auth user:', e);
+      }
+    }
 
     const record: VariableIncome = {
       id,
-      user_id: userId,
+      user_id: supabaseUserId,
       description: income.description,
       amount: Number(income.amount),
       year: income.year,
       month: income.month,
       fortnight: income.fortnight,
       category_id: income.category_id || 'cat_extras',
-      account_id: resolvedAccountId,
+      account_id: income.account_id || '',
       currency: income.currency || 'USD',
       notes: income.notes || '',
       sync_status: 'pending',
@@ -946,6 +956,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.variable_incomes.put(record);
 
     const { sync_status, ...payload } = record;
+    if (!payload.account_id) delete (payload as any).account_id;
     console.log('[Supabase Variable Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
