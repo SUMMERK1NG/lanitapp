@@ -597,7 +597,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Fijos
     const pendingIncomes = await db.fixed_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingIncomes.filter((i) => !i.user_id || i.user_id === targetUid)) {
-      const { sync_status, ...rest } = item as any;
+      const { sync_status, category_id, ...rest } = item as any;
       const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert({
         ...rest,
@@ -1232,7 +1232,7 @@ export async function saveFixedIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record as any;
+      const { sync_status, category_id, ...payload } = record as any;
       payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {
