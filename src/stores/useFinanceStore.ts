@@ -581,65 +581,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         }
         break;
       }
-      case 'incomes': {
-        if (eventType === 'DELETE' && oldRow?.id) {
-          set((s) => ({
-            fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id),
-            variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id),
-          }));
-          await db.fixed_incomes.delete(oldRow.id);
-          await db.variable_incomes.delete(oldRow.id);
-        } else if (newRow?.id) {
-          if (newRow.user_id && userId && newRow.user_id !== userId) break;
-          const isFijo = newRow.income_type === 'fijo';
-          if (isFijo) {
-            const item: FixedIncome = {
-              id: ensureValidUuid(newRow.id),
-              user_id: newRow.user_id || userId,
-              name: newRow.description || 'Ingreso Fijo',
-              amount: Number(newRow.amount || 0),
-              currency: newRow.currency || 'USD',
-              default_fortnight: newRow.quincena === 15 ? 'q1' : newRow.quincena === 30 ? 'q2' : 'both',
-              category_id: newRow.category_id || 'cat_salary',
-              is_active: newRow.is_active !== undefined ? newRow.is_active : true,
-              notes: newRow.notes || '',
-              sync_status: 'synced',
-            };
-            set((s) => ({
-              fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
-                ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
-                : [...s.fixedIncomes, item],
-            }));
-            await db.fixed_incomes.put(item);
-          } else {
-            const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
-            const now = new Date();
-            const item: VariableIncome = {
-              id: ensureValidUuid(newRow.id),
-              user_id: newRow.user_id || userId,
-              description: newRow.description || 'Ingreso Variable',
-              amount: Number(newRow.amount || 0),
-              year: !isNaN(yr) ? yr : now.getFullYear(),
-              month: !isNaN(mo) ? mo - 1 : now.getMonth(),
-              fortnight: newRow.quincena === 30 ? 'q2' : 'q1',
-              category_id: newRow.category_id || 'cat_extras',
-              account_id: newRow.account_id || '',
-              currency: newRow.currency || 'USD',
-              notes: newRow.notes || '',
-              sync_status: 'synced',
-              created_at: newRow.created_at || new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            set((s) => ({
-              variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
-                ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
-                : [...s.variableIncomes, item],
-            }));
-            await db.variable_incomes.put(item);
-          }
-        }
-        break;
-      }
       case 'fixed_expenses': {
         if (eventType === 'DELETE' && oldRow?.id) {
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));

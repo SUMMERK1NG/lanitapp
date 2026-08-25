@@ -780,7 +780,6 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
     'fixed_incomes',
     'monthly_fixed_income_overrides',
     'variable_incomes',
-    'incomes',
     'fixed_expenses',
     'monthly_fixed_overrides',
     'fortnight_item_states',
@@ -866,42 +865,6 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                 await db.fixed_incomes.put(normIncome);
               } else if (tableName === 'variable_incomes') {
                 await db.variable_incomes.put(normalizeVariableIncomeRow(newRow));
-              } else if (tableName === 'incomes') {
-                if (newRow.income_type === 'fijo') {
-                  const q = newRow.quincena === 15 ? 'q1' : newRow.quincena === 30 ? 'q2' : 'both';
-                  await db.fixed_incomes.put({
-                    id: ensureValidUuid(newRow.id),
-                    user_id: newRow.user_id || userId,
-                    name: newRow.description || 'Ingreso Fijo',
-                    amount: Number(newRow.amount || 0),
-                    currency: newRow.currency || 'USD',
-                    default_fortnight: q,
-                    category_id: newRow.category_id || 'cat_salary',
-                    is_active: newRow.is_active !== undefined ? newRow.is_active : true,
-                    notes: newRow.notes || '',
-                    sync_status: 'synced',
-                  });
-                } else {
-                  const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
-                  const now = new Date();
-                  const q: FortnightType = newRow.quincena === 30 ? 'q2' : 'q1';
-                  await db.variable_incomes.put({
-                    id: ensureValidUuid(newRow.id),
-                    user_id: newRow.user_id || userId,
-                    description: newRow.description || 'Ingreso Variable',
-                    amount: Number(newRow.amount || 0),
-                    year: !isNaN(yr) ? yr : now.getFullYear(),
-                    month: !isNaN(mo) ? mo - 1 : now.getMonth(),
-                    fortnight: q,
-                    category_id: newRow.category_id || 'cat_extras',
-                    account_id: newRow.account_id || '',
-                    currency: newRow.currency || 'USD',
-                    notes: newRow.notes || '',
-                    sync_status: 'synced',
-                    created_at: newRow.created_at || new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  });
-                }
               } else if (targetTable) {
                 await targetTable.put({ ...newRow, sync_status: 'synced' as SyncStatus });
               }

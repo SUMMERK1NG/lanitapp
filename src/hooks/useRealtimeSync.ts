@@ -10,7 +10,6 @@ export const SYNCED_TABLES = [
   'fixed_incomes',
   'monthly_fixed_income_overrides',
   'variable_incomes',
-  'incomes',
   'fixed_expenses',
   'monthly_fixed_overrides',
   'debts',
