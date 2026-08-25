@@ -552,19 +552,21 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                     {paymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
                     {paymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
                     {paymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
+                    {paymentMode === 'other' && <><span className="text-base">🌐</span><span>Otra Divisa / Forma</span></>}
                   </div>
                   <ChevronDown className="w-4 h-4 text-muted shrink-0" />
                 </button>
                 {isPaymentDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setIsPaymentDropdownOpen(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-56 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
                       {[
+                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
                         { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
                         { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
-                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
                         { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
                         { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
+                        { id: 'other' as const, icon: '🌐', label: 'Otra Divisa / Forma' },
                       ].map((opt) => (
                         <button
                           key={opt.id}
@@ -591,7 +593,13 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
               {/* Monto con cálculo dinámico e inverso */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  {paymentMode === 'ves_fixed' ? 'Monto en Bolívares (Bs.)' : paymentMode === 'ves_euro' ? 'Monto en Euros (€)' : 'Monto en Dólares ($ USD)'}
+                  {paymentMode === 'ves_fixed'
+                    ? 'Monto en Bolívares (Bs.)'
+                    : paymentMode === 'ves_euro'
+                    ? 'Monto en Euros (€)'
+                    : paymentMode === 'other'
+                    ? 'Monto ($ USD u Otra Divisa)'
+                    : 'Monto en Dólares ($ USD)'}
                 </label>
                 <MoneyInput
                   value={amount}
@@ -619,6 +627,10 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                     ) : paymentMode === 'ves_parallel' ? (
                       <span className="text-[#FF914D]">
                         ≈ Bs. {formatCurrencyVE(numEntered * parallelUsd)} (Tasa Paralelo: Bs. {formatCurrencyVE(parallelUsd)})
+                      </span>
+                    ) : paymentMode === 'other' ? (
+                      <span className="text-primary-custom">
+                        ≈ Bs. {formatCurrencyVE(numEntered * bcvUsd)} (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)})
                       </span>
                     ) : (
                       <span className="text-emerald-400">

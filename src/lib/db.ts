@@ -1369,6 +1369,8 @@ export async function saveVariableIncome(
     user_id: userId,
     description: income.description,
     amount: Number(income.amount),
+    original_amount: income.original_amount !== undefined ? Number(income.original_amount) : Number(income.amount),
+    payment_mode: income.payment_mode || 'usd_cash',
     year: income.year,
     month: income.month,
     fortnight: income.fortnight,
