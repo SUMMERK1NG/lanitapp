@@ -745,6 +745,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
     'fixed_incomes',
     'monthly_fixed_income_overrides',
     'variable_incomes',
+    'incomes',
     'fixed_expenses',
     'monthly_fixed_overrides',
     'fortnight_item_states',
@@ -768,11 +769,16 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
           const targetTable = (db as any)[tableName];
           if (payload.eventType === 'DELETE') {
             const oldId = oldRow?.id;
-            if (oldId && targetTable) {
-              await targetTable.delete(oldId);
+            if (oldId) {
+              if (tableName === 'incomes') {
+                await db.fixed_incomes.delete(oldId);
+                await db.variable_incomes.delete(oldId);
+              } else if (targetTable) {
+                await targetTable.delete(oldId);
+              }
             }
           } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            if (newRow?.id && targetTable && (!newRow.user_id || newRow.user_id === userId)) {
+            if (newRow?.id && (!newRow.user_id || newRow.user_id === userId)) {
               if (tableName === 'accounts') {
                 const normAcc = {
                   id: newRow.id,
@@ -787,7 +793,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                   updated_at: newRow.updated_at,
                   sync_status: 'synced' as SyncStatus,
                 };
-                await targetTable.put(normAcc);
+                await db.accounts.put(normAcc);
               } else if (tableName === 'debts') {
                 const normDebt = {
                   ...newRow,
@@ -796,7 +802,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                   currency: newRow.currency || newRow.currency_type || 'USD',
                   sync_status: 'synced' as SyncStatus,
                 };
-                await targetTable.put(normDebt);
+                await db.debts.put(normDebt);
               } else if (tableName === 'fixed_expenses') {
                 const normExpense = {
                   ...newRow,
@@ -808,7 +814,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                     : 'both',
                   sync_status: 'synced' as SyncStatus,
                 };
-                await targetTable.put(normExpense);
+                await db.fixed_expenses.put(normExpense);
               } else if (tableName === 'fixed_incomes') {
                 const normIncome = {
                   ...newRow,
@@ -822,14 +828,50 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                   is_active: newRow.is_active !== undefined ? newRow.is_active : true,
                   sync_status: 'synced' as SyncStatus,
                 };
-                await targetTable.put(normIncome);
+                await db.fixed_incomes.put(normIncome);
               } else if (tableName === 'variable_incomes') {
-                await targetTable.put({
+                await db.variable_incomes.put({
                   ...newRow,
                   id: ensureValidUuid(newRow.id),
                   sync_status: 'synced' as SyncStatus,
                 });
-              } else {
+              } else if (tableName === 'incomes') {
+                if (newRow.income_type === 'fijo') {
+                  const q = newRow.quincena === 15 ? 'q1' : newRow.quincena === 30 ? 'q2' : 'both';
+                  await db.fixed_incomes.put({
+                    id: ensureValidUuid(newRow.id),
+                    user_id: newRow.user_id || userId,
+                    name: newRow.description || 'Ingreso Fijo',
+                    amount: Number(newRow.amount || 0),
+                    currency: newRow.currency || 'USD',
+                    default_fortnight: q,
+                    category_id: newRow.category_id || 'cat_salary',
+                    is_active: newRow.is_active !== undefined ? newRow.is_active : true,
+                    notes: newRow.notes || '',
+                    sync_status: 'synced',
+                  });
+                } else {
+                  const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
+                  const now = new Date();
+                  const q: FortnightType = newRow.quincena === 30 ? 'q2' : 'q1';
+                  await db.variable_incomes.put({
+                    id: ensureValidUuid(newRow.id),
+                    user_id: newRow.user_id || userId,
+                    description: newRow.description || 'Ingreso Variable',
+                    amount: Number(newRow.amount || 0),
+                    year: !isNaN(yr) ? yr : now.getFullYear(),
+                    month: !isNaN(mo) ? mo - 1 : now.getMonth(),
+                    fortnight: q,
+                    category_id: newRow.category_id || 'cat_extras',
+                    account_id: newRow.account_id || '',
+                    currency: newRow.currency || 'USD',
+                    notes: newRow.notes || '',
+                    sync_status: 'synced',
+                    created_at: newRow.created_at || new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  });
+                }
+              } else if (targetTable) {
                 await targetTable.put({ ...newRow, sync_status: 'synced' as SyncStatus });
               }
             }
@@ -1323,7 +1365,26 @@ export async function saveVariableIncome(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Variable Income Error]:', error.message, error.details);
+        console.warn('[Supabase Variable Income Notice]:', error.message);
+        const legacyPayload = {
+          id: record.id,
+          user_id: userId,
+          description: record.description,
+          amount: Number(record.amount),
+          income_type: 'variable',
+          quincena: record.fortnight === 'q1' ? 15 : 30,
+          month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
+          category_id: record.category_id || 'cat_extras',
+          account_id: record.account_id || null,
+          currency: record.currency || 'USD',
+          notes: record.notes || '',
+        };
+        const { error: legErr } = await supabase.from('incomes').upsert(legacyPayload);
+        if (!legErr) {
+          record.sync_status = 'synced';
+        } else {
+          console.error('[Supabase Incomes Fallback Error]:', legErr.message, legErr.details);
+        }
       }
     } catch (e) {
       console.warn('Direct variable income upsert notice:', e);

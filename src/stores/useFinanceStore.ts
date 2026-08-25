@@ -537,6 +537,65 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         }
         break;
       }
+      case 'incomes': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({
+            fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id),
+            variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id),
+          }));
+          await db.fixed_incomes.delete(oldRow.id);
+          await db.variable_incomes.delete(oldRow.id);
+        } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
+          const isFijo = newRow.income_type === 'fijo';
+          if (isFijo) {
+            const item: FixedIncome = {
+              id: ensureValidUuid(newRow.id),
+              user_id: newRow.user_id || userId,
+              name: newRow.description || 'Ingreso Fijo',
+              amount: Number(newRow.amount || 0),
+              currency: newRow.currency || 'USD',
+              default_fortnight: newRow.quincena === 15 ? 'q1' : newRow.quincena === 30 ? 'q2' : 'both',
+              category_id: newRow.category_id || 'cat_salary',
+              is_active: newRow.is_active !== undefined ? newRow.is_active : true,
+              notes: newRow.notes || '',
+              sync_status: 'synced',
+            };
+            set((s) => ({
+              fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
+                ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
+                : [...s.fixedIncomes, item],
+            }));
+            await db.fixed_incomes.put(item);
+          } else {
+            const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
+            const now = new Date();
+            const item: VariableIncome = {
+              id: ensureValidUuid(newRow.id),
+              user_id: newRow.user_id || userId,
+              description: newRow.description || 'Ingreso Variable',
+              amount: Number(newRow.amount || 0),
+              year: !isNaN(yr) ? yr : now.getFullYear(),
+              month: !isNaN(mo) ? mo - 1 : now.getMonth(),
+              fortnight: newRow.quincena === 30 ? 'q2' : 'q1',
+              category_id: newRow.category_id || 'cat_extras',
+              account_id: newRow.account_id || '',
+              currency: newRow.currency || 'USD',
+              notes: newRow.notes || '',
+              sync_status: 'synced',
+              created_at: newRow.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            set((s) => ({
+              variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
+                ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
+                : [...s.variableIncomes, item],
+            }));
+            await db.variable_incomes.put(item);
+          }
+        }
+        break;
+      }
       case 'fixed_expenses': {
         if (eventType === 'DELETE' && oldRow?.id) {
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
@@ -965,10 +1024,30 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         if (!error) {
           await db.variable_incomes.update(id, { sync_status: 'synced' });
         } else {
-          console.error('[Supabase Variable Incomes Error]:', error.message, error.details);
-          set((state) => ({
-            syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
-          }));
+          console.warn('[Supabase Variable Incomes Notice]:', error.message);
+          // Fallback en tabla 'incomes' (esquema unificado)
+          const legacyPayload = {
+            id: record.id,
+            user_id: supabaseUserId,
+            description: record.description,
+            amount: Number(record.amount),
+            income_type: 'variable',
+            quincena: record.fortnight === 'q1' ? 15 : 30,
+            month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
+            category_id: record.category_id || 'cat_extras',
+            account_id: record.account_id || null,
+            currency: record.currency || 'USD',
+            notes: record.notes || '',
+          };
+          const { error: legErr } = await supabase.from('incomes').upsert(legacyPayload);
+          if (!legErr) {
+            await db.variable_incomes.update(id, { sync_status: 'synced' });
+          } else {
+            console.error('[Supabase Incomes Fallback Error]:', legErr.message, legErr.details);
+            set((state) => ({
+              syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+            }));
+          }
         }
       } catch {
         set((state) => ({
