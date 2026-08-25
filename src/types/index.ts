@@ -161,6 +161,7 @@ export interface Debt {
   platform?: DebtPlatformType;
   debt_mode: DebtModeType; // 'installments' (Cashea, etc.) vs 'open' (Monto Fijo / Abierto)
   total_amount: number;
+  initial_payment?: number;
   current_balance: number;
   total_installments?: number;
   pending_installments?: number;

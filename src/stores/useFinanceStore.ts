@@ -1008,6 +1008,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       platform: debt.platform || 'particular',
       debt_mode: debt.debt_mode || 'installments',
       total_amount: Number(debt.total_amount),
+      initial_payment: debt.initial_payment !== undefined ? Number(debt.initial_payment) : undefined,
       current_balance,
       total_installments: debt.total_installments,
       pending_installments: debt.pending_installments,

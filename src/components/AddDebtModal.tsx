@@ -53,7 +53,6 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   isOpen,
   onClose,
   editingDebt,
-  categories = [],
   initialAmount,
   initialCreditor,
   initialDebtMode,
@@ -68,6 +67,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   const [creditor, setCreditor] = useState<string>(editingDebt?.creditor || initialCreditor || '');
   const [platform, setPlatform] = useState<DebtPlatformType>(editingDebt?.platform || initialPlatform || 'particular');
   const [debtAmount, setDebtAmount] = useState<number>(editingDebt?.total_amount || initialAmount || 0);
+  const [initialPayment, setInitialPayment] = useState<number>(editingDebt?.initial_payment || 0);
   const [totalInstallments, setTotalInstallments] = useState<string>(editingDebt?.total_installments?.toString() || '4');
   const [pendingInstallments, setPendingInstallments] = useState<string>(editingDebt?.pending_installments?.toString() || '4');
   const [installmentAmount, setInstallmentAmount] = useState<number>(editingDebt?.installment_amount || 0);
@@ -136,6 +136,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setCreditor(editingDebt.creditor);
       setPlatform(editingDebt.platform || 'cashea');
       setDebtAmount(editingDebt.total_amount || 0);
+      setInitialPayment(editingDebt.initial_payment || 0);
       setTotalInstallments(editingDebt.total_installments?.toString() || '4');
       setPendingInstallments(editingDebt.pending_installments?.toString() || '4');
       setInstallmentAmount(editingDebt.installment_amount || 0);
@@ -162,6 +163,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setPlatform(initialPlatform || 'particular');
       const amt = initialAmount || 0;
       setDebtAmount(amt);
+      setInitialPayment(0);
       setTotalInstallments('4');
       setPendingInstallments('4');
       if (amt > 0 && mode === 'installments') {
@@ -199,13 +201,18 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
     }
   };
 
+  const remainingAmount = useMemo(() => {
+    return Math.max(0, debtAmount - initialPayment);
+  }, [debtAmount, initialPayment]);
+
   // Auto calculate installment and interest amounts when total amount changes
   const handleDebtAmountChange = (val: number) => {
     setDebtAmount(val);
 
     const inst = parseInt(totalInstallments, 10);
-    if (val > 0 && inst > 0 && debtMode === 'installments') {
-      const perInst = Number((val / inst).toFixed(2));
+    const rem = Math.max(0, val - initialPayment);
+    if (inst > 0 && debtMode === 'installments') {
+      const perInst = Number((rem / inst).toFixed(2));
       setInstallmentAmount(perInst);
     }
     if (debtMode === 'open' && hasInterest && val > 0) {
@@ -216,12 +223,23 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
     }
   };
 
+  const handleInitialPaymentChange = (val: number) => {
+    setInitialPayment(val);
+    const inst = parseInt(totalInstallments, 10);
+    const rem = Math.max(0, debtAmount - val);
+    if (inst > 0 && debtMode === 'installments') {
+      const perInst = Number((rem / inst).toFixed(2));
+      setInstallmentAmount(perInst);
+    }
+  };
+
   const handleInstallmentsChange = (val: string) => {
     setTotalInstallments(val);
     setPendingInstallments(val); // New debts start with total installments pending
     const inst = parseInt(val, 10);
-    if (debtAmount > 0 && inst > 0 && debtMode === 'installments') {
-      const perInst = Number((debtAmount / inst).toFixed(2));
+    const rem = Math.max(0, debtAmount - initialPayment);
+    if (inst > 0 && debtMode === 'installments') {
+      const perInst = Number((rem / inst).toFixed(2));
       setInstallmentAmount(perInst);
     }
   };
@@ -279,10 +297,11 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
         platform,
         debt_mode: debtMode,
         total_amount: numTotal,
-        current_balance: editingDebt ? editingDebt.current_balance : numTotal,
+        initial_payment: debtMode === 'installments' ? initialPayment : undefined,
+        current_balance: editingDebt ? editingDebt.current_balance : (debtMode === 'installments' ? Math.max(0, numTotal - initialPayment) : numTotal),
         total_installments: totalInstNum,
         pending_installments: pendingInstNum,
-        installment_amount: debtMode === 'installments' ? installmentAmount || (numTotal / (totalInstNum || 1)) : undefined,
+        installment_amount: debtMode === 'installments' ? installmentAmount || (Math.max(0, numTotal - initialPayment) / (totalInstNum || 1)) : undefined,
         fortnight_due: fortnightDue,
         start_year: startOpt.year,
         start_month: startOpt.month,
@@ -398,15 +417,6 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                 <option value="particular" className="bg-slate-900 text-white">🤝 Particular / Familiar / Amigo</option>
                 <option value="banco" className="bg-slate-900 text-white">🏦 Tarjeta de Crédito / Banco</option>
                 <option value="other" className="bg-slate-900 text-white">📌 Otro / General</option>
-                {categories.length > 0 && (
-                  <optgroup label="Categorías del Sistema">
-                    {categories.map((c) => (
-                      <option key={c.id} value="other" className="bg-slate-900 text-white">
-                        🏷️ {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
               </select>
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-muted">
                 <ChevronDown className="w-4 h-4" />
@@ -428,13 +438,34 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
             />
           </div>
 
-          {/* Modalidad A: Por Cuotas (SIN intereses y SIN campo cuotas restantes) */}
+          {/* Modalidad A: Por Cuotas (SIN intereses y con campo Monto Inicial) */}
           {debtMode === 'installments' && (
             <div className="p-3.5 rounded-2xl bg-card border border-app space-y-3">
-              <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
-                Estructura de Cuotas
-              </span>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
+                  Estructura de Cuotas
+                </span>
+                {initialPayment > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[#00C2C7]/15 text-[#00C2C7] border border-[#00C2C7]/20">
+                    Restante: ${remainingAmount.toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[10px] text-muted font-medium mb-1">
+                    Monto Inicial ($) <span className="text-[9px] text-muted font-normal">(Opcional)</span>
+                  </label>
+                  <MoneyInput
+                    value={initialPayment}
+                    onChange={handleInitialPaymentChange}
+                    currencySymbol="$"
+                    placeholder="0,00"
+                    className="!py-1.5 !text-xs !font-bold"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[10px] text-muted font-medium mb-1">Total de Cuotas</label>
                   <input
@@ -459,6 +490,12 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                   />
                 </div>
               </div>
+
+              {initialPayment > 0 && (
+                <div className="text-[11px] text-muted bg-surface/80 px-2.5 py-1.5 rounded-xl border border-app">
+                  Monto por Cuota: <strong className="text-[#00C2C7]">${installmentAmount.toFixed(2)}</strong> (después de inicial de <strong className="text-app">${initialPayment.toFixed(2)}</strong>)
+                </div>
+              )}
 
               {/* Selector Comenzar a pagar a partir de */}
               <div className="relative pt-1">
@@ -684,7 +721,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                 { id: 'bcv_usd' as const, label: 'Tasa BCV (USD/Bs)' },
                 { id: 'cash' as const, label: 'Efectivo Cash ($)' },
                 { id: 'bcv_eur' as const, label: 'Euro BCV (€/Bs)' },
-                { id: 'other' as const, label: 'Transferencia / Otro' },
+                { id: 'other' as const, label: 'Binance / Otros' },
               ].map((opt) => (
                 <button
                   key={opt.id}
