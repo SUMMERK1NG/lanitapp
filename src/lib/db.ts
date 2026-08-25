@@ -353,6 +353,31 @@ export async function migrateLocalDataToCloud(userId: string): Promise<void> {
   }
 }
 
+export function normalizeVariableIncomeRow(v: any): VariableIncome {
+  const [yr, mo] = (v.month_year || '').split('-').map(Number);
+  const now = new Date();
+  const year = !isNaN(yr) && yr > 2000 ? yr : (typeof v.year === 'number' ? v.year : now.getFullYear());
+  const month = !isNaN(mo) && mo >= 1 && mo <= 12 ? mo - 1 : (typeof v.month === 'number' ? v.month : now.getMonth());
+  const fortnight: FortnightType = (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1';
+
+  return {
+    id: ensureValidUuid(v.id),
+    user_id: v.user_id,
+    description: v.name || v.description || 'Ingreso Variable',
+    amount: Number(v.amount || 0),
+    year,
+    month,
+    fortnight,
+    category_id: v.category_id || 'cat_extras',
+    account_id: v.account_id || '',
+    currency: v.currency || 'USD',
+    notes: v.notes || '',
+    sync_status: 'synced',
+    created_at: v.created_at || new Date().toISOString(),
+    updated_at: v.updated_at || new Date().toISOString(),
+  };
+}
+
 export const fetchAllDataFromSupabase = fetchAndConsolidateUserCloudData;
 
 /**
@@ -510,13 +535,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.monthly_fixed_income_overrides.bulkPut(remoteIncomeOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
     }
     if (remoteVarIncomes && remoteVarIncomes.length > 0) {
-      await db.variable_incomes.bulkPut(remoteVarIncomes.map((v: any) => ({
-        ...v,
-        id: ensureValidUuid(v.id),
-        description: v.description || v.name || 'Ingreso Variable',
-        fortnight: (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1',
-        sync_status: 'synced',
-      })));
+      await db.variable_incomes.bulkPut(remoteVarIncomes.map((v: any) => normalizeVariableIncomeRow(v)));
     }
     if (remoteExpenses && remoteExpenses.length > 0) {
       await db.fixed_expenses.bulkPut(remoteExpenses.map((e: any) => ({
@@ -846,13 +865,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                 };
                 await db.fixed_incomes.put(normIncome);
               } else if (tableName === 'variable_incomes') {
-                await db.variable_incomes.put({
-                  ...newRow,
-                  id: ensureValidUuid(newRow.id),
-                  description: newRow.description || newRow.name || 'Ingreso Variable',
-                  fortnight: (newRow.quincena === 30 || newRow.fortnight === 'q2' || newRow.quincena === '30') ? 'q2' : 'q1',
-                  sync_status: 'synced' as SyncStatus,
-                });
+                await db.variable_incomes.put(normalizeVariableIncomeRow(newRow));
               } else if (tableName === 'incomes') {
                 if (newRow.income_type === 'fijo') {
                   const q = newRow.quincena === 15 ? 'q1' : newRow.quincena === 30 ? 'q2' : 'both';
