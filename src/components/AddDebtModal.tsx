@@ -19,6 +19,7 @@ import type {
   Category,
 } from '../types/index.ts';
 import { saveDebt } from '../services/debtsService.ts';
+import { DEFAULT_CATEGORIES } from '../lib/db.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 
@@ -105,9 +106,13 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   initialNotes,
   onSaved,
 }) => {
-  const expenseCategories = useMemo(() => {
-    return (categories || []).filter((cat) => cat.type === 'expense');
+  const allCategories = useMemo(() => {
+    return categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
   }, [categories]);
+
+  const expenseCategories = useMemo(() => {
+    return allCategories.filter((cat) => cat.type === 'expense');
+  }, [allCategories]);
 
   const [debtMode, setDebtMode] = useState<DebtModeType>(editingDebt?.debt_mode || initialDebtMode || 'installments');
   const [creditor, setCreditor] = useState<string>(editingDebt?.creditor || initialCreditor || '');
@@ -456,7 +461,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
             >
               <div className="flex items-center gap-2 truncate">
                 {(() => {
-                  const selectedCat = categories?.find((c) => c.id === platform);
+                  const selectedCat = allCategories?.find((c) => c.id === platform);
                   if (selectedCat) {
                     return (
                       <>
