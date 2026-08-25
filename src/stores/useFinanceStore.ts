@@ -35,6 +35,18 @@ import {
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
+export const fortnightToQuincena = (f: any): number | null => {
+  if (f === 'q1' || f === 15 || f === '15') return 15;
+  if (f === 'q2' || f === 30 || f === '30') return 30;
+  return null; // 'both'
+};
+
+export const quincenaToFortnight = (q: any): 'q1' | 'q2' | 'both' => {
+  if (q === 15 || q === '15' || q === 'q1') return 'q1';
+  if (q === 30 || q === '30' || q === 'q2') return 'q2';
+  return 'both';
+};
+
 export interface SyncQueueItem {
   id: string;
   table: string;
@@ -348,11 +360,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
         ...i,
         id: ensureValidUuid(i.id),
-        default_fortnight: (i.default_fortnight === 15 || i.default_fortnight === '15' || i.default_fortnight === 'q1')
-          ? 'q1'
-          : (i.default_fortnight === 30 || i.default_fortnight === '30' || i.default_fortnight === 'q2')
-          ? 'q2'
-          : 'both',
+        default_fortnight: quincenaToFortnight(i.default_fortnight),
         sync_status: 'synced',
       }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
@@ -360,11 +368,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
         ...e,
         id: ensureValidUuid(e.id),
-        default_fortnight: (e.default_fortnight === 15 || e.default_quincena === 15 || e.default_fortnight === '15' || e.default_fortnight === 'q1')
-          ? 'q1'
-          : (e.default_fortnight === 30 || e.default_quincena === 30 || e.default_fortnight === '30' || e.default_fortnight === 'q2')
-          ? 'q2'
-          : 'both',
+        default_fortnight: quincenaToFortnight(e.default_fortnight || e.default_quincena),
         sync_status: 'synced',
       }));
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
@@ -488,11 +492,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           const item: FixedIncome = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
-            default_fortnight: (newRow.default_fortnight === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
-              ? 'q1'
-              : (newRow.default_fortnight === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
-              ? 'q2'
-              : 'both',
+            default_fortnight: quincenaToFortnight(newRow.default_fortnight),
             sync_status: 'synced',
           };
           set((s) => ({
@@ -542,11 +542,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           const item: FixedExpense = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
-            default_fortnight: (newRow.default_fortnight === 15 || newRow.default_quincena === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
-              ? 'q1'
-              : (newRow.default_fortnight === 30 || newRow.default_quincena === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
-              ? 'q2'
-              : 'both',
+            default_fortnight: quincenaToFortnight(newRow.default_fortnight || newRow.default_quincena),
             sync_status: 'synced',
           };
           set((s) => ({
@@ -841,12 +837,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   saveFixedIncome: async (income, userId) => {
     const id = ensureValidUuid(income.id);
-
-    const fortnightToQuincena = (f: any): number | null => {
-      if (f === 'q1' || f === 15) return 15;
-      if (f === 'q2' || f === 30) return 30;
-      return null; // 'both'
-    };
 
     const record: FixedIncome = {
       id,
