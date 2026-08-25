@@ -1226,7 +1226,7 @@ export async function skipSavingContributionPeriod(data: {
  * Plantilla de Ingresos Fijos
  */
 export async function saveFixedIncome(
-  income: Partial<FixedIncome> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
+  income: Partial<FixedIncome> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' | 'split' }
 ): Promise<FixedIncome> {
   const id = ensureValidUuid(income.id);
   let userId = income.user_id || getActiveUserId();
@@ -1245,7 +1245,9 @@ export async function saveFixedIncome(
     user_id: userId,
     name: income.name,
     amount: Number(income.amount),
+    original_amount: income.original_amount !== undefined ? Number(income.original_amount) : Number(income.amount),
     currency: income.currency || 'USD',
+    payment_mode: income.payment_mode || 'usd_cash',
     default_fortnight: income.default_fortnight,
     category_id: income.category_id || 'cat_salary',
     is_active: income.is_active !== undefined ? income.is_active : true,
@@ -1255,7 +1257,7 @@ export async function saveFixedIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, category_id, is_active, ...payload } = record as any;
+      const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
       payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {

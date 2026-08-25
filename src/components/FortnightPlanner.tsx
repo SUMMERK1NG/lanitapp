@@ -171,17 +171,18 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const isActive = override?.is_active !== undefined ? override.is_active : fi.is_active;
         if (!isActive) return false;
 
-        if (fi.default_fortnight === 'both') return true;
+        if (fi.default_fortnight === 'both' || fi.default_fortnight === 'split') return true;
         return fi.default_fortnight === selectedFortnight;
       })
       .map((fi) => {
         const override = overrideMap.get(fi.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fi.amount;
+        const finalAmount = fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount;
         return {
           id: fi.id,
           name: fi.name,
-          finalAmount: amount,
-          notes: fi.notes || 'Ingreso fijo',
+          finalAmount,
+          notes: fi.notes || (fi.default_fortnight === 'split' ? '50% sueldo quincenal' : 'Ingreso fijo'),
           isFixed: true,
         };
       });

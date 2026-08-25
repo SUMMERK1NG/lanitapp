@@ -8,6 +8,7 @@ import {
   XCircle,
   Layers,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import type {
   FixedIncome,
@@ -16,6 +17,8 @@ import type {
   Category,
   Account,
   FortnightType,
+  ExchangeRatesData,
+  FixedExpensePaymentMode,
 } from '../types/index.ts';
 import {
   saveFixedIncome,
@@ -37,6 +40,7 @@ interface IncomesManagementModuleProps {
   selectedYear: number;
   selectedMonth: number;
   onChangePeriod: (year: number, month: number) => void;
+  rates?: ExchangeRatesData;
   currency?: string;
 }
 
@@ -54,18 +58,26 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   selectedYear,
   selectedMonth,
   onChangePeriod,
+  rates,
   currency = '$',
 }) => {
   const [activeTab, setActiveTab] = useState<'fixed' | 'variable'>('fixed');
+
+  const bcvUsd = rates?.bcvDollar && rates.bcvDollar > 0 ? rates.bcvDollar : 1;
+  const bcvEur = rates?.bcvEuro && rates.bcvEuro > 0 ? rates.bcvEuro : 1;
+  const parallelUsd = rates?.parallelDollar && rates.parallelDollar > 0 ? rates.parallelDollar : bcvUsd;
 
   // Fixed Income Modal states
   const [isFixedModalOpen, setIsFixedModalOpen] = useState<boolean>(false);
   const [editingFixed, setEditingFixed] = useState<FixedIncome | null>(null);
   const [fixedName, setFixedName] = useState<string>('');
   const [fixedAmount, setFixedAmount] = useState<number>(0);
-  const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
+  const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('usd_cash');
+  const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both' | 'split'>('split');
   const [fixedCategoryId, setFixedCategoryId] = useState<string>('cat_salary');
   const [fixedNotes, setFixedNotes] = useState<string>('');
+  const [isFixedCategoryDropdownOpen, setIsFixedCategoryDropdownOpen] = useState<boolean>(false);
+  const [isFixedPaymentDropdownOpen, setIsFixedPaymentDropdownOpen] = useState<boolean>(false);
 
   // Variable Income Modal states
   const [isVarModalOpen, setIsVarModalOpen] = useState<boolean>(false);
@@ -76,10 +88,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const [varCategoryId, setVarCategoryId] = useState<string>('cat_extras');
   const [varAccountId, setVarAccountId] = useState<string>(accounts[0]?.id || '');
   const [varNotes, setVarNotes] = useState<string>('');
+  const [isVarCategoryDropdownOpen, setIsVarCategoryDropdownOpen] = useState<boolean>(false);
 
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
-  // 1. Process Fixed Incomes for current month
+  // 1. Process Fixed Incomes for current month with currency conversions
   const overrideMap = useMemo(() => {
     return new Map(
       monthlyIncomeOverrides
@@ -92,18 +105,46 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     return fixedIncomes.map((fi) => {
       const override = overrideMap.get(fi.id);
       const isActive = override?.is_active !== undefined ? override.is_active : fi.is_active;
-      const finalAmount = override?.custom_amount !== undefined ? override.custom_amount : fi.amount;
+
+      let mode: FixedExpensePaymentMode = fi.payment_mode || 'usd_cash';
+      if (mode === 'cash') mode = 'usd_cash';
+      else if (mode === 'bcv_usd') mode = 'ves_bcv';
+      else if (mode === 'fixed_ves') mode = 'ves_fixed';
+      else if (mode === 'bcv_eur') mode = 'ves_euro';
+      else if (mode === 'parallel_ves') mode = 'ves_parallel';
+
+      const rawCurrency = fi.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'ves_euro' ? 'EUR' : 'USD');
+      const origAmt = fi.original_amount !== undefined ? fi.original_amount : fi.amount;
+
+      let usdEquivalent = 0;
+      if (rawCurrency === 'VES' || mode === 'ves_fixed') {
+        usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
+      } else if (rawCurrency === 'EUR' || mode === 'ves_euro') {
+        usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
+      } else {
+        usdEquivalent = Number(origAmt.toFixed(2));
+      }
+
+      const finalAmountUSD = override?.custom_amount !== undefined ? override.custom_amount : usdEquivalent;
+
       return {
         ...fi,
+        payment_mode: mode,
+        currency: rawCurrency,
+        original_amount: origAmt,
+        amount_usd: finalAmountUSD,
         isActive,
-        finalAmount,
+        finalAmount: finalAmountUSD,
       };
     });
-  }, [fixedIncomes, overrideMap]);
+  }, [fixedIncomes, overrideMap, bcvUsd, bcvEur]);
 
   const totalMonthlyFixed = processedFixedIncomes
     .filter((i) => i.isActive)
-    .reduce((sum, i) => sum + i.finalAmount, 0);
+    .reduce((sum, i) => {
+      if (i.default_fortnight === 'both') return sum + (i.finalAmount * 2);
+      return sum + i.finalAmount;
+    }, 0);
 
   // 2. Filter Variable Incomes for current month
   const currentMonthVariables = useMemo(() => {
@@ -119,16 +160,22 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
   // Quincenas totals
   const q1Fixed = processedFixedIncomes
-    .filter((i) => i.isActive && (i.default_fortnight === 'q1' || i.default_fortnight === 'both'))
-    .reduce((sum, i) => sum + i.finalAmount, 0);
+    .filter((i) => i.isActive && (i.default_fortnight === 'q1' || i.default_fortnight === 'both' || i.default_fortnight === 'split'))
+    .reduce((sum, i) => {
+      if (i.default_fortnight === 'split') return sum + (i.finalAmount / 2);
+      return sum + i.finalAmount;
+    }, 0);
   const q1Variable = currentMonthVariables
     .filter((i) => i.fortnight === 'q1')
     .reduce((sum, i) => sum + i.amount, 0);
   const totalQ1 = q1Fixed + q1Variable;
 
   const q2Fixed = processedFixedIncomes
-    .filter((i) => i.isActive && (i.default_fortnight === 'q2' || i.default_fortnight === 'both'))
-    .reduce((sum, i) => sum + i.finalAmount, 0);
+    .filter((i) => i.isActive && (i.default_fortnight === 'q2' || i.default_fortnight === 'both' || i.default_fortnight === 'split'))
+    .reduce((sum, i) => {
+      if (i.default_fortnight === 'split') return sum + (i.finalAmount / 2);
+      return sum + i.finalAmount;
+    }, 0);
   const q2Variable = currentMonthVariables
     .filter((i) => i.fortnight === 'q2')
     .reduce((sum, i) => sum + i.amount, 0);
@@ -139,32 +186,55 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setEditingFixed(null);
     setFixedName('');
     setFixedAmount(0);
-    setFixedFortnight('q1');
+    setFixedPaymentMode('usd_cash');
+    setFixedFortnight('split');
     setFixedCategoryId(incomeCategories[0]?.id || 'cat_salary');
     setFixedNotes('');
+    setIsFixedCategoryDropdownOpen(false);
+    setIsFixedPaymentDropdownOpen(false);
     setIsFixedModalOpen(true);
   };
 
-  const handleOpenEditFixed = (fi: FixedIncome) => {
+  const handleOpenEditFixed = (fi: typeof processedFixedIncomes[0]) => {
     setEditingFixed(fi);
     setFixedName(fi.name);
-    setFixedAmount(fi.amount || 0);
-    setFixedFortnight(fi.default_fortnight);
+    setFixedPaymentMode(fi.payment_mode || 'usd_cash');
+    const exactOriginal = fi.original_amount !== undefined ? fi.original_amount : fi.finalAmount;
+    setFixedAmount(exactOriginal || 0);
+    setFixedFortnight(fi.default_fortnight || 'split');
     setFixedCategoryId(fi.category_id);
     setFixedNotes(fi.notes || '');
+    setIsFixedCategoryDropdownOpen(false);
+    setIsFixedPaymentDropdownOpen(false);
     setIsFixedModalOpen(true);
   };
 
   const handleSaveFixed = async (e: React.FormEvent) => {
     e.preventDefault();
-    const num = fixedAmount;
-    if (!fixedName.trim() || isNaN(num) || num <= 0) return;
+    const numInput = fixedAmount;
+    if (!fixedName.trim() || isNaN(numInput) || numInput <= 0) return;
+
+    let finalAmountUSD = numInput;
+    let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
+
+    if (fixedPaymentMode === 'ves_fixed') {
+      finalCurrency = 'VES';
+      finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
+    } else if (fixedPaymentMode === 'ves_euro') {
+      finalCurrency = 'EUR';
+      finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
+    } else {
+      finalCurrency = 'USD';
+      finalAmountUSD = Number(numInput.toFixed(2));
+    }
 
     await saveFixedIncome({
       id: editingFixed?.id,
       name: fixedName.trim(),
-      amount: num,
-      currency: 'USD',
+      amount: finalAmountUSD,
+      original_amount: numInput,
+      currency: finalCurrency,
+      payment_mode: fixedPaymentMode,
       default_fortnight: fixedFortnight,
       category_id: fixedCategoryId,
       notes: fixedNotes,
@@ -198,6 +268,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarCategoryId(incomeCategories.find(c => c.id === 'cat_extras')?.id || incomeCategories[0]?.id || 'cat_extras');
     setVarAccountId(accounts[0]?.id || '');
     setVarNotes('');
+    setIsVarCategoryDropdownOpen(false);
     setIsVarModalOpen(true);
   };
 
@@ -209,6 +280,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarCategoryId(vi.category_id || 'cat_extras');
     setVarAccountId(vi.account_id || accounts[0]?.id || '');
     setVarNotes(vi.notes || '');
+    setIsVarCategoryDropdownOpen(false);
     setIsVarModalOpen(true);
   };
 
@@ -260,29 +332,29 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             onChange={onChangePeriod}
-            className="w-full sm:w-auto justify-between sm:justify-start"
           />
         </div>
 
-        {/* Sub-Navigation Tabs Responsivos y Claros */}
-        <div className="w-full grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
+        {/* Tab Selector: Fijos vs Variables */}
+        <div className="flex items-center p-1 bg-card rounded-2xl border border-app max-w-md mx-auto sm:mx-0">
           <button
+            type="button"
             onClick={() => setActiveTab('fixed')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
               activeTab === 'fixed'
-                ? 'bg-primary-custom text-white shadow-md'
+                ? 'bg-surface text-app shadow-sm border border-app'
                 : 'text-muted hover:text-app'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Ingresos Fijos</span>
+            <span>Ingresos Fijos ({processedFixedIncomes.length})</span>
           </button>
-
           <button
+            type="button"
             onClick={() => setActiveTab('variable')}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
               activeTab === 'variable'
-                ? 'bg-primary-custom text-white shadow-md'
+                ? 'bg-primary-custom text-white shadow-sm'
                 : 'text-muted hover:text-app'
             }`}
           >
@@ -292,42 +364,48 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         </div>
       </div>
 
-      {/* KPI Cards Summary Responsivo */}
+      {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Total Mes</span>
-          <p className="text-base sm:text-2xl font-black text-primary-custom tracking-tight">
-            {currency}{totalCombinedIncome.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
+          <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Mes</span>
+          <p className="text-lg sm:text-xl font-black text-primary-custom mt-1">
+            {currency}{totalCombinedIncome.toFixed(2)}
           </p>
-          <span className="text-[10px] sm:text-[11px] text-muted block truncate">En {MONTH_NAMES[selectedMonth]} {selectedYear}</span>
+          <span className="text-[10px] text-muted block mt-0.5">
+            En {MONTH_NAMES[selectedMonth]} {selectedYear}
+          </span>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Ingresos Fijos</span>
-          <p className="text-base sm:text-2xl font-black text-[#00C2C7] tracking-tight">
-            {currency}{totalMonthlyFixed.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
+          <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Ingresos Fijos</span>
+          <p className="text-lg sm:text-xl font-black text-[#00C2C7] mt-1">
+            {currency}{totalMonthlyFixed.toFixed(2)}
           </p>
-          <span className="text-[10px] sm:text-[11px] text-muted block truncate">Sueldo, tickets, etc.</span>
+          <span className="text-[10px] text-muted block mt-0.5">
+            Sueldo, tickets, etc.
+          </span>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Ingresos Variables</span>
-          <p className="text-base sm:text-2xl font-black text-[#FF914D] tracking-tight">
-            {currency}{totalMonthlyVariable.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
+          <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Ingresos Variables</span>
+          <p className="text-lg sm:text-xl font-black text-[#FF914D] mt-1">
+            {currency}{totalMonthlyVariable.toFixed(2)}
           </p>
-          <span className="text-[10px] sm:text-[11px] text-muted block truncate">Bonos, freelance, extras</span>
+          <span className="text-[10px] text-muted block mt-0.5">
+            Bonos, freelance, extras
+          </span>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block truncate">Por Quincena</span>
-          <div className="text-xs space-y-0.5 pt-0.5">
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-muted">Q15:</span>
-              <strong className="text-app font-bold">{currency}{totalQ1.toFixed(0)}</strong>
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
+          <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Por Quincena</span>
+          <div className="mt-1 space-y-0.5 text-xs font-bold text-app">
+            <div className="flex justify-between text-muted">
+              <span>Q15:</span>
+              <span className="text-app">{currency}{totalQ1.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-muted">Q30:</span>
-              <strong className="text-app font-bold">{currency}{totalQ2.toFixed(0)}</strong>
+            <div className="flex justify-between text-muted">
+              <span>Q30:</span>
+              <span className="text-app">{currency}{totalQ2.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -335,7 +413,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       {/* TAB 1: INGRESOS FIJOS */}
       {activeTab === 'fixed' && (
-        <div className="space-y-4 animate-in fade-in duration-150">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-app flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary-custom" />
@@ -358,7 +436,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               <div className="space-y-1.5">
                 <h3 className="text-base font-bold text-app">Comienza a estructurar tus finanzas</h3>
                 <p className="text-xs text-muted max-w-sm mx-auto leading-relaxed">
-                  Agrega tu primer registro para calcular tus balances y proyecciones de quincena automáticamente.
+                  Agrega tu sueldo o ingresos fijos para calcular tus balances y proyecciones de quincena automáticamente.
                 </p>
               </div>
               <button
@@ -373,6 +451,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {processedFixedIncomes.map((fi) => {
                 const category = categories.find((c) => c.id === fi.category_id);
+                const isVes = fi.currency === 'VES' || fi.payment_mode === 'ves_fixed';
+                const isEur = fi.currency === 'EUR' || fi.payment_mode === 'ves_euro';
+
                 return (
                   <div
                     key={fi.id}
@@ -394,18 +475,55 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                           <h4 className="text-sm font-bold text-app">{fi.name}</h4>
                           <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
                             <span className="px-2 py-0.5 rounded bg-card text-[10px] font-semibold text-app">
-                              {fi.default_fortnight === 'q1' && `Quincena 15 de ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
-                              {fi.default_fortnight === 'q2' && `Quincena 30 de ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
-                              {fi.default_fortnight === 'both' && 'Ambas Quincenas'}
+                              {fi.default_fortnight === 'q1' && `Quincena 15`}
+                              {fi.default_fortnight === 'q2' && `Quincena 30`}
+                              {fi.default_fortnight === 'split' && `Dividido 50/50 (${currency}${(fi.finalAmount / 2).toFixed(2)} c/u)`}
+                              {fi.default_fortnight === 'both' && `Ambas Quincenas (${currency}${fi.finalAmount.toFixed(2)} c/u)`}
                             </span>
+                            {fi.payment_mode && (
+                              <span className="text-[10px] text-muted">
+                                {fi.payment_mode === 'ves_bcv' && '🏛️ BCV'}
+                                {fi.payment_mode === 'ves_fixed' && '🇻🇪 Bs'}
+                                {fi.payment_mode === 'ves_euro' && '💶 Euro'}
+                                {fi.payment_mode === 'usd_cash' && '💵 Cash'}
+                                {fi.payment_mode === 'ves_parallel' && '⚡ Paralelo'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right">
-                        <span className="text-base font-black text-[#00C2C7]">
-                          +{currency}{fi.finalAmount.toFixed(2)}
-                        </span>
+                        {isVes ? (
+                          <>
+                            <span className="text-base font-black text-[#00C2C7]">
+                              +Bs. {(fi.original_amount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] text-muted block">
+                              ≈ {currency}{fi.finalAmount.toFixed(2)} USD
+                            </span>
+                          </>
+                        ) : isEur ? (
+                          <>
+                            <span className="text-base font-black text-[#00C2C7]">
+                              +€{(fi.original_amount || 0).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] text-muted block">
+                              ≈ {currency}{fi.finalAmount.toFixed(2)} USD
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-base font-black text-[#00C2C7]">
+                              +{currency}{fi.finalAmount.toFixed(2)}
+                            </span>
+                            {rates?.bcvDollar ? (
+                              <span className="text-[10px] text-muted block">
+                                ≈ Bs. {(fi.finalAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -426,7 +544,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         <button
                           onClick={() => handleOpenEditFixed(fi)}
                           className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
-                          title="Editar regla base"
+                          title="Editar ingreso fijo"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -449,15 +567,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       {/* TAB 2: INGRESOS VARIABLES / EXTRAS */}
       {activeTab === 'variable' && (
-        <div className="space-y-4 animate-in fade-in duration-150">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-bold text-app flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#FF914D]" />
-                Ingresos Variables del Mes ({currentMonthVariables.length})
-              </h4>
-              <p className="text-xs text-muted">Registros puntuales para {MONTH_NAMES[selectedMonth]} {selectedYear}</p>
-            </div>
+            <h4 className="text-sm font-bold text-app flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#FF914D]" />
+              Ingresos Variables del Mes ({currentMonthVariables.length})
+            </h4>
             <button
               onClick={handleOpenAddVar}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
@@ -473,9 +588,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 <Sparkles className="w-8 h-8" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base font-bold text-app">Comienza a estructurar tus finanzas</h3>
+                <h3 className="text-base font-bold text-app">Sin ingresos extras este mes</h3>
                 <p className="text-xs text-muted max-w-sm mx-auto leading-relaxed">
-                  Agrega tu primer registro para calcular tus balances y proyecciones de quincena automáticamente.
+                  Registra bonos puntuales, horas extras, comisiones o proyectos freelance para {MONTH_NAMES[selectedMonth]} {selectedYear}.
                 </p>
               </div>
               <button
@@ -490,12 +605,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {currentMonthVariables.map((vi) => {
                 const category = categories.find((c) => c.id === vi.category_id);
-                const account = accounts.find((a) => a.id === vi.account_id);
-
                 return (
                   <div
                     key={vi.id}
-                    className="p-4 rounded-3xl bg-surface border border-app shadow-md hover:border-primary-custom transition-all"
+                    className="p-4 rounded-3xl bg-surface border border-app shadow-md hover:border-[#FF914D] transition-all"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
@@ -509,9 +622,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                           <h4 className="text-sm font-bold text-app">{vi.description}</h4>
                           <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
                             <span className="px-2 py-0.5 rounded bg-card text-[10px] font-semibold text-app">
-                              {vi.fortnight === 'q1' ? `Quincena 15 de ${MONTH_NAMES[selectedMonth]}` : `Quincena 30 de ${MONTH_NAMES[selectedMonth]}`}
+                              {vi.fortnight === 'q1'
+                                ? `Quincena 15 de ${MONTH_NAMES[selectedMonth]}`
+                                : `Quincena 30 de ${MONTH_NAMES[selectedMonth]}`}
                             </span>
-                            {account && <span className="text-[10px] text-muted">• {account.name}</span>}
                           </div>
                         </div>
                       </div>
@@ -520,11 +634,16 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         <span className="text-base font-black text-[#FF914D]">
                           +{currency}{vi.amount.toFixed(2)}
                         </span>
+                        {rates?.bcvDollar ? (
+                          <span className="text-[10px] text-muted block">
+                            ≈ Bs. {(vi.amount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-app text-xs">
-                      <span className="text-[11px] text-muted truncate max-w-[200px]">
+                      <span className="text-muted text-[11px] truncate max-w-[200px]">
                         {vi.notes || 'Ingreso puntual registrado'}
                       </span>
 
@@ -532,14 +651,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         <button
                           onClick={() => handleOpenEditVar(vi)}
                           className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
-                          title="Editar ingreso extra"
+                          title="Editar ingreso variable"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteVar(vi.id)}
                           className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
-                          title="Eliminar ingreso extra"
+                          title="Eliminar ingreso variable"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -556,12 +675,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       {/* Add / Edit Fixed Income Modal */}
       {isFixedModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold mb-4">
               {editingFixed ? 'Editar Ingreso Fijo' : 'Nuevo Ingreso Fijo Recurrente'}
             </h3>
 
             <form onSubmit={handleSaveFixed} className="space-y-3.5">
+              {/* Concepto / Nombre */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Concepto / Nombre del Ingreso
@@ -569,78 +689,201 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Sueldo Base, Tickets de Alimentación..."
+                  placeholder="Ej. Sueldo Base, Salario Mensual, Tickets..."
                   value={fixedName}
                   onChange={(e) => setFixedName(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Monto ($ USD)
-                  </label>
-                  <MoneyInput
-                    value={fixedAmount}
-                    onChange={setFixedAmount}
-                    currencySymbol="$"
-                    placeholder="0,00"
-                    required
-                    className="!py-2 !text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Quincena Asignada
-                  </label>
-                  <div className="grid grid-cols-3 gap-1 p-1 bg-card rounded-xl border border-app">
-                    {[
-                      { id: 'q1' as const, label: 'Quincena 15' },
-                      { id: 'q2' as const, label: 'Quincena 30' },
-                      { id: 'both' as const, label: 'Ambas Quincenas' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setFixedFortnight(opt.id)}
-                        className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center truncate ${
-                          fixedFortnight === opt.id
-                            ? 'bg-primary-custom text-white shadow-sm'
-                            : 'text-muted hover:text-app'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+              {/* Forma de Cobro: Custom Styled Dropdown */}
+              <div className="relative">
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Forma de Cobro
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFixedPaymentDropdownOpen(!isFixedPaymentDropdownOpen);
+                    setIsFixedCategoryDropdownOpen(false);
+                  }}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {fixedPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
+                    {fixedPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>Bolívar (Tasa BCV)</span></>}
+                    {fixedPaymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
+                    {fixedPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolívar (Monto Fijo Bs)</span></>}
+                    {fixedPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
                   </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isFixedPaymentDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsFixedPaymentDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {[
+                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
+                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
+                        { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
+                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
+                        { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setFixedPaymentMode(opt.id);
+                            setIsFixedPaymentDropdownOpen(false);
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                            fixedPaymentMode === opt.id
+                              ? 'bg-primary-custom text-white shadow-sm'
+                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <span className="text-base">{opt.icon}</span>
+                          <span className="truncate">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Monto con conversiones dinámicas */}
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  {fixedPaymentMode === 'ves_fixed' ? 'Monto Total en Bolívares (Bs.)' : fixedPaymentMode === 'ves_euro' ? 'Monto Total en Euros (€)' : 'Monto Total en Dólares ($ USD)'}
+                </label>
+                <MoneyInput
+                  value={fixedAmount}
+                  onChange={setFixedAmount}
+                  currencySymbol={fixedPaymentMode === 'ves_fixed' ? 'Bs' : fixedPaymentMode === 'ves_euro' ? '€' : '$'}
+                  placeholder="0,00"
+                  required
+                  className="!py-2.5 !text-sm font-black"
+                />
+
+                {/* Sub-indicador de conversión en vivo */}
+                <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
+                  {fixedPaymentMode === 'ves_fixed' && (
+                    <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  )}
+                  {fixedPaymentMode === 'ves_euro' && (
+                    <span>≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                  )}
+                  {(fixedPaymentMode === 'usd_cash' || fixedPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
+                    <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  ) : null}
+                  {fixedPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
+                    <span>≈ Bs. {(fixedAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paralelo: {parallelUsd.toFixed(2)})</span>
+                  ) : null}
                 </div>
               </div>
 
+              {/* Quincena Asignada con opción de Dividir Sueldo */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Categoría
+                  Distribución en Quincena
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1 no-scrollbar">
-                  {incomeCategories.map((c) => (
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-2xl border border-app">
+                  {[
+                    { id: 'split' as const, label: 'Dividir 50% / 50%', desc: '50% en Q15 y 50% en Q30' },
+                    { id: 'q1' as const, label: 'Quincena 15', desc: '100% en Quincena 15' },
+                    { id: 'q2' as const, label: 'Quincena 30', desc: '100% en Quincena 30' },
+                    { id: 'both' as const, label: 'Ambas (Monto C/U)', desc: 'Monto completo en c/u' },
+                  ].map((opt) => (
                     <button
-                      key={c.id}
+                      key={opt.id}
                       type="button"
-                      onClick={() => setFixedCategoryId(c.id)}
-                      className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        fixedCategoryId === c.id
-                          ? 'border-primary-custom bg-card ring-2 ring-primary-custom text-app'
-                          : 'border-app bg-card/60 text-muted hover:text-app'
+                      onClick={() => setFixedFortnight(opt.id)}
+                      className={`py-2 px-2.5 rounded-xl text-left transition-all cursor-pointer ${
+                        fixedFortnight === opt.id
+                          ? 'bg-primary-custom text-white shadow-sm'
+                          : 'text-muted hover:text-app hover:bg-surface-hover'
                       }`}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#00C2C7' }} />
-                      <span className="truncate">{c.name}</span>
+                      <p className="text-xs font-bold truncate">{opt.label}</p>
+                      <p className={`text-[9px] truncate ${fixedFortnight === opt.id ? 'text-white/80' : 'text-muted'}`}>
+                        {opt.desc}
+                      </p>
                     </button>
                   ))}
                 </div>
+                {fixedFortnight === 'split' && fixedAmount > 0 && (
+                  <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
+                    💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).
+                  </p>
+                )}
               </div>
 
+              {/* Categoría: Custom Styled Dropdown */}
+              <div className="relative">
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Categoría
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFixedCategoryDropdownOpen(!isFixedCategoryDropdownOpen);
+                    setIsFixedPaymentDropdownOpen(false);
+                  }}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {(() => {
+                      const selectedCat = categories.find((c) => c.id === fixedCategoryId);
+                      return (
+                        <>
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: selectedCat?.color || '#00C2C7' }}
+                          />
+                          <span className="truncate">{selectedCat?.name || 'Salario / Sueldo'}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isFixedCategoryDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsFixedCategoryDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {incomeCategories && incomeCategories.length > 0 ? (
+                        incomeCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setFixedCategoryId(cat.id);
+                              setIsFixedCategoryDropdownOpen(false);
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                              fixedCategoryId === cat.id
+                                ? 'bg-primary-custom text-white shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: cat.color || '#00C2C7' }}
+                            />
+                            <span className="truncate">{cat.name}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="p-2 text-xs text-slate-400 text-center">No hay categorías disponibles</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Notas */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Notas / Observaciones
@@ -654,6 +897,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 />
               </div>
 
+              {/* Actions */}
               <div className="flex items-center gap-2 pt-3">
                 <button
                   type="button"
@@ -677,7 +921,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       {/* Add / Edit Variable Income Modal */}
       {isVarModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto no-scrollbar">
             <h3 className="text-base font-bold mb-4">
               {editingVar ? 'Editar Ingreso Extra' : 'Registrar Ingreso Variable / Extra'}
             </h3>
@@ -710,6 +954,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                     required
                     className="!py-2 !text-sm"
                   />
+                  {rates?.bcvDollar && varAmount > 0 ? (
+                    <span className="text-[10px] text-muted block mt-1">
+                      ≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div>
@@ -718,8 +967,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   </label>
                   <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
                     {[
-                      { id: 'q1' as const, label: `Quincena 15 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
-                      { id: 'q2' as const, label: `Quincena 30 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
+                      { id: 'q1' as const, label: `Q15 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
+                      { id: 'q2' as const, label: `Q30 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
                     ].map((opt) => (
                       <button
                         key={opt.id}
@@ -738,27 +987,65 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              <div>
+              {/* Categoría: Custom Styled Dropdown */}
+              <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Categoría
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-32 overflow-y-auto pr-1 no-scrollbar">
-                  {incomeCategories.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setVarCategoryId(c.id)}
-                      className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        varCategoryId === c.id
-                          ? 'border-primary-custom bg-card ring-2 ring-primary-custom text-app'
-                          : 'border-app bg-card/60 text-muted hover:text-app'
-                      }`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#FF914D' }} />
-                      <span className="truncate">{c.name}</span>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsVarCategoryDropdownOpen(!isVarCategoryDropdownOpen)}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {(() => {
+                      const selectedCat = categories.find((c) => c.id === varCategoryId);
+                      return (
+                        <>
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: selectedCat?.color || '#FF914D' }}
+                          />
+                          <span className="truncate">{selectedCat?.name || 'Extras & Freelance'}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isVarCategoryDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsVarCategoryDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {incomeCategories && incomeCategories.length > 0 ? (
+                        incomeCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setVarCategoryId(cat.id);
+                              setIsVarCategoryDropdownOpen(false);
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                              varCategoryId === cat.id
+                                ? 'bg-primary-custom text-white shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            <span
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: cat.color || '#FF914D' }}
+                            />
+                            <span className="truncate">{cat.name}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="p-2 text-xs text-slate-400 text-center">No hay categorías disponibles</div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div>

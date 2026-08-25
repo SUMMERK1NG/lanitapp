@@ -86,8 +86,10 @@ export interface FixedIncome {
   user_id?: string;
   name: string;
   amount: number; // in USD
+  original_amount?: number;
   currency: string;
-  default_fortnight: 'q1' | 'q2' | 'both'; // q1 = Quincena 15, q2 = Quincena 30
+  payment_mode?: FixedExpensePaymentMode;
+  default_fortnight: 'q1' | 'q2' | 'both' | 'split'; // q1 = Quincena 15, q2 = Quincena 30, split = 50% en cada quincena, both = monto completo en ambas
   category_id: string;
   is_active: boolean;
   notes?: string;

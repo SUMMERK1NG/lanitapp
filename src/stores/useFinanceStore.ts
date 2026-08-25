@@ -38,12 +38,13 @@ export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 export const fortnightToQuincena = (f: any): number | null => {
   if (f === 'q1' || f === 15 || f === '15') return 15;
   if (f === 'q2' || f === 30 || f === '30') return 30;
-  return null; // 'both'
+  return null; // 'both' | 'split'
 };
 
-export const quincenaToFortnight = (q: any): 'q1' | 'q2' | 'both' => {
+export const quincenaToFortnight = (q: any): 'q1' | 'q2' | 'both' | 'split' => {
   if (q === 15 || q === '15' || q === 'q1') return 'q1';
   if (q === 30 || q === '30' || q === 'q2') return 'q2';
+  if (q === 'split') return 'split';
   return 'both';
 };
 
@@ -903,7 +904,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       user_id: supabaseUserId,
       name: income.name,
       amount: Number(income.amount),
+      original_amount: income.original_amount !== undefined ? Number(income.original_amount) : Number(income.amount),
       currency: income.currency || 'USD',
+      payment_mode: income.payment_mode || 'usd_cash',
       default_fortnight: income.default_fortnight,
       category_id: income.category_id || 'cat_salary',
       is_active: income.is_active !== undefined ? income.is_active : true,
@@ -918,7 +921,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
-    const { sync_status, category_id, is_active, ...payload } = record as any;
+    const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
     payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
     console.log('[Supabase Fixed Incomes Payload]:', payload);
 

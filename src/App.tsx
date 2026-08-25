@@ -574,6 +574,7 @@ export function App() {
                 variableIncomes={variableIncomes}
                 categories={categories}
                 accounts={accounts}
+                rates={rates}
                 selectedYear={selectedYear}
                 selectedMonth={selectedMonth}
                 onChangePeriod={(y, m) => {
