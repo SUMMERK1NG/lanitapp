@@ -1014,7 +1014,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.variable_incomes.put(record);
 
-    const { sync_status, ...payload } = record;
+    const { sync_status, category_id, ...payload } = record as any;
     if (!payload.account_id) delete (payload as any).account_id;
     console.log('[Supabase Variable Incomes Payload]:', payload);
 
@@ -1026,7 +1026,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         } else {
           console.warn('[Supabase Variable Incomes Notice]:', error.message);
           // Fallback en tabla 'incomes' (esquema unificado)
-          const legacyPayload = {
+          const legacyPayload: any = {
             id: record.id,
             user_id: supabaseUserId,
             description: record.description,
@@ -1034,8 +1034,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
             income_type: 'variable',
             quincena: record.fortnight === 'q1' ? 15 : 30,
             month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
-            category_id: record.category_id || 'cat_extras',
-            account_id: record.account_id || null,
             currency: record.currency || 'USD',
             notes: record.notes || '',
           };

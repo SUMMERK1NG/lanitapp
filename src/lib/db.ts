@@ -616,7 +616,8 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Variables
     const pendingVarIncomes = await db.variable_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingVarIncomes.filter((v) => !v.user_id || v.user_id === targetUid)) {
-      const { sync_status, ...rest } = item;
+      const { sync_status, category_id, ...rest } = item as any;
+      if (!rest.account_id) delete rest.account_id;
       const { error } = await supabase.from('variable_incomes').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
       if (!error) {
         await db.variable_incomes.update(item.id, { sync_status: 'synced' });
@@ -1359,14 +1360,14 @@ export async function saveVariableIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...varPayload } = record;
-      if (!varPayload.account_id) delete (varPayload as any).account_id;
+      const { sync_status, category_id, ...varPayload } = record as any;
+      if (!varPayload.account_id) delete varPayload.account_id;
       const { error } = await supabase.from('variable_incomes').upsert(varPayload);
       if (!error) {
         record.sync_status = 'synced';
       } else {
         console.warn('[Supabase Variable Income Notice]:', error.message);
-        const legacyPayload = {
+        const legacyPayload: any = {
           id: record.id,
           user_id: userId,
           description: record.description,
@@ -1374,8 +1375,6 @@ export async function saveVariableIncome(
           income_type: 'variable',
           quincena: record.fortnight === 'q1' ? 15 : 30,
           month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
-          category_id: record.category_id || 'cat_extras',
-          account_id: record.account_id || null,
           currency: record.currency || 'USD',
           notes: record.notes || '',
         };
