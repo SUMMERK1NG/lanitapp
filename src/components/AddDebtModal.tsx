@@ -7,7 +7,9 @@ import {
   Calendar,
   Percent,
   ChevronDown,
+  Tag,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import type {
   Debt,
   PaymentMethodType,
@@ -16,9 +18,48 @@ import type {
   FortnightType,
   Category,
 } from '../types/index.ts';
-import { saveDebt } from '../lib/db.ts';
+import { saveDebt } from '../services/debtsService.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+
+// Mapeo de nombres de iconos a componentes
+const iconMap: Record<string, any> = {
+  film: LucideIcons.Film,
+  briefcase: LucideIcons.Briefcase,
+  car: LucideIcons.Car,
+  home: LucideIcons.Home,
+  'heart-pulse': LucideIcons.HeartPulse,
+  wallet: LucideIcons.Wallet,
+  TrendingUp: LucideIcons.TrendingUp,
+  CreditCard: LucideIcons.CreditCard,
+  Laptop: LucideIcons.Laptop,
+  ShoppingCart: LucideIcons.ShoppingCart,
+  Clock: LucideIcons.Clock,
+  HeartPulse: LucideIcons.HeartPulse,
+  MoreHorizontal: LucideIcons.MoreHorizontal,
+  PiggyBank: LucideIcons.PiggyBank,
+  DollarSign: LucideIcons.DollarSign,
+  Target: LucideIcons.Target,
+  UtensilsCrossed: LucideIcons.UtensilsCrossed,
+  Wifi: LucideIcons.Wifi,
+  Film: LucideIcons.Film,
+  Briefcase: LucideIcons.Briefcase,
+  Car: LucideIcons.Car,
+  Home: LucideIcons.Home,
+  Wallet: LucideIcons.Wallet,
+  Tag: LucideIcons.Tag,
+};
+
+// Función helper para renderizar icono
+const renderIcon = (iconName?: string) => {
+  if (!iconName) return <LucideIcons.DollarSign className="w-4 h-4" />;
+  const IconComponent =
+    iconMap[iconName] ||
+    iconMap[iconName.toLowerCase()] ||
+    (LucideIcons as Record<string, any>)[iconName] ||
+    LucideIcons.DollarSign;
+  return <IconComponent className="w-4 h-4" />;
+};
 
 interface AddDebtModalProps {
   isOpen: boolean;
@@ -53,6 +94,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   isOpen,
   onClose,
   editingDebt,
+  categories = [],
   initialAmount,
   initialCreditor,
   initialDebtMode,
@@ -63,9 +105,15 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   initialNotes,
   onSaved,
 }) => {
+  const expenseCategories = useMemo(() => {
+    return (categories || []).filter((cat) => cat.type === 'expense');
+  }, [categories]);
+
   const [debtMode, setDebtMode] = useState<DebtModeType>(editingDebt?.debt_mode || initialDebtMode || 'installments');
   const [creditor, setCreditor] = useState<string>(editingDebt?.creditor || initialCreditor || '');
-  const [platform, setPlatform] = useState<DebtPlatformType>(editingDebt?.platform || initialPlatform || 'particular');
+  const [platform, setPlatform] = useState<DebtPlatformType>(
+    editingDebt?.platform || initialPlatform || (expenseCategories.length > 0 ? (expenseCategories[0].id as DebtPlatformType) : 'particular')
+  );
   const [debtAmount, setDebtAmount] = useState<number>(editingDebt?.total_amount || initialAmount || 0);
   const [initialPayment, setInitialPayment] = useState<number>(editingDebt?.initial_payment || 0);
   const [totalInstallments, setTotalInstallments] = useState<string>(editingDebt?.total_installments?.toString() || '4');
@@ -95,6 +143,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
     `${initialStartYearVal}_${initialStartMonthVal}_${initialStartFortnightVal}`
   );
   const [isStartPeriodDropdownOpen, setIsStartPeriodDropdownOpen] = useState<boolean>(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState<boolean>(false);
 
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'VES'>(editingDebt?.currency || 'USD');
   const [paymentType, setPaymentType] = useState<PaymentMethodType>(editingDebt?.payment_type || 'bcv_usd');
@@ -131,10 +180,11 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   }, []);
 
   useEffect(() => {
+    const defaultPlatform = (expenseCategories.length > 0 ? (expenseCategories[0].id as DebtPlatformType) : 'other');
     if (editingDebt) {
       setDebtMode(editingDebt.debt_mode || 'installments');
       setCreditor(editingDebt.creditor);
-      setPlatform(editingDebt.platform || 'cashea');
+      setPlatform(editingDebt.platform || defaultPlatform);
       setDebtAmount(editingDebt.total_amount || 0);
       setInitialPayment(editingDebt.initial_payment || 0);
       setTotalInstallments(editingDebt.total_installments?.toString() || '4');
@@ -160,7 +210,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       const mode = initialDebtMode || 'installments';
       setDebtMode(mode);
       setCreditor(initialCreditor || (initialPlatform === 'particular' ? 'Préstamo Particular' : ''));
-      setPlatform(initialPlatform || 'particular');
+      setPlatform(initialPlatform || defaultPlatform);
       const amt = initialAmount || 0;
       setDebtAmount(amt);
       setInitialPayment(0);
@@ -188,7 +238,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setDueDate('');
       setNotes(initialNotes || '');
     }
-  }, [editingDebt, isOpen, initialAmount, initialCreditor, initialDebtMode, initialPlatform, initialStartYear, initialStartMonth, initialStartFortnight, initialNotes]);
+  }, [editingDebt, isOpen, initialAmount, initialCreditor, initialDebtMode, initialPlatform, initialStartYear, initialStartMonth, initialStartFortnight, initialNotes, categories]);
 
   // Platform selection handler
   const handleSelectPlatform = (platId: DebtPlatformType) => {
@@ -323,7 +373,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
+      <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[90vh] overflow-y-auto overflow-x-hidden animate-in zoom-in-95 no-scrollbar">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
           <div className="flex items-center gap-2.5">
@@ -395,27 +445,78 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
           </div>
 
           {/* Categoría */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-semibold text-muted mb-1">
               Categoría
             </label>
-            <div className="relative">
-              <select
-                value={platform}
-                onChange={(e) => handleSelectPlatform(e.target.value as DebtPlatformType)}
-                className="w-full bg-card border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app appearance-none focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
-              >
-                <option value="cashea" className="bg-slate-900 text-white">🟡 Cashea</option>
-                <option value="creditotal" className="bg-slate-900 text-white">🔵 CrediTotal</option>
-                <option value="multimax" className="bg-slate-900 text-white">🏪 Multimax / Tiendas por Departamento</option>
-                <option value="particular" className="bg-slate-900 text-white">🤝 Particular / Familiar / Amigo</option>
-                <option value="banco" className="bg-slate-900 text-white">🏦 Tarjeta de Crédito / Banco</option>
-                <option value="other" className="bg-slate-900 text-white">📌 Otro / General</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-muted">
-                <ChevronDown className="w-4 h-4" />
+            <button
+              type="button"
+              onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+              className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+            >
+              <div className="flex items-center gap-2 truncate">
+                {(() => {
+                  const selectedCat = categories?.find((c) => c.id === platform);
+                  if (selectedCat) {
+                    return (
+                      <>
+                        <span className="text-primary-custom flex items-center">{renderIcon(selectedCat.icon)}</span>
+                        <span className="truncate">{selectedCat.name}</span>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <span className="text-primary-custom flex items-center">{renderIcon('Tag')}</span>
+                      <span className="truncate">{platform === 'other' ? 'Otra' : platform || 'Seleccionar categoría'}</span>
+                    </>
+                  );
+                })()}
               </div>
-            </div>
+              <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+            </button>
+
+            {isCategoryDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsCategoryDropdownOpen(false)} />
+                <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  {expenseCategories && expenseCategories.length > 0 ? (
+                    expenseCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          handleSelectPlatform(cat.id as DebtPlatformType);
+                          setIsCategoryDropdownOpen(false);
+                        }}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                          platform === cat.id
+                            ? 'bg-primary-custom text-white shadow-sm'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span className={`flex items-center ${platform === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                          {renderIcon(cat.icon)}
+                        </span>
+                        <span className="truncate">{cat.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectPlatform('other');
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl text-xs font-bold text-left text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2"
+                    >
+                      <Tag className="w-4 h-4 text-primary-custom" />
+                      <span>Otra</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Monto de la Deuda */}

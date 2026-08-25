@@ -158,6 +158,7 @@ export interface Debt {
   id: string;
   user_id?: string;
   creditor: string;
+  creditor_name?: string;
   platform?: DebtPlatformType;
   debt_mode: DebtModeType; // 'installments' (Cashea, etc.) vs 'open' (Monto Fijo / Abierto)
   total_amount: number;
@@ -171,6 +172,7 @@ export interface Debt {
   start_month?: number; // Mes de inicio (0-11)
   start_fortnight?: FortnightType; // Quincena de inicio
   currency: 'USD' | 'EUR' | 'VES';
+  currency_type?: string;
   payment_type: PaymentMethodType;
   has_interest?: boolean;
   interest_rate?: number; // percentage

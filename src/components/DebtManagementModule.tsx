@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
   Plus,
@@ -10,7 +10,8 @@ import {
   Layers,
 } from 'lucide-react';
 import type { Debt, DebtPayment, ExchangeRatesData, Category } from '../types/index.ts';
-import { deleteDebt } from '../lib/db.ts';
+import { subscribeToDebtsChanges, fetchDebts, deleteDebt } from '../services/debtsService.ts';
+import { getActiveUserId } from '../lib/db.ts';
 import { AddDebtModal } from './AddDebtModal.tsx';
 import { AddPaymentModal } from './AddPaymentModal.tsx';
 
@@ -20,6 +21,7 @@ interface DebtManagementModuleProps {
   rates: ExchangeRatesData;
   categories?: Category[];
   currency?: string;
+  userId?: string;
 }
 
 const MONTH_NAMES = [
@@ -33,6 +35,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
   rates,
   categories = [],
   currency = '$',
+  userId,
 }) => {
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'paid'>('active');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -40,6 +43,27 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<string | undefined>(undefined);
   const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
+
+  const activeUid = userId || getActiveUserId();
+
+  // Sincronización Realtime Dedicada para Deudas
+  useEffect(() => {
+    if (!activeUid) return;
+
+    // 1. Carga inicial desde Supabase
+    fetchDebts(activeUid).catch((err) => {
+      console.warn('[DebtManagementModule Initial Fetch Notice]:', err);
+    });
+
+    // 2. Suscripción persistente en tiempo real a la tabla 'debts'
+    const unsubscribe = subscribeToDebtsChanges(activeUid, () => {
+      fetchDebts(activeUid);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [activeUid]);
 
   // Financial Metrics
   const totalDebtOriginal = debts.reduce((sum, d) => sum + d.total_amount, 0);

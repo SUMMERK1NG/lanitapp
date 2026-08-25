@@ -22,9 +22,16 @@ import {
   DEFAULT_CATEGORIES,
   toSupabaseAccountPayload,
   getFortnightPeriodKey,
+  getActiveUserId,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
+import {
+  sanitizeDebtPayload,
+  normalizeDebtRow,
+  subscribeToDebtsChanges as subscribeToDebtsChangesService,
+  fetchDebts as fetchDebtsService,
+} from '../services/debtsService.ts';
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
@@ -84,6 +91,8 @@ export interface FinanceStoreState {
 
   saveDebt: (debt: Partial<Debt> & { creditor: string; total_amount: number; payment_type: Debt['payment_type'] }, userId: string) => Promise<Debt>;
   deleteDebt: (id: string, userId: string) => Promise<void>;
+  fetchDebts: (userId: string) => Promise<Debt[]>;
+  subscribeToDebtsChanges: (userId: string, onUpdate?: () => void) => () => void;
   addDebtPayment: (data: {
     debt_id: string;
     amount: number;
@@ -341,7 +350,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureValidUuid(v.id), sync_status: 'synced' }));
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({ ...e, id: ensureValidUuid(e.id), sync_status: 'synced' }));
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const debts: Debt[] = rawDebts.map((d: any) => ({ ...d, id: ensureValidUuid(d.id), sync_status: 'synced' }));
+      const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
       const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureValidUuid(p.id), sync_status: 'synced' }));
       const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({ ...s, id: ensureValidUuid(s.id), sync_status: 'synced' }));
       const savingContributions: SavingContribution[] = rawContribs.map((c: any) => ({ ...c, id: ensureValidUuid(c.id), sync_status: 'synced' }));
@@ -533,7 +542,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debts: s.debts.filter((d) => d.id !== oldRow.id) }));
           await db.debts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: Debt = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
+          const item: Debt = {
+            ...newRow,
+            id: ensureValidUuid(newRow.id),
+            creditor: newRow.creditor || newRow.creditor_name || 'Deuda',
+            currency: newRow.currency || newRow.currency_type || 'USD',
+            sync_status: 'synced',
+          };
           set((s) => ({
             debts: s.debts.some((d) => d.id === item.id)
               ? s.debts.map((d) => (d.id === item.id ? item : d))
@@ -992,76 +1007,64 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   },
 
   saveDebt: async (debt, userId) => {
-    const id = ensureValidUuid(debt.id);
-    const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount);
-    const status = current_balance <= 0 ? 'paid' : (debt.status || 'active');
-
-    const now = new Date();
-    const start_year = debt.start_year !== undefined ? debt.start_year : now.getFullYear();
-    const start_month = debt.start_month !== undefined ? debt.start_month : now.getMonth();
-    const start_fortnight = debt.start_fortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
-
-    const record: Debt = {
-      id,
-      user_id: userId,
-      creditor: debt.creditor,
-      platform: debt.platform || 'particular',
-      debt_mode: debt.debt_mode || 'installments',
-      total_amount: Number(debt.total_amount),
-      initial_payment: debt.initial_payment !== undefined ? Number(debt.initial_payment) : undefined,
-      current_balance,
-      total_installments: debt.total_installments,
-      pending_installments: debt.pending_installments,
-      installment_amount: debt.installment_amount !== undefined ? Number(debt.installment_amount) : undefined,
-      fortnight_due: debt.fortnight_due || 'q1',
-      start_year,
-      start_month,
-      start_fortnight,
-      currency: debt.currency || 'USD',
-      payment_type: debt.payment_type,
-      has_interest: debt.has_interest,
-      interest_rate: debt.interest_rate || 0,
-      interest_amount: debt.interest_amount || 0,
-      interest_frequency: debt.interest_frequency,
-      interest_fortnight: debt.interest_fortnight,
-      due_date: debt.due_date,
-      status,
-      priority: debt.priority || 'medium',
-      notes: debt.notes || '',
-      sync_status: 'pending',
-      created_at: debt.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    const activeUid = userId || debt.user_id || getActiveUserId();
+    const sanitizedPayload = sanitizeDebtPayload(debt, activeUid);
+    const localRecord = normalizeDebtRow({ ...sanitizedPayload, currency: debt.currency || 'USD' });
+    localRecord.sync_status = 'pending';
 
     set((s) => ({
-      debts: s.debts.some((d) => d.id === id)
-        ? s.debts.map((d) => (d.id === id ? record : d))
-        : [...s.debts, record],
+      debts: s.debts.some((d) => d.id === localRecord.id)
+        ? s.debts.map((d) => (d.id === localRecord.id ? localRecord : d))
+        : [...s.debts, localRecord],
     }));
-    await db.debts.put(record);
+    await db.debts.put(localRecord);
 
-    const { sync_status, ...payload } = record;
-    console.log('[Supabase Debts Payload]:', payload);
+    console.log('[Supabase Debts Payload]:', sanitizedPayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        const { error } = await supabase.from('debts').upsert(payload);
-        if (!error) {
-          await db.debts.update(id, { sync_status: 'synced' });
-        } else {
+        const { data, error } = await supabase
+          .from('debts')
+          .upsert(sanitizedPayload)
+          .select()
+          .single();
+
+        if (!error && data) {
+          const confirmedDebt = normalizeDebtRow(data);
+          set((s) => ({
+            debts: s.debts.map((d) => (d.id === confirmedDebt.id ? confirmedDebt : d)),
+          }));
+          await db.debts.put(confirmedDebt);
+          return confirmedDebt;
+        } else if (error) {
           console.error('[Supabase Debts Error]:', error.message, error.details);
           set((state) => ({
-            syncQueue: [...state.syncQueue, { id, table: 'debts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+            syncQueue: [...state.syncQueue, { id: localRecord.id, table: 'debts', action: 'upsert', payload: sanitizedPayload, timestamp: new Date().toISOString() }],
           }));
         }
       } catch {
         set((state) => ({
-          syncQueue: [...state.syncQueue, { id, table: 'debts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          syncQueue: [...state.syncQueue, { id: localRecord.id, table: 'debts', action: 'upsert', payload: sanitizedPayload, timestamp: new Date().toISOString() }],
         }));
       }
     }
 
-    return record;
+    return localRecord;
+  },
+
+  fetchDebts: async (userId: string) => {
+    const debts = await fetchDebtsService(userId);
+    set({ debts });
+    return debts;
+  },
+
+  subscribeToDebtsChanges: (userId: string, onUpdate?: () => void) => {
+    return subscribeToDebtsChangesService(userId, () => {
+      fetchDebtsService(userId).then((debts) => {
+        set({ debts });
+        if (onUpdate) onUpdate();
+      });
+    });
   },
 
   deleteDebt: async (id, userId) => {
@@ -1130,17 +1133,28 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.debts.put(updatedDebt);
 
     const { sync_status: s1, ...payPayload } = paymentRecord;
-    const { sync_status: s2, ...debtPayload } = updatedDebt;
+    const debtPayload = sanitizeDebtPayload(updatedDebt, userId);
 
     console.log('[Supabase Debt Payments Payload]:', payPayload);
     console.log('[Supabase Debts Update Payload]:', debtPayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await Promise.all([
-          supabase.from('debt_payments').upsert(payPayload),
-          supabase.from('debts').upsert(debtPayload),
+        const [resPay, resDebt] = await Promise.all([
+          supabase.from('debt_payments').upsert(payPayload).select().single(),
+          supabase.from('debts').upsert(debtPayload).select().single(),
         ]);
+
+        if (!resPay.error && resPay.data) {
+          await db.debt_payments.update(paymentRecord.id, { sync_status: 'synced' });
+        }
+        if (!resDebt.error && resDebt.data) {
+          const confirmedDebt = normalizeDebtRow(resDebt.data);
+          set((s) => ({
+            debts: s.debts.map((d) => (d.id === confirmedDebt.id ? confirmedDebt : d)),
+          }));
+          await db.debts.put(confirmedDebt);
+        }
       } catch {
         set((state) => ({
           syncQueue: [

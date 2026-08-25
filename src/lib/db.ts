@@ -305,8 +305,17 @@ export async function migrateLocalDataToCloud(userId: string): Promise<void> {
     }
     if (Array.isArray(localDebts) && localDebts.length > 0) {
       const sanitized = localDebts.map((d: any) => {
-        const { sync_status, isEditing, ...rest } = d;
-        return { ...rest, user_id: userId, total_amount: Number(d.total_amount || 0), current_balance: Number(d.current_balance || d.total_amount || 0) };
+        const { sync_status, isEditing, currency, creditor, ...rest } = d;
+        return {
+          ...rest,
+          creditor_name: d.creditor || d.creditor_name || d.name || 'Deuda',
+          currency_type: d.currency || d.currency_type || 'USD',
+          user_id: userId,
+          total_amount: Number(d.total_amount || 0),
+          original_amount: Number(d.total_amount || d.original_amount || 0),
+          remaining_amount: Number(d.current_balance || d.remaining_amount || d.total_amount || 0),
+          current_balance: Number(d.current_balance || d.total_amount || 0),
+        };
       });
       const { error } = await supabase.from('debts').upsert(sanitized);
       if (error) console.error('[Supabase Debts Migration Error]:', error.message, error.details);
@@ -502,7 +511,13 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.monthly_fixed_overrides.bulkPut(remoteExpenseOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
     }
     if (remoteDebts && remoteDebts.length > 0) {
-      await db.debts.bulkPut(remoteDebts.map((d) => ({ ...d, sync_status: 'synced' })));
+      await db.debts.bulkPut(remoteDebts.map((d) => ({
+        ...d,
+        creditor: d.creditor_name || d.creditor || d.name || 'Deuda',
+        creditor_name: d.creditor_name || d.creditor || d.name || 'Deuda',
+        currency: d.currency || d.currency_type || 'USD',
+        sync_status: 'synced',
+      })));
     }
     if (remotePayments && remotePayments.length > 0) {
       await db.debt_payments.bulkPut(remotePayments.map((p) => ({ ...p, sync_status: 'synced' })));
@@ -605,8 +620,17 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Deudas
     const pendingDebts = await db.debts.where('sync_status').equals('pending').toArray();
     for (const item of pendingDebts.filter((d) => !d.user_id || d.user_id === targetUid)) {
-      const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('debts').upsert({ ...rest, user_id: targetUid, total_amount: Number(item.total_amount), current_balance: Number(item.current_balance) });
+      const { sync_status, currency, creditor, ...rest } = item;
+      const { error } = await supabase.from('debts').upsert({
+        ...rest,
+        creditor_name: item.creditor || item.creditor_name || (item as any).name || 'Deuda',
+        currency_type: item.currency || item.currency_type || 'USD',
+        user_id: targetUid,
+        total_amount: Number(item.total_amount),
+        original_amount: Number(item.total_amount),
+        remaining_amount: Number(item.current_balance),
+        current_balance: Number(item.current_balance),
+      });
       if (!error) {
         await db.debts.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -772,6 +796,15 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                       sync_status: 'synced' as SyncStatus,
                     };
                     await targetTable.put(normAcc);
+                  } else if (tableName === 'debts') {
+                    const normDebt = {
+                      ...newRow,
+                      id: ensureValidUuid(newRow.id),
+                      creditor: newRow.creditor || newRow.creditor_name || 'Deuda',
+                      currency: newRow.currency || newRow.currency_type || 'USD',
+                      sync_status: 'synced' as SyncStatus,
+                    };
+                    await targetTable.put(normDebt);
                   } else {
                     await targetTable.put({ ...newRow, sync_status: 'synced' });
                   }
@@ -1596,7 +1629,14 @@ export async function saveDebt(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, currency, creditor, ...restPayload } = record;
+      const payload = {
+        ...restPayload,
+        creditor_name: record.creditor || record.creditor_name || 'Deuda',
+        original_amount: Number(record.total_amount),
+        remaining_amount: Number(record.current_balance),
+        currency_type: record.currency || 'USD',
+      };
       const { error } = await supabase.from('debts').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
@@ -1706,6 +1746,7 @@ export async function addDebtPayment(data: {
         supabase.from('debt_payments').upsert(payPayload),
         supabase.from('debts').update({
           current_balance: newBalance,
+          remaining_amount: newBalance,
           pending_installments: newPendingInstallments,
           status: newStatus,
           updated_at: new Date().toISOString(),

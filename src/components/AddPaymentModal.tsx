@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, DollarSign, TrendingDown, Sparkles } from 'lucide-react';
 import type { Debt, FortnightType, ExchangeRatesData } from '../types/index.ts';
-import { addDebtPayment } from '../lib/db.ts';
+import { addDebtPayment } from '../services/debtsService.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 

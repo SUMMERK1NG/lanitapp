@@ -610,6 +610,7 @@ export function App() {
                 debtPayments={debtPayments}
                 rates={rates}
                 categories={categories}
+                userId={activeUserId}
               />
             </div>
           )}
