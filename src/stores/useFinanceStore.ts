@@ -348,7 +348,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({ ...i, id: ensureValidUuid(i.id), sync_status: 'synced' }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureValidUuid(v.id), sync_status: 'synced' }));
-      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({ ...e, id: ensureValidUuid(e.id), sync_status: 'synced' }));
+      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
+        ...e,
+        id: ensureValidUuid(e.id),
+        default_fortnight: (e.default_fortnight === 15 || e.default_quincena === 15 || e.default_fortnight === '15' || e.default_fortnight === 'q1')
+          ? 'q1'
+          : (e.default_fortnight === 30 || e.default_quincena === 30 || e.default_fortnight === '30' || e.default_fortnight === 'q2')
+          ? 'q2'
+          : 'both',
+        sync_status: 'synced',
+      }));
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
       const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
       const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureValidUuid(p.id), sync_status: 'synced' }));
@@ -512,7 +521,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
           await db.fixed_expenses.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedExpense = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
+          const item: FixedExpense = {
+            ...newRow,
+            id: ensureValidUuid(newRow.id),
+            default_fortnight: (newRow.default_fortnight === 15 || newRow.default_quincena === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
+              ? 'q1'
+              : (newRow.default_fortnight === 30 || newRow.default_quincena === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
+              ? 'q2'
+              : 'both',
+            sync_status: 'synced',
+          };
           set((s) => ({
             fixedExpenses: s.fixedExpenses.some((e) => e.id === item.id)
               ? s.fixedExpenses.map((e) => (e.id === item.id ? item : e))
@@ -964,7 +982,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_expenses.put(record);
 
-    const { sync_status, ...payload } = record;
+    const fortnightToQuincena = (f: any): number | null => {
+      if (f === 'q1' || f === 15) return 15;
+      if (f === 'q2' || f === 30) return 30;
+      return null; // 'both'
+    };
+
+    const { sync_status, default_quincena, ...payload } = record as any;
+    payload.default_fortnight = fortnightToQuincena(record.default_fortnight);
     console.log('[Supabase Fixed Expenses Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {

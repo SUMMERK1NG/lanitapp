@@ -135,6 +135,7 @@ export interface FixedExpense {
   currency: 'USD' | 'VES' | 'EUR' | string;
   payment_mode?: FixedExpensePaymentMode;
   default_fortnight: 'q1' | 'q2' | 'both'; // q1 = Quincena 15, q2 = Quincena 30
+  default_quincena?: number | null;
   category_id: string;
   is_active: boolean; // default status
   assumed_by_third_party?: boolean;

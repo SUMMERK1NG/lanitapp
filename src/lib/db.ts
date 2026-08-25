@@ -505,7 +505,15 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.variable_incomes.bulkPut(remoteVarIncomes.map((v) => ({ ...v, sync_status: 'synced' })));
     }
     if (remoteExpenses && remoteExpenses.length > 0) {
-      await db.fixed_expenses.bulkPut(remoteExpenses.map((e) => ({ ...e, sync_status: 'synced' })));
+      await db.fixed_expenses.bulkPut(remoteExpenses.map((e: any) => ({
+        ...e,
+        default_fortnight: (e.default_fortnight === 15 || e.default_quincena === 15 || e.default_fortnight === '15' || e.default_fortnight === 'q1')
+          ? 'q1'
+          : (e.default_fortnight === 30 || e.default_quincena === 30 || e.default_fortnight === '30' || e.default_fortnight === 'q2')
+          ? 'q2'
+          : 'both',
+        sync_status: 'synced',
+      })));
     }
     if (remoteExpenseOverrides && remoteExpenseOverrides.length > 0) {
       await db.monthly_fixed_overrides.bulkPut(remoteExpenseOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
@@ -607,8 +615,14 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Gastos Fijos
     const pendingExpenses = await db.fixed_expenses.where('sync_status').equals('pending').toArray();
     for (const item of pendingExpenses.filter((e) => !e.user_id || e.user_id === targetUid)) {
-      const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('fixed_expenses').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const { sync_status, default_quincena, ...rest } = item as any;
+      const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
+      const { error } = await supabase.from('fixed_expenses').upsert({
+        ...rest,
+        default_fortnight: fortnightNum,
+        user_id: targetUid,
+        amount: Number(item.amount),
+      });
       if (!error) {
         await db.fixed_expenses.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -805,6 +819,18 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                       sync_status: 'synced' as SyncStatus,
                     };
                     await targetTable.put(normDebt);
+                  } else if (tableName === 'fixed_expenses') {
+                    const normExpense = {
+                      ...newRow,
+                      id: ensureValidUuid(newRow.id),
+                      default_fortnight: (newRow.default_fortnight === 15 || newRow.default_quincena === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
+                        ? 'q1'
+                        : (newRow.default_fortnight === 30 || newRow.default_quincena === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
+                        ? 'q2'
+                        : 'both',
+                      sync_status: 'synced' as SyncStatus,
+                    };
+                    await targetTable.put(normExpense);
                   } else {
                     await targetTable.put({ ...newRow, sync_status: 'synced' });
                   }
@@ -1552,7 +1578,8 @@ export async function saveFixedExpense(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, default_quincena, ...payload } = record as any;
+      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_expenses').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
