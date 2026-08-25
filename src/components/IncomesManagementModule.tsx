@@ -10,6 +10,7 @@ import {
   Sparkles,
   ChevronDown,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import type {
   FixedIncome,
   MonthlyFixedIncomeOverride,
@@ -30,6 +31,45 @@ import {
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+
+const iconMap: Record<string, any> = {
+  film: LucideIcons.Film,
+  briefcase: LucideIcons.Briefcase,
+  car: LucideIcons.Car,
+  home: LucideIcons.Home,
+  'heart-pulse': LucideIcons.HeartPulse,
+  wallet: LucideIcons.Wallet,
+  TrendingUp: LucideIcons.TrendingUp,
+  CreditCard: LucideIcons.CreditCard,
+  Laptop: LucideIcons.Laptop,
+  ShoppingCart: LucideIcons.ShoppingCart,
+  Clock: LucideIcons.Clock,
+  HeartPulse: LucideIcons.HeartPulse,
+  MoreHorizontal: LucideIcons.MoreHorizontal,
+  PiggyBank: LucideIcons.PiggyBank,
+  DollarSign: LucideIcons.DollarSign,
+  Target: LucideIcons.Target,
+  UtensilsCrossed: LucideIcons.UtensilsCrossed,
+  Wifi: LucideIcons.Wifi,
+  Film: LucideIcons.Film,
+  Briefcase: LucideIcons.Briefcase,
+  Car: LucideIcons.Car,
+  Home: LucideIcons.Home,
+  Wallet: LucideIcons.Wallet,
+  Tag: LucideIcons.Tag,
+  Sparkles: LucideIcons.Sparkles,
+  Layers: LucideIcons.Layers,
+};
+
+const renderIcon = (iconName?: string) => {
+  if (!iconName) return <LucideIcons.DollarSign className="w-4 h-4" />;
+  const IconComponent =
+    iconMap[iconName] ||
+    iconMap[iconName.toLowerCase()] ||
+    (LucideIcons as Record<string, any>)[iconName] ||
+    LucideIcons.DollarSign;
+  return <IconComponent className="w-4 h-4" />;
+};
 
 interface IncomesManagementModuleProps {
   fixedIncomes: FixedIncome[];
@@ -681,15 +721,15 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             </h3>
 
             <form onSubmit={handleSaveFixed} className="space-y-3.5">
-              {/* Concepto / Nombre */}
+              {/* Nombre del Ingreso */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Concepto / Nombre del Ingreso
+                  Nombre del Ingreso
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Sueldo Base, Salario Mensual, Tickets..."
+                  placeholder="Ej. Sueldo, Bono..."
                   value={fixedName}
                   onChange={(e) => setFixedName(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -783,12 +823,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* Quincena Asignada con opción de Dividir Sueldo */}
+              {/* Distribución de Sueldo con botones compactos */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Distribución en Quincena
+                  Distribución de Sueldo
                 </label>
-                <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-2xl border border-app">
+                <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
                   {[
                     { id: 'split' as const, label: 'Dividir 50% / 50%', desc: '50% en Q15 y 50% en Q30' },
                     { id: 'q1' as const, label: 'Quincena 15', desc: '100% en Quincena 15' },
@@ -799,14 +839,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       key={opt.id}
                       type="button"
                       onClick={() => setFixedFortnight(opt.id)}
-                      className={`py-2 px-2.5 rounded-xl text-left transition-all cursor-pointer ${
+                      className={`py-1.5 px-2 rounded-lg text-left transition-all cursor-pointer ${
                         fixedFortnight === opt.id
                           ? 'bg-primary-custom text-white shadow-sm'
                           : 'text-muted hover:text-app hover:bg-surface-hover'
                       }`}
                     >
-                      <p className="text-xs font-bold truncate">{opt.label}</p>
-                      <p className={`text-[9px] truncate ${fixedFortnight === opt.id ? 'text-white/80' : 'text-muted'}`}>
+                      <p className="text-[11px] font-bold truncate leading-tight">{opt.label}</p>
+                      <p className={`text-[8.5px] truncate mt-0.5 ${fixedFortnight === opt.id ? 'text-white/80' : 'text-muted'}`}>
                         {opt.desc}
                       </p>
                     </button>
@@ -819,7 +859,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* Categoría: Custom Styled Dropdown */}
+              {/* Categoría: Custom Styled Dropdown con Iconos Lucide */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Categoría
@@ -835,13 +875,18 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   <div className="flex items-center gap-2 truncate">
                     {(() => {
                       const selectedCat = categories.find((c) => c.id === fixedCategoryId);
+                      if (selectedCat) {
+                        return (
+                          <>
+                            <span className="text-primary-custom flex items-center">{renderIcon(selectedCat.icon)}</span>
+                            <span className="truncate">{selectedCat.name}</span>
+                          </>
+                        );
+                      }
                       return (
                         <>
-                          <span
-                            className="w-3 h-3 rounded-full shrink-0"
-                            style={{ backgroundColor: selectedCat?.color || '#00C2C7' }}
-                          />
-                          <span className="truncate">{selectedCat?.name || 'Salario / Sueldo'}</span>
+                          <span className="text-primary-custom flex items-center">{renderIcon('Briefcase')}</span>
+                          <span className="truncate">Seleccionar categoría</span>
                         </>
                       );
                     })()}
@@ -868,10 +913,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                             }`}
                           >
-                            <span
-                              className="w-3 h-3 rounded-full shrink-0"
-                              style={{ backgroundColor: cat.color || '#00C2C7' }}
-                            />
+                            <span className={`flex items-center ${fixedCategoryId === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                              {renderIcon(cat.icon)}
+                            </span>
                             <span className="truncate">{cat.name}</span>
                           </button>
                         ))
@@ -929,12 +973,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <form onSubmit={handleSaveVar} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Concepto / Descripción
+                  Nombre del Ingreso Extra
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Proyecto Web Freelance, Guardia Extra, Bono Asistencia..."
+                  placeholder="Ej. Freelance, Bono, Guardia..."
                   value={varDescription}
                   onChange={(e) => setVarDescription(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -987,7 +1031,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* Categoría: Custom Styled Dropdown */}
+              {/* Categoría: Custom Styled Dropdown con Iconos Lucide */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Categoría
@@ -1000,13 +1044,18 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   <div className="flex items-center gap-2 truncate">
                     {(() => {
                       const selectedCat = categories.find((c) => c.id === varCategoryId);
+                      if (selectedCat) {
+                        return (
+                          <>
+                            <span className="text-primary-custom flex items-center">{renderIcon(selectedCat.icon)}</span>
+                            <span className="truncate">{selectedCat.name}</span>
+                          </>
+                        );
+                      }
                       return (
                         <>
-                          <span
-                            className="w-3 h-3 rounded-full shrink-0"
-                            style={{ backgroundColor: selectedCat?.color || '#FF914D' }}
-                          />
-                          <span className="truncate">{selectedCat?.name || 'Extras & Freelance'}</span>
+                          <span className="text-primary-custom flex items-center">{renderIcon('Sparkles')}</span>
+                          <span className="truncate">Seleccionar categoría</span>
                         </>
                       );
                     })()}
@@ -1033,10 +1082,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                             }`}
                           >
-                            <span
-                              className="w-3 h-3 rounded-full shrink-0"
-                              style={{ backgroundColor: cat.color || '#FF914D' }}
-                            />
+                            <span className={`flex items-center ${varCategoryId === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                              {renderIcon(cat.icon)}
+                            </span>
                             <span className="truncate">{cat.name}</span>
                           </button>
                         ))
