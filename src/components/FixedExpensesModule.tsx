@@ -6,15 +6,52 @@ import {
   Edit2,
   CheckCircle2,
   XCircle,
-  Users,
   ChevronDown,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import type { FixedExpense, MonthlyFixedOverride, Category, ExchangeRatesData, FixedExpensePaymentMode } from '../types/index.ts';
 import { saveFixedExpense, deleteFixedExpense, toggleMonthlyFixedOverride } from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+
+const iconMap: Record<string, any> = {
+  film: LucideIcons.Film,
+  briefcase: LucideIcons.Briefcase,
+  car: LucideIcons.Car,
+  home: LucideIcons.Home,
+  'heart-pulse': LucideIcons.HeartPulse,
+  wallet: LucideIcons.Wallet,
+  TrendingUp: LucideIcons.TrendingUp,
+  CreditCard: LucideIcons.CreditCard,
+  Laptop: LucideIcons.Laptop,
+  ShoppingCart: LucideIcons.ShoppingCart,
+  Clock: LucideIcons.Clock,
+  HeartPulse: LucideIcons.HeartPulse,
+  MoreHorizontal: LucideIcons.MoreHorizontal,
+  PiggyBank: LucideIcons.PiggyBank,
+  DollarSign: LucideIcons.DollarSign,
+  Target: LucideIcons.Target,
+  UtensilsCrossed: LucideIcons.UtensilsCrossed,
+  Wifi: LucideIcons.Wifi,
+  Film: LucideIcons.Film,
+  Briefcase: LucideIcons.Briefcase,
+  Car: LucideIcons.Car,
+  Home: LucideIcons.Home,
+  Wallet: LucideIcons.Wallet,
+  Tag: LucideIcons.Tag,
+};
+
+const renderIcon = (iconName?: string) => {
+  if (!iconName) return <LucideIcons.DollarSign className="w-4 h-4" />;
+  const IconComponent =
+    iconMap[iconName] ||
+    iconMap[iconName.toLowerCase()] ||
+    (LucideIcons as Record<string, any>)[iconName] ||
+    LucideIcons.DollarSign;
+  return <IconComponent className="w-4 h-4" />;
+};
 
 interface FixedExpensesModuleProps {
   fixedExpenses: FixedExpense[];
@@ -43,6 +80,8 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   currency = '$',
 }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState<boolean>(false);
+  const [isPaymentDropdownOpen, setIsPaymentDropdownOpen] = useState<boolean>(false);
   const [editingExpense, setEditingExpense] = useState<FixedExpense | null>(null);
 
   // Form states
@@ -127,6 +166,8 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     setDefaultFortnight('q1');
     setCategoryId(expenseCategories[0]?.id || 'cat_services');
     setNotes('');
+    setIsCategoryDropdownOpen(false);
+    setIsPaymentDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -140,6 +181,8 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     setDefaultFortnight(expense.default_fortnight);
     setCategoryId(expense.category_id);
     setNotes(expense.notes || '');
+    setIsCategoryDropdownOpen(false);
+    setIsPaymentDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -192,18 +235,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
       selectedMonth,
       !expense.isActive,
       expense.finalAmount,
-      expense.isAssumed
-    );
-  };
-
-  const handleToggleAssumed = async (expense: typeof processedExpenses[0]) => {
-    await toggleMonthlyFixedOverride(
-      expense.id,
-      selectedYear,
-      selectedMonth,
-      expense.isActive,
-      expense.finalAmount,
-      !expense.isAssumed
+      false
     );
   };
 
@@ -221,7 +253,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
             <h3 className="text-base font-bold text-app">Gastos Fijos</h3>
           </div>
           <p className="text-xs text-muted mt-1">
-            Periodo: <strong>{MONTH_NAMES[selectedMonth]} {selectedYear}</strong> • Activa, pausa o marca si fue asumido por un 3ro
+            Periodo: <strong>{MONTH_NAMES[selectedMonth]} {selectedYear}</strong> • Activa o pausa gastos para este período
           </p>
         </div>
 
@@ -342,7 +374,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                   <div className="text-right shrink-0">
                     {isVes ? (
                       <>
-                        <p className={`text-base font-black ${expense.isActive && !expense.isAssumed ? 'text-[#FF914D]' : 'text-muted'}`}>
+                        <p className={`text-base font-black ${expense.isActive ? 'text-[#FF914D]' : 'text-muted'}`}>
                           Bs. {expense.original_amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         <span className="text-[11px] text-muted font-semibold block text-right">
@@ -351,7 +383,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                       </>
                     ) : isEur ? (
                       <>
-                        <p className={`text-base font-black ${expense.isActive && !expense.isAssumed ? 'text-purple-400' : 'text-muted'}`}>
+                        <p className={`text-base font-black ${expense.isActive ? 'text-purple-400' : 'text-muted'}`}>
                           € {expense.original_amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         <span className="text-[11px] text-muted font-semibold block text-right">
@@ -360,19 +392,13 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                       </>
                     ) : (
                       <>
-                        <p className={`text-base font-black ${expense.isActive && !expense.isAssumed ? 'text-app' : 'text-muted'}`}>
+                        <p className={`text-base font-black ${expense.isActive ? 'text-app' : 'text-muted'}`}>
                           ${expense.amount_usd.toFixed(2)}
                         </p>
                         <span className="text-[11px] text-muted font-semibold block text-right">
                           ≈ Bs. {(expense.amount_usd * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </>
-                    )}
-
-                    {expense.isAssumed && (
-                      <span className="text-[9px] font-black text-emerald-400 block uppercase mt-0.5">
-                        Cubierto 3ro
-                      </span>
                     )}
                   </div>
                 </div>
@@ -395,20 +421,6 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                       <XCircle className="w-3.5 h-3.5 text-muted" />
                     )}
                     <span>{expense.isActive ? 'Activo' : 'Pausado'}</span>
-                  </button>
-
-                  {/* Switch Cubierto por 3ro */}
-                  <button
-                    onClick={() => handleToggleAssumed(expense)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-                      expense.isAssumed
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
-                        : 'bg-card text-muted hover:text-app'
-                    }`}
-                    title="Marca esto si este mes el gasto fue asumido por otra persona para no restarlo de tu saldo"
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Cubierto por 3ro</span>
                   </button>
 
                   {/* Actions: Edit & Delete */}
@@ -444,65 +456,136 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
             </h3>
 
             <form onSubmit={handleSave} className="space-y-4">
-              {/* Concepto / Nombre */}
+              {/* Nombre del Gasto */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Concepto / Nombre del Gasto
+                  Nombre del Gasto
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Alquiler, Fibra Óptica, Condominio, Moto..."
+                  placeholder="Ej. Alquiler, Moto, Netflix..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              {/* Categoría: Styled Dropdown */}
-              <div>
+              {/* Categoría: Custom Styled Dropdown */}
+              <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Categoría de Gasto
                 </label>
-                <div className="relative">
-                  <select
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full bg-card border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app appearance-none focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
-                  >
-                    {expenseCategories.map((c) => (
-                      <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                        🏷️ {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-muted">
-                    <ChevronDown className="w-4 h-4" />
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {(() => {
+                      const selectedCat = expenseCategories.find((c) => c.id === categoryId);
+                      if (selectedCat) {
+                        return (
+                          <>
+                            <span className="text-primary-custom flex items-center">{renderIcon(selectedCat.icon)}</span>
+                            <span className="truncate">{selectedCat.name}</span>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <span className="text-primary-custom flex items-center">{renderIcon('Tag')}</span>
+                          <span className="truncate">Seleccionar categoría</span>
+                        </>
+                      );
+                    })()}
                   </div>
-                </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isCategoryDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsCategoryDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {expenseCategories && expenseCategories.length > 0 ? (
+                        expenseCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => {
+                              setCategoryId(cat.id);
+                              setIsCategoryDropdownOpen(false);
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                              categoryId === cat.id
+                                ? 'bg-primary-custom text-white shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            <span className={`flex items-center ${categoryId === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                              {renderIcon(cat.icon)}
+                            </span>
+                            <span className="truncate">{cat.name}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="p-2 text-xs text-slate-400 text-center">No hay categorías disponibles</div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Modalidad y Moneda de Pago: Clean Full-width Dark Dropdown */}
-              <div>
+              {/* Forma de Pago: Custom Styled Dropdown */}
+              <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Modalidad y Moneda de Pago
+                  Forma de Pago
                 </label>
-                <div className="relative">
-                  <select
-                    value={paymentMode}
-                    onChange={(e) => setPaymentMode(e.target.value as FixedExpensePaymentMode)}
-                    className="w-full bg-card border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app appearance-none focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
-                  >
-                    <option value="ves_bcv" className="bg-slate-900 text-white">🏛️ Bolívares (Tasa Oficial BCV)</option>
-                    <option value="ves_fixed" className="bg-slate-900 text-white">🇻🇪 Bolívares (Monto Fijo en Bs)</option>
-                    <option value="usd_cash" className="bg-slate-900 text-white">💵 Dólar Cash (USD)</option>
-                    <option value="ves_euro" className="bg-slate-900 text-white">💶 Bolívares (Tasa Euro BCV)</option>
-                    <option value="ves_parallel" className="bg-slate-900 text-white">⚡ Bolívares (Tasa Paralelo / Cash)</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-muted">
-                    <ChevronDown className="w-4 h-4" />
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentDropdownOpen(!isPaymentDropdownOpen)}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {paymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>Bolívar (Tasa BCV)</span></>}
+                    {paymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolívar (Monto Fijo Bs)</span></>}
+                    {paymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
+                    {paymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
+                    {paymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
                   </div>
-                </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+                {isPaymentDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsPaymentDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {[
+                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
+                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
+                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
+                        { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
+                        { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setPaymentMode(opt.id);
+                            setIsPaymentDropdownOpen(false);
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                            paymentMode === opt.id
+                              ? 'bg-primary-custom text-white shadow-sm'
+                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <span className="text-base">{opt.icon}</span>
+                          <span className="truncate">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Monto con cálculo dinámico e inverso */}
