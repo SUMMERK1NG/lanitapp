@@ -345,7 +345,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced' as SyncStatus,
       }));
 
-      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({ ...i, id: ensureValidUuid(i.id), sync_status: 'synced' }));
+      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
+        ...i,
+        id: ensureValidUuid(i.id),
+        default_fortnight: (i.default_fortnight === 15 || i.default_fortnight === '15' || i.default_fortnight === 'q1')
+          ? 'q1'
+          : (i.default_fortnight === 30 || i.default_fortnight === '30' || i.default_fortnight === 'q2')
+          ? 'q2'
+          : 'both',
+        sync_status: 'synced',
+      }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureValidUuid(v.id), sync_status: 'synced' }));
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
@@ -476,7 +485,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id) }));
           await db.fixed_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: FixedIncome = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
+          const item: FixedIncome = {
+            ...newRow,
+            id: ensureValidUuid(newRow.id),
+            default_fortnight: (newRow.default_fortnight === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
+              ? 'q1'
+              : (newRow.default_fortnight === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
+              ? 'q2'
+              : 'both',
+            sync_status: 'synced',
+          };
           set((s) => ({
             fixedIncomes: s.fixedIncomes.some((i) => i.id === item.id)
               ? s.fixedIncomes.map((i) => (i.id === item.id ? item : i))
@@ -823,6 +841,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   saveFixedIncome: async (income, userId) => {
     const id = ensureValidUuid(income.id);
+
+    const fortnightToQuincena = (f: any): number | null => {
+      if (f === 'q1' || f === 15) return 15;
+      if (f === 'q2' || f === 30) return 30;
+      return null; // 'both'
+    };
+
     const record: FixedIncome = {
       id,
       user_id: userId,
@@ -843,7 +868,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
-    const { sync_status, ...payload } = record;
+    const { sync_status, ...payload } = record as any;
+    payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
     console.log('[Supabase Fixed Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {

@@ -496,7 +496,15 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.accounts.bulkPut(remoteAccounts);
     }
     if (remoteIncomes && remoteIncomes.length > 0) {
-      await db.fixed_incomes.bulkPut(remoteIncomes.map((i) => ({ ...i, sync_status: 'synced' })));
+      await db.fixed_incomes.bulkPut(remoteIncomes.map((i: any) => ({
+        ...i,
+        default_fortnight: (i.default_fortnight === 15 || i.default_fortnight === '15' || i.default_fortnight === 'q1')
+          ? 'q1'
+          : (i.default_fortnight === 30 || i.default_fortnight === '30' || i.default_fortnight === 'q2')
+          ? 'q2'
+          : 'both',
+        sync_status: 'synced',
+      })));
     }
     if (remoteIncomeOverrides && remoteIncomeOverrides.length > 0) {
       await db.monthly_fixed_income_overrides.bulkPut(remoteIncomeOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
@@ -589,8 +597,14 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Fijos
     const pendingIncomes = await db.fixed_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingIncomes.filter((i) => !i.user_id || i.user_id === targetUid)) {
-      const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('fixed_incomes').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const { sync_status, ...rest } = item as any;
+      const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
+      const { error } = await supabase.from('fixed_incomes').upsert({
+        ...rest,
+        default_fortnight: fortnightNum,
+        user_id: targetUid,
+        amount: Number(item.amount),
+      });
       if (!error) {
         await db.fixed_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -1218,7 +1232,8 @@ export async function saveFixedIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, ...payload } = record as any;
+      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
