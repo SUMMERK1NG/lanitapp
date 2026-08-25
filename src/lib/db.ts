@@ -622,15 +622,18 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Variables
     const pendingVarIncomes = await db.variable_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingVarIncomes.filter((v) => !v.user_id || v.user_id === targetUid)) {
-      const { sync_status, category_id, description, fortnight, ...rest } = item as any;
-      if (!rest.account_id) delete rest.account_id;
-      const { error } = await supabase.from('variable_incomes').upsert({
-        ...rest,
-        name: item.description || (item as any).name || 'Ingreso Variable',
-        quincena: item.fortnight === 'q1' || (item.fortnight as any) === 15 ? 15 : 30,
+      const payload = {
+        id: item.id,
         user_id: targetUid,
+        name: item.description || (item as any).name || 'Ingreso Variable',
         amount: Number(item.amount),
-      });
+        currency: item.currency || 'USD',
+        quincena: item.fortnight === 'q1' || (item.fortnight as any) === 15 ? 15 : 30,
+        month_year: `${item.year}-${String(item.month + 1).padStart(2, '0')}`,
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('variable_incomes').upsert(payload);
       if (!error) {
         await db.variable_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -1374,32 +1377,22 @@ export async function saveVariableIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, category_id, description, fortnight, ...varPayload } = record as any;
-      varPayload.name = record.description;
-      varPayload.quincena = record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30;
-      if (!varPayload.account_id) delete varPayload.account_id;
+      const varPayload = {
+        id: record.id,
+        user_id: userId,
+        name: record.description,
+        amount: Number(record.amount),
+        currency: record.currency || 'USD',
+        quincena: record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30,
+        month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
+        created_at: record.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
       const { error } = await supabase.from('variable_incomes').upsert(varPayload);
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.warn('[Supabase Variable Income Notice]:', error.message);
-        const legacyPayload: any = {
-          id: record.id,
-          user_id: userId,
-          description: record.description,
-          amount: Number(record.amount),
-          income_type: 'variable',
-          quincena: record.fortnight === 'q1' ? 15 : 30,
-          month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
-          currency: record.currency || 'USD',
-          notes: record.notes || '',
-        };
-        const { error: legErr } = await supabase.from('incomes').upsert(legacyPayload);
-        if (!legErr) {
-          record.sync_status = 'synced';
-        } else {
-          console.error('[Supabase Incomes Fallback Error]:', legErr.message, legErr.details);
-        }
+        console.error('[Supabase Variable Income Error]:', error.message, error.details);
       }
     } catch (e) {
       console.warn('Direct variable income upsert notice:', e);

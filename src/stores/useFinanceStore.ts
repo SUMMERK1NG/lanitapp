@@ -364,13 +364,30 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced',
       }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({
-        ...v,
-        id: ensureValidUuid(v.id),
-        description: v.description || v.name || 'Ingreso Variable',
-        fortnight: (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1',
-        sync_status: 'synced',
-      }));
+      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => {
+        const [yr, mo] = (v.month_year || '').split('-').map(Number);
+        const now = new Date();
+        const year = !isNaN(yr) && yr > 2000 ? yr : (v.year || now.getFullYear());
+        const month = !isNaN(mo) && mo >= 1 && mo <= 12 ? mo - 1 : (v.month !== undefined ? v.month : now.getMonth());
+        const fortnight: FortnightType = (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1';
+
+        return {
+          id: ensureValidUuid(v.id),
+          user_id: v.user_id,
+          description: v.name || v.description || 'Ingreso Variable',
+          amount: Number(v.amount || 0),
+          year,
+          month,
+          fortnight,
+          category_id: v.category_id || 'cat_extras',
+          account_id: v.account_id || '',
+          currency: v.currency || 'USD',
+          notes: v.notes || '',
+          sync_status: 'synced',
+          created_at: v.created_at || new Date().toISOString(),
+          updated_at: v.updated_at || new Date().toISOString(),
+        };
+      });
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
         ...e,
         id: ensureValidUuid(e.id),
@@ -533,12 +550,27 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
+          const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
+          const now = new Date();
+          const year = !isNaN(yr) && yr > 2000 ? yr : (newRow.year || now.getFullYear());
+          const month = !isNaN(mo) && mo >= 1 && mo <= 12 ? mo - 1 : (newRow.month !== undefined ? newRow.month : now.getMonth());
+          const fortnight: FortnightType = (newRow.quincena === 30 || newRow.fortnight === 'q2' || newRow.quincena === '30') ? 'q2' : 'q1';
+
           const item: VariableIncome = {
-            ...newRow,
             id: ensureValidUuid(newRow.id),
-            description: newRow.description || newRow.name || 'Ingreso Variable',
-            fortnight: (newRow.quincena === 30 || newRow.fortnight === 'q2' || newRow.quincena === '30') ? 'q2' : 'q1',
+            user_id: newRow.user_id,
+            description: newRow.name || newRow.description || 'Ingreso Variable',
+            amount: Number(newRow.amount || 0),
+            year,
+            month,
+            fortnight,
+            category_id: newRow.category_id || 'cat_extras',
+            account_id: newRow.account_id || '',
+            currency: newRow.currency || 'USD',
+            notes: newRow.notes || '',
             sync_status: 'synced',
+            created_at: newRow.created_at || new Date().toISOString(),
+            updated_at: newRow.updated_at || new Date().toISOString(),
           };
           set((s) => ({
             variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
@@ -1026,10 +1058,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.variable_incomes.put(record);
 
-    const { sync_status, category_id, description, fortnight, ...payload } = record as any;
-    payload.name = record.description;
-    payload.quincena = record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30;
-    if (!payload.account_id) delete (payload as any).account_id;
+    const payload = {
+      id: record.id,
+      user_id: supabaseUserId,
+      name: record.description,
+      amount: Number(record.amount),
+      currency: record.currency || 'USD',
+      quincena: record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30,
+      month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
+      created_at: record.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
     console.log('[Supabase Variable Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -1038,28 +1077,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         if (!error) {
           await db.variable_incomes.update(id, { sync_status: 'synced' });
         } else {
-          console.warn('[Supabase Variable Incomes Notice]:', error.message);
-          // Fallback en tabla 'incomes' (esquema unificado)
-          const legacyPayload: any = {
-            id: record.id,
-            user_id: supabaseUserId,
-            description: record.description,
-            amount: Number(record.amount),
-            income_type: 'variable',
-            quincena: record.fortnight === 'q1' ? 15 : 30,
-            month_year: `${record.year}-${String(record.month + 1).padStart(2, '0')}`,
-            currency: record.currency || 'USD',
-            notes: record.notes || '',
-          };
-          const { error: legErr } = await supabase.from('incomes').upsert(legacyPayload);
-          if (!legErr) {
-            await db.variable_incomes.update(id, { sync_status: 'synced' });
-          } else {
-            console.error('[Supabase Incomes Fallback Error]:', legErr.message, legErr.details);
-            set((state) => ({
-              syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
-            }));
-          }
+          console.error('[Supabase Variable Incomes Error]:', error.message, error.details);
+          set((state) => ({
+            syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
+          }));
         }
       } catch {
         set((state) => ({
