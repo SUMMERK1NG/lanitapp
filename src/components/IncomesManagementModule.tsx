@@ -124,11 +124,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const [editingVar, setEditingVar] = useState<VariableIncome | null>(null);
   const [varDescription, setVarDescription] = useState<string>('');
   const [varAmount, setVarAmount] = useState<number>(0);
+  const [varPaymentMode, setVarPaymentMode] = useState<FixedExpensePaymentMode>('usd_cash');
   const [varFortnight, setVarFortnight] = useState<FortnightType>('q1');
   const [varCategoryId, setVarCategoryId] = useState<string>('cat_extras');
-  const [varAccountId, setVarAccountId] = useState<string>(accounts[0]?.id || '');
+  const [varAccountId, setVarAccountId] = useState<string>('');
   const [varNotes, setVarNotes] = useState<string>('');
   const [isVarCategoryDropdownOpen, setIsVarCategoryDropdownOpen] = useState<boolean>(false);
+  const [isVarPaymentDropdownOpen, setIsVarPaymentDropdownOpen] = useState<boolean>(false);
+  const [isVarAccountDropdownOpen, setIsVarAccountDropdownOpen] = useState<boolean>(false);
 
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
@@ -304,11 +307,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setEditingVar(null);
     setVarDescription('');
     setVarAmount(0);
+    setVarPaymentMode('usd_cash');
     setVarFortnight('q1');
     setVarCategoryId(incomeCategories.find(c => c.id === 'cat_extras')?.id || incomeCategories[0]?.id || 'cat_extras');
     setVarAccountId(accounts[0]?.id || '');
     setVarNotes('');
     setIsVarCategoryDropdownOpen(false);
+    setIsVarPaymentDropdownOpen(false);
+    setIsVarAccountDropdownOpen(false);
     setIsVarModalOpen(true);
   };
 
@@ -316,29 +322,46 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setEditingVar(vi);
     setVarDescription(vi.description);
     setVarAmount(vi.amount || 0);
+    setVarPaymentMode('usd_cash');
     setVarFortnight(vi.fortnight);
     setVarCategoryId(vi.category_id || 'cat_extras');
-    setVarAccountId(vi.account_id || accounts[0]?.id || '');
+    setVarAccountId(vi.account_id || '');
     setVarNotes(vi.notes || '');
     setIsVarCategoryDropdownOpen(false);
+    setIsVarPaymentDropdownOpen(false);
+    setIsVarAccountDropdownOpen(false);
     setIsVarModalOpen(true);
   };
 
   const handleSaveVar = async (e: React.FormEvent) => {
     e.preventDefault();
-    const num = varAmount;
-    if (!varDescription.trim() || isNaN(num) || num <= 0) return;
+    const numInput = varAmount;
+    if (!varDescription.trim() || isNaN(numInput) || numInput <= 0) return;
+
+    let finalAmountUSD = numInput;
+    let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
+
+    if (varPaymentMode === 'ves_fixed') {
+      finalCurrency = 'VES';
+      finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
+    } else if (varPaymentMode === 'ves_euro') {
+      finalCurrency = 'EUR';
+      finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
+    } else {
+      finalCurrency = 'USD';
+      finalAmountUSD = Number(numInput.toFixed(2));
+    }
 
     await saveVariableIncome({
       id: editingVar?.id,
       description: varDescription.trim(),
-      amount: num,
+      amount: finalAmountUSD,
       year: selectedYear,
       month: selectedMonth,
       fortnight: varFortnight,
       category_id: varCategoryId,
       account_id: varAccountId,
-      currency: 'USD',
+      currency: finalCurrency,
       notes: varNotes,
     });
 
@@ -971,6 +994,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             </h3>
 
             <form onSubmit={handleSaveVar} className="space-y-3.5">
+              {/* Nombre */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Nombre del Ingreso Extra
@@ -981,53 +1005,95 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   placeholder="Ej. Freelance, Bono, Guardia..."
                   value={varDescription}
                   onChange={(e) => setVarDescription(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Monto ($ USD)
-                  </label>
-                  <MoneyInput
-                    value={varAmount}
-                    onChange={setVarAmount}
-                    currencySymbol="$"
-                    placeholder="0,00"
-                    required
-                    className="!py-2 !text-sm"
-                  />
-                  {rates?.bcvDollar && varAmount > 0 ? (
-                    <span className="text-[10px] text-muted block mt-1">
-                      ≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted mb-1">
-                    Quincena Asignada
-                  </label>
-                  <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
-                    {[
-                      { id: 'q1' as const, label: `Q15 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
-                      { id: 'q2' as const, label: `Q30 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setVarFortnight(opt.id)}
-                        className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center truncate ${
-                          varFortnight === opt.id
-                            ? 'bg-primary-custom text-white shadow-sm'
-                            : 'text-muted hover:text-app'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+              {/* Forma de Cobro: Custom Styled Dropdown */}
+              <div className="relative">
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Forma de Cobro
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsVarPaymentDropdownOpen(!isVarPaymentDropdownOpen);
+                    setIsVarCategoryDropdownOpen(false);
+                    setIsVarAccountDropdownOpen(false);
+                  }}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {varPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
+                    {varPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>Bolívar (Tasa BCV)</span></>}
+                    {varPaymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
+                    {varPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolívar (Monto Fijo Bs)</span></>}
+                    {varPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
                   </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isVarPaymentDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsVarPaymentDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      {[
+                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
+                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
+                        { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
+                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
+                        { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setVarPaymentMode(opt.id);
+                            setIsVarPaymentDropdownOpen(false);
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                            varPaymentMode === opt.id
+                              ? 'bg-primary-custom text-white shadow-sm'
+                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <span className="text-base">{opt.icon}</span>
+                          <span className="truncate">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Monto con conversiones dinámicas */}
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  {varPaymentMode === 'ves_fixed' ? 'Monto en Bolívares (Bs.)' : varPaymentMode === 'ves_euro' ? 'Monto en Euros (€)' : 'Monto en Dólares ($ USD)'}
+                </label>
+                <MoneyInput
+                  value={varAmount}
+                  onChange={setVarAmount}
+                  currencySymbol={varPaymentMode === 'ves_fixed' ? 'Bs' : varPaymentMode === 'ves_euro' ? '€' : '$'}
+                  placeholder="0,00"
+                  required
+                  className="!py-2.5 !text-sm font-black"
+                />
+
+                {/* Sub-indicador de conversión en vivo */}
+                <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
+                  {varPaymentMode === 'ves_fixed' && (
+                    <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  )}
+                  {varPaymentMode === 'ves_euro' && (
+                    <span>≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                  )}
+                  {(varPaymentMode === 'usd_cash' || varPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
+                    <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  ) : null}
+                  {varPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
+                    <span>≈ Bs. {(varAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Paralelo: {parallelUsd.toFixed(2)})</span>
+                  ) : null}
                 </div>
               </div>
 
@@ -1038,7 +1104,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </label>
                 <button
                   type="button"
-                  onClick={() => setIsVarCategoryDropdownOpen(!isVarCategoryDropdownOpen)}
+                  onClick={() => {
+                    setIsVarCategoryDropdownOpen(!isVarCategoryDropdownOpen);
+                    setIsVarPaymentDropdownOpen(false);
+                    setIsVarAccountDropdownOpen(false);
+                  }}
                   className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -1096,31 +1166,125 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
+              {/* Quincena Asignada */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Cuenta Destino
+                  Quincena Asignada
                 </label>
-                <div className="grid grid-cols-2 gap-1.5 max-h-28 overflow-y-auto pr-1 no-scrollbar">
-                  {accounts.map((acc) => (
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-2xl border border-app">
+                  {[
+                    { id: 'q1' as const, label: `Quincena 15 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
+                    { id: 'q2' as const, label: `Quincena 30 (${MONTH_NAMES[selectedMonth].substring(0, 3)})` },
+                  ].map((opt) => (
                     <button
-                      key={acc.id}
+                      key={opt.id}
                       type="button"
-                      onClick={() => setVarAccountId(acc.id)}
-                      className={`p-2 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
-                        varAccountId === acc.id
-                          ? 'border-primary-custom bg-card ring-2 ring-primary-custom text-app'
-                          : 'border-app bg-card/60 text-muted hover:text-app'
+                      onClick={() => setVarFortnight(opt.id)}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
+                        varFortnight === opt.id
+                          ? 'bg-primary-custom text-white shadow-sm'
+                          : 'text-muted hover:text-app hover:bg-surface-hover'
                       }`}
                     >
-                      <span className="truncate">{acc.name}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface text-muted uppercase">
-                        {acc.currency}
-                      </span>
+                      {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Cuenta Destino: Custom Styled Dropdown */}
+              <div className="relative">
+                <label className="block text-xs font-semibold text-muted mb-1">
+                  Cuenta Destino (Opcional)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsVarAccountDropdownOpen(!isVarAccountDropdownOpen);
+                    setIsVarCategoryDropdownOpen(false);
+                    setIsVarPaymentDropdownOpen(false);
+                  }}
+                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {(() => {
+                      const selectedAcc = accounts.find((a) => a.id === varAccountId);
+                      if (selectedAcc) {
+                        return (
+                          <>
+                            <span className="text-primary-custom flex items-center">{renderIcon('Wallet')}</span>
+                            <span className="truncate">{selectedAcc.name}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface text-muted uppercase">
+                              {selectedAcc.currency}
+                            </span>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <span className="text-muted flex items-center">{renderIcon('Wallet')}</span>
+                          <span className="truncate text-muted">Sin asignar / Por cobrar</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+                </button>
+
+                {isVarAccountDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsVarAccountDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVarAccountId('');
+                          setIsVarAccountDropdownOpen(false);
+                        }}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${
+                          !varAccountId
+                            ? 'bg-primary-custom text-white shadow-sm'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center">{renderIcon('Wallet')}</span>
+                          <span>Sin asignar / Por cobrar</span>
+                        </div>
+                      </button>
+                      {accounts && accounts.length > 0 ? (
+                        accounts.map((acc) => (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => {
+                              setVarAccountId(acc.id);
+                              setIsVarAccountDropdownOpen(false);
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${
+                              varAccountId === acc.id
+                                ? 'bg-primary-custom text-white shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={`flex items-center ${varAccountId === acc.id ? 'text-white' : 'text-primary-custom'}`}>
+                                {renderIcon('Wallet')}
+                              </span>
+                              <span className="truncate">{acc.name}</span>
+                            </div>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface/50 text-slate-300 uppercase shrink-0">
+                              {acc.currency}
+                            </span>
+                          </button>
+                        ))
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Notas */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Notas / Observaciones
@@ -1134,6 +1298,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 />
               </div>
 
+              {/* Actions */}
               <div className="flex items-center gap-2 pt-3">
                 <button
                   type="button"
