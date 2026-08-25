@@ -978,6 +978,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       }
     }
 
+    const existing = await db.variable_incomes.get(id);
+    const txId = existing?.transaction_id || income.transaction_id || generateUuid();
+
     const record: VariableIncome = {
       id,
       user_id: supabaseUserId,
@@ -988,6 +991,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       fortnight: income.fortnight,
       category_id: income.category_id || 'cat_extras',
       account_id: income.account_id || '',
+      transaction_id: income.account_id ? txId : undefined,
       currency: income.currency || 'USD',
       notes: income.notes || '',
       sync_status: 'pending',
@@ -1001,6 +1005,48 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         : [...s.variableIncomes, record],
     }));
     await db.variable_incomes.put(record);
+
+    // Manage linked transaction in Capital & Cuentas
+    if (record.account_id) {
+      const tx: Transaction = {
+        id: txId,
+        user_id: supabaseUserId,
+        amount: Number(record.amount),
+        type: 'income',
+        description: `Ingreso: ${record.description}`,
+        category_id: record.category_id || 'cat_extras',
+        account_id: record.account_id,
+        transaction_date: `${record.year}-${String(record.month + 1).padStart(2, '0')}-${record.fortnight === 'q1' ? '15' : '28'}`,
+        sync_status: 'pending',
+        created_at: record.created_at || new Date().toISOString(),
+      };
+      await db.transactions.put(tx);
+      set((s) => ({
+        transactions: s.transactions.some((t) => t.id === tx.id)
+          ? s.transactions.map((t) => (t.id === tx.id ? tx : t))
+          : [...s.transactions, tx],
+      }));
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          const { sync_status, ...txPayload } = tx;
+          await supabase.from('transactions').upsert(txPayload);
+        } catch (e) {
+          console.warn('Sync var income tx store err:', e);
+        }
+      }
+    } else if (existing?.transaction_id) {
+      await db.transactions.delete(existing.transaction_id);
+      set((s) => ({
+        transactions: s.transactions.filter((t) => t.id !== existing.transaction_id),
+      }));
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.from('transactions').delete().eq('id', existing.transaction_id);
+        } catch (e) {
+          console.warn('Delete var income tx store err:', e);
+        }
+      }
+    }
 
     const payload = {
       id: record.id,
@@ -1038,6 +1084,21 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   deleteVariableIncome: async (id, userId) => {
     const cleanId = ensureValidUuid(id);
+    const existing = await db.variable_incomes.get(id);
+    if (existing?.transaction_id) {
+      await db.transactions.delete(existing.transaction_id);
+      set((s) => ({
+        transactions: s.transactions.filter((t) => t.id !== existing.transaction_id),
+      }));
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          await supabase.from('transactions').delete().eq('id', existing.transaction_id);
+        } catch (e) {
+          console.warn('Delete linked tx store err:', e);
+        }
+      }
+    }
+
     set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== id && v.id !== cleanId) }));
     await db.variable_incomes.delete(id);
 

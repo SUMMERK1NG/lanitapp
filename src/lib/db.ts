@@ -19,7 +19,7 @@ import type {
   SyncStatus,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
-import { ensureValidUuid } from '../utils/uuid.ts';
+import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
 
 export function getActiveUserId(): string {
   try {
@@ -1336,6 +1336,9 @@ export async function saveVariableIncome(
     }
   }
 
+  const existing = await db.variable_incomes.get(id);
+  const txId = existing?.transaction_id || income.transaction_id || generateUuid();
+
   const record: VariableIncome = {
     id,
     user_id: userId,
@@ -1346,6 +1349,7 @@ export async function saveVariableIncome(
     fortnight: income.fortnight,
     category_id: income.category_id || 'cat_extras',
     account_id: income.account_id || '',
+    transaction_id: income.account_id ? txId : undefined,
     currency: income.currency || 'USD',
     notes: income.notes || '',
     sync_status: 'pending',
@@ -1377,20 +1381,61 @@ export async function saveVariableIncome(
     }
   }
 
+  // Manage linked transaction in Capital & Cuentas
+  if (record.account_id) {
+    const tx: Transaction = {
+      id: txId,
+      user_id: userId,
+      amount: Number(record.amount),
+      type: 'income',
+      description: `Ingreso: ${record.description}`,
+      category_id: record.category_id || 'cat_extras',
+      account_id: record.account_id,
+      transaction_date: `${record.year}-${String(record.month + 1).padStart(2, '0')}-${record.fortnight === 'q1' ? '15' : '28'}`,
+      sync_status: 'pending',
+      created_at: record.created_at || new Date().toISOString(),
+    };
+    await db.transactions.put(tx);
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        const { sync_status, ...txPayload } = tx;
+        await supabase.from('transactions').upsert(txPayload);
+      } catch (e) {
+        console.warn('Direct transaction upsert notice:', e);
+      }
+    }
+  } else if (existing?.transaction_id) {
+    await db.transactions.delete(existing.transaction_id);
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('transactions').delete().eq('id', existing.transaction_id);
+      } catch (e) {
+        console.warn('Delete remote tx notice:', e);
+      }
+    }
+  }
+
   await db.variable_incomes.put(record);
   return record;
 }
 
 export async function deleteVariableIncome(id: string): Promise<void> {
+  const existing = await db.variable_incomes.get(id);
+  if (existing?.transaction_id) {
+    await db.transactions.delete(existing.transaction_id);
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('transactions').delete().eq('id', existing.transaction_id);
+      } catch (e) {
+        console.warn('Delete linked tx err:', e);
+      }
+    }
+  }
   await db.variable_incomes.delete(id);
-  await db.transactions.delete('tx_' + id);
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await Promise.all([
-        supabase.from('variable_incomes').delete().eq('id', id),
-        supabase.from('transactions').delete().eq('id', 'tx_' + id),
-      ]);
+      await supabase.from('variable_incomes').delete().eq('id', id);
     } catch (e) {
       console.warn('Delete remote var income err:', e);
     }

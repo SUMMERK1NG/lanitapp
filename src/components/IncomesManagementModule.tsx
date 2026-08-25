@@ -310,7 +310,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarPaymentMode('usd_cash');
     setVarFortnight('q1');
     setVarCategoryId(incomeCategories.find(c => c.id === 'cat_extras')?.id || incomeCategories[0]?.id || 'cat_extras');
-    setVarAccountId(accounts[0]?.id || '');
+    setVarAccountId('');
     setVarNotes('');
     setIsVarCategoryDropdownOpen(false);
     setIsVarPaymentDropdownOpen(false);
@@ -1222,8 +1222,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       }
                       return (
                         <>
-                          <span className="text-muted flex items-center">{renderIcon('Wallet')}</span>
-                          <span className="truncate text-muted">Sin asignar / Por cobrar</span>
+                          <span className="text-muted flex items-center text-sm">🚫</span>
+                          <span className="truncate text-muted">Ninguna (Opcional)</span>
                         </>
                       );
                     })()}
@@ -1248,8 +1248,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="flex items-center">{renderIcon('Wallet')}</span>
-                          <span>Sin asignar / Por cobrar</span>
+                          <span className="text-sm">🚫</span>
+                          <span>Ninguna (No abonar a cuenta)</span>
                         </div>
                       </button>
                       {accounts && accounts.length > 0 ? (

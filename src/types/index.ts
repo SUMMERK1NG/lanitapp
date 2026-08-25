@@ -117,6 +117,7 @@ export interface VariableIncome {
   fortnight: FortnightType; // 'q1' (15) o 'q2' (30)
   category_id?: string;
   account_id?: string;
+  transaction_id?: string;
   currency: string;
   notes?: string;
   sync_status: SyncStatus;
