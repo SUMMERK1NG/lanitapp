@@ -1216,7 +1216,17 @@ export async function saveFixedIncome(
   income: Partial<FixedIncome> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }
 ): Promise<FixedIncome> {
   const id = ensureValidUuid(income.id);
-  const userId = income.user_id || getActiveUserId();
+  let userId = income.user_id || getActiveUserId();
+  if (supabase) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        userId = user.id;
+      }
+    } catch {
+      // fallback
+    }
+  }
   const record: FixedIncome = {
     id,
     user_id: userId,
