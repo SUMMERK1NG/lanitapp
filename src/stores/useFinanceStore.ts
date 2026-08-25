@@ -838,9 +838,22 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   saveFixedIncome: async (income, userId) => {
     const id = ensureValidUuid(income.id);
 
+    // Obtener el auth.uid() real de Supabase
+    let supabaseUserId = userId || getActiveUserId();
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          supabaseUserId = user.id;
+        }
+      } catch (e) {
+        console.warn('Could not get Supabase auth user:', e);
+      }
+    }
+
     const record: FixedIncome = {
       id,
-      user_id: userId,
+      user_id: supabaseUserId,
       name: income.name,
       amount: Number(income.amount),
       currency: income.currency || 'USD',
