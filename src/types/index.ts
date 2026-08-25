@@ -127,7 +127,7 @@ export interface VariableIncome {
   updated_at?: string;
 }
 
-export type FixedExpensePaymentMode = 'usd_cash' | 'ves_fixed' | 'ves_bcv' | 'ves_euro' | 'ves_parallel' | 'other' | 'cash' | 'bcv_usd' | 'fixed_ves' | 'bcv_eur' | 'parallel_ves';
+export type FixedExpensePaymentMode = 'usd_cash' | 'eur_cash' | 'ves_bcv' | 'ves_euro' | 'ves_parallel' | 'ves_fixed' | 'other' | 'cash' | 'bcv_usd' | 'fixed_ves' | 'bcv_eur' | 'parallel_ves';
 
 export interface FixedExpense {
   id: string;

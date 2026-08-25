@@ -75,6 +75,20 @@ const renderIcon = (iconName?: string) => {
   return <IconComponent className="w-4 h-4" />;
 };
 
+export const PAYMENT_MODES_LIST: {
+  id: FixedExpensePaymentMode;
+  icon: string;
+  label: string;
+}[] = [
+  { id: 'usd_cash', icon: '💵', label: 'CASH USD' },
+  { id: 'eur_cash', icon: '💶', label: 'CASH EURO' },
+  { id: 'ves_bcv', icon: '🏛️', label: 'DOLAR TASA BCV (BS)' },
+  { id: 'ves_euro', icon: '🇪🇺', label: 'EURO TASA BCV (BS)' },
+  { id: 'ves_parallel', icon: '⚡', label: 'DOLAR PROMEDIO (BS)' },
+  { id: 'ves_fixed', icon: '🇻🇪', label: 'Bolivar (Monto Fijo)' },
+  { id: 'other', icon: '🌐', label: 'OTROS' },
+];
+
 interface IncomesManagementModuleProps {
   fixedIncomes: FixedIncome[];
   monthlyIncomeOverrides: MonthlyFixedIncomeOverride[];
@@ -168,15 +182,15 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       else if (mode === 'bcv_eur') mode = 'ves_euro';
       else if (mode === 'parallel_ves') mode = 'ves_parallel';
 
-      const rawCurrency = fi.currency || (mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_parallel' ? 'VES' : mode === 'ves_euro' ? 'EUR' : 'USD');
+      const rawCurrency = fi.currency || (mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_parallel' || mode === 'ves_euro' ? 'VES' : mode === 'eur_cash' ? 'EUR' : 'USD');
       const origAmt = fi.original_amount !== undefined ? fi.original_amount : fi.amount;
 
       let usdEquivalent = 0;
       if (mode === 'ves_parallel') {
         usdEquivalent = Number((origAmt / parallelUsd).toFixed(2));
-      } else if (rawCurrency === 'VES' || mode === 'ves_fixed' || mode === 'ves_bcv') {
+      } else if (rawCurrency === 'VES' || mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_euro') {
         usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
-      } else if (rawCurrency === 'EUR' || mode === 'ves_euro') {
+      } else if (rawCurrency === 'EUR' || mode === 'eur_cash') {
         usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
       } else {
         usdEquivalent = Number(origAmt.toFixed(2));
@@ -281,10 +295,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     if (fixedPaymentMode === 'ves_parallel') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / parallelUsd).toFixed(2));
-    } else if (fixedPaymentMode === 'ves_fixed' || fixedPaymentMode === 'ves_bcv') {
+    } else if (fixedPaymentMode === 'ves_fixed' || fixedPaymentMode === 'ves_bcv' || fixedPaymentMode === 'ves_euro') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (fixedPaymentMode === 'ves_euro') {
+    } else if (fixedPaymentMode === 'eur_cash') {
       finalCurrency = 'EUR';
       finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
     } else {
@@ -344,7 +358,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarDescription(vi.description);
     const exactOriginal = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
     setVarAmount(exactOriginal || 0);
-    setVarPaymentMode(vi.payment_mode || (vi.currency === 'VES' ? 'ves_bcv' : vi.currency === 'EUR' ? 'ves_euro' : 'usd_cash'));
+    setVarPaymentMode(vi.payment_mode || (vi.currency === 'VES' ? 'ves_bcv' : vi.currency === 'EUR' ? 'eur_cash' : 'usd_cash'));
     setVarFortnight(vi.fortnight);
     setVarCategoryId(vi.category_id || 'cat_extras');
     setVarAccountId(vi.account_id || '');
@@ -366,10 +380,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     if (varPaymentMode === 'ves_parallel') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / parallelUsd).toFixed(2));
-    } else if (varPaymentMode === 'ves_fixed' || varPaymentMode === 'ves_bcv') {
+    } else if (varPaymentMode === 'ves_fixed' || varPaymentMode === 'ves_bcv' || varPaymentMode === 'ves_euro') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (varPaymentMode === 'ves_euro') {
+    } else if (varPaymentMode === 'eur_cash') {
       finalCurrency = 'EUR';
       finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
     } else {
@@ -572,8 +586,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {processedFixedIncomes.map((fi) => {
                 const category = categories.find((c) => c.id === fi.category_id);
-                const isVes = fi.currency === 'VES' || fi.payment_mode === 'ves_fixed' || fi.payment_mode === 'ves_bcv' || fi.payment_mode === 'ves_parallel';
-                const isEur = fi.currency === 'EUR' || fi.payment_mode === 'ves_euro';
+                const isVes = fi.currency === 'VES' || fi.payment_mode === 'ves_fixed' || fi.payment_mode === 'ves_bcv' || fi.payment_mode === 'ves_parallel' || fi.payment_mode === 'ves_euro';
+                const isEur = fi.currency === 'EUR' || fi.payment_mode === 'eur_cash';
 
                 return (
                   <div
@@ -602,13 +616,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                               {fi.default_fortnight === 'both' && `Ambas Quincenas (${currency}${fi.finalAmount.toFixed(2)} c/u)`}
                             </span>
                             {fi.payment_mode && (
-                              <span className="text-[10px] text-muted">
-                                {fi.payment_mode === 'ves_bcv' && '🏛️ BCV'}
-                                {fi.payment_mode === 'ves_parallel' && '⚡ Paralelo'}
-                                {fi.payment_mode === 'ves_fixed' && '🇻🇪 Bs Fijo'}
-                                {fi.payment_mode === 'ves_euro' && '💶 Euro'}
-                                {fi.payment_mode === 'usd_cash' && '💵 Cash'}
-                                {fi.payment_mode === 'other' && '🌐 Otro'}
+                              <span className="text-[10px] text-muted font-medium">
+                                {fi.payment_mode === 'usd_cash' && '💵 CASH USD'}
+                                {fi.payment_mode === 'eur_cash' && '💶 CASH EURO'}
+                                {fi.payment_mode === 'ves_bcv' && '🏛️ DOLAR BCV'}
+                                {fi.payment_mode === 'ves_euro' && '🇪🇺 EURO BCV'}
+                                {fi.payment_mode === 'ves_parallel' && '⚡ DOLAR PROMEDIO'}
+                                {fi.payment_mode === 'ves_fixed' && '🇻🇪 Bolivar Fijo'}
+                                {fi.payment_mode === 'other' && '🌐 OTROS'}
                               </span>
                             )}
                           </div>
@@ -720,8 +735,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {currentMonthVariables.map((vi) => {
                 const category = categories.find((c) => c.id === vi.category_id);
-                const isVes = vi.currency === 'VES' || vi.payment_mode === 'ves_fixed' || vi.payment_mode === 'ves_bcv' || vi.payment_mode === 'ves_parallel';
-                const isEur = vi.currency === 'EUR' || vi.payment_mode === 'ves_euro';
+                const isVes = vi.currency === 'VES' || vi.payment_mode === 'ves_fixed' || vi.payment_mode === 'ves_bcv' || vi.payment_mode === 'ves_parallel' || vi.payment_mode === 'ves_euro';
+                const isEur = vi.currency === 'EUR' || vi.payment_mode === 'eur_cash';
                 const origAmt = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
 
                 return (
@@ -746,13 +761,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                                 : `Quincena 30 de ${MONTH_NAMES[selectedMonth]}`}
                             </span>
                             {vi.payment_mode && (
-                              <span className="text-[10px] text-muted">
-                                {vi.payment_mode === 'ves_bcv' && '🏛️ BCV'}
-                                {vi.payment_mode === 'ves_parallel' && '⚡ Paralelo'}
-                                {vi.payment_mode === 'ves_fixed' && '🇻🇪 Bs Fijo'}
-                                {vi.payment_mode === 'ves_euro' && '💶 Euro'}
-                                {vi.payment_mode === 'usd_cash' && '💵 Cash'}
-                                {vi.payment_mode === 'other' && '🌐 Otro'}
+                              <span className="text-[10px] text-muted font-medium">
+                                {vi.payment_mode === 'usd_cash' && '💵 CASH USD'}
+                                {vi.payment_mode === 'eur_cash' && '💶 CASH EURO'}
+                                {vi.payment_mode === 'ves_bcv' && '🏛️ DOLAR BCV'}
+                                {vi.payment_mode === 'ves_euro' && '🇪🇺 EURO BCV'}
+                                {vi.payment_mode === 'ves_parallel' && '⚡ DOLAR PROMEDIO'}
+                                {vi.payment_mode === 'ves_fixed' && '🇻🇪 Bolivar Fijo'}
+                                {vi.payment_mode === 'other' && '🌐 OTROS'}
                               </span>
                             )}
                           </div>
@@ -847,7 +863,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 />
               </div>
 
-              {/* Forma de Cobro: Custom Styled Dropdown */}
+              {/* Forma de Cobro: Custom Styled Dropdown con las 7 opciones exactas */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Forma de Cobro
@@ -861,12 +877,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    {fixedPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
-                    {fixedPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>Bolívar (Tasa BCV)</span></>}
-                    {fixedPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
-                    {fixedPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolívar (Monto Fijo Bs)</span></>}
-                    {fixedPaymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
-                    {fixedPaymentMode === 'other' && <><span className="text-base">🌐</span><span>Otra Divisa / Forma</span></>}
+                    {fixedPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>CASH USD</span></>}
+                    {fixedPaymentMode === 'eur_cash' && <><span className="text-base">💶</span><span>CASH EURO</span></>}
+                    {fixedPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>DOLAR TASA BCV (BS)</span></>}
+                    {fixedPaymentMode === 'ves_euro' && <><span className="text-base">🇪🇺</span><span>EURO TASA BCV (BS)</span></>}
+                    {fixedPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>DOLAR PROMEDIO (BS)</span></>}
+                    {fixedPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolivar (Monto Fijo)</span></>}
+                    {fixedPaymentMode === 'other' && <><span className="text-base">🌐</span><span>OTROS</span></>}
                   </div>
                   <ChevronDown className="w-4 h-4 text-muted shrink-0" />
                 </button>
@@ -875,14 +892,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setIsFixedPaymentDropdownOpen(false)} />
                     <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-56 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                      {[
-                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
-                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
-                        { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
-                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
-                        { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
-                        { id: 'other' as const, icon: '🌐', label: 'Otra Divisa / Forma' },
-                      ].map((opt) => (
+                      {PAYMENT_MODES_LIST.map((opt) => (
                         <button
                           key={opt.id}
                           type="button"
@@ -908,26 +918,28 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               {/* Monto con conversiones dinámicas */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  {fixedPaymentMode === 'ves_bcv'
-                    ? 'Monto en Bolívares (Bs. a Tasa BCV)'
+                  {fixedPaymentMode === 'usd_cash'
+                    ? 'Monto en Dólares ($ USD)'
+                    : fixedPaymentMode === 'eur_cash'
+                    ? 'Monto en Euros (€ EUR)'
+                    : fixedPaymentMode === 'ves_bcv'
+                    ? 'Monto en Bolívares (DOLAR TASA BCV)'
+                    : fixedPaymentMode === 'ves_euro'
+                    ? 'Monto en Bolívares (EURO TASA BCV)'
                     : fixedPaymentMode === 'ves_parallel'
-                    ? 'Monto en Bolívares (Bs. a Tasa Paralelo)'
+                    ? 'Monto en Bolívares (DOLAR PROMEDIO)'
                     : fixedPaymentMode === 'ves_fixed'
                     ? 'Monto Fijo en Bolívares (Bs.)'
-                    : fixedPaymentMode === 'ves_euro'
-                    ? 'Monto en Euros (€)'
-                    : fixedPaymentMode === 'other'
-                    ? 'Monto ($ USD u Otra Divisa)'
-                    : 'Monto Total en Dólares ($ USD)'}
+                    : 'Monto ($ USD u Otra Divisa)'}
                 </label>
                 <MoneyInput
                   value={fixedAmount}
                   onChange={setFixedAmount}
                   currencySymbol={
-                    fixedPaymentMode === 'ves_bcv' || fixedPaymentMode === 'ves_parallel' || fixedPaymentMode === 'ves_fixed'
-                      ? 'Bs'
-                      : fixedPaymentMode === 'ves_euro'
+                    fixedPaymentMode === 'eur_cash'
                       ? '€'
+                      : fixedPaymentMode === 'ves_bcv' || fixedPaymentMode === 'ves_euro' || fixedPaymentMode === 'ves_parallel' || fixedPaymentMode === 'ves_fixed'
+                      ? 'Bs'
                       : '$'
                   }
                   placeholder="0,00"
@@ -937,19 +949,19 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
-                  {fixedPaymentMode === 'ves_bcv' && (
+                  {fixedPaymentMode === 'usd_cash' && rates?.bcvDollar ? (
+                    <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  ) : fixedPaymentMode === 'eur_cash' ? (
+                    <span>≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                  ) : fixedPaymentMode === 'ves_bcv' ? (
                     <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
-                  )}
-                  {fixedPaymentMode === 'ves_parallel' && (
-                    <span>≈ ${(fixedAmount / parallelUsd).toFixed(2)} USD (Tasa Paralelo: {parallelUsd.toFixed(2)})</span>
-                  )}
-                  {fixedPaymentMode === 'ves_fixed' && (
+                  ) : fixedPaymentMode === 'ves_euro' ? (
+                    <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)}) • ≈ €{(fixedAmount / bcvEur).toFixed(2)} EUR</span>
+                  ) : fixedPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
+                    <span>≈ ${(fixedAmount / parallelUsd).toFixed(2)} USD (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                  ) : fixedPaymentMode === 'ves_fixed' ? (
                     <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
-                  )}
-                  {fixedPaymentMode === 'ves_euro' && (
-                    <span>≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)}) • ≈ Bs. {(fixedAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                  )}
-                  {(fixedPaymentMode === 'usd_cash' || fixedPaymentMode === 'other') && rates?.bcvDollar ? (
+                  ) : fixedPaymentMode === 'other' && rates?.bcvDollar ? (
                     <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : null}
                 </div>
@@ -1054,7 +1066,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
                 {fixedFortnight === 'split' && fixedAmount > 0 && (
                   <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
-                    💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).
+                    💡 Cobrarás {(fixedAmount / 2).toFixed(2)} el día 15 y {(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: {fixedAmount.toFixed(2)}).
                   </p>
                 )}
               </div>
@@ -1118,7 +1130,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 />
               </div>
 
-              {/* Forma de Cobro: Custom Styled Dropdown */}
+              {/* Forma de Cobro: Custom Styled Dropdown con las 7 opciones exactas */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Forma de Cobro
@@ -1133,12 +1145,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    {varPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>Dólar Cash (USD)</span></>}
-                    {varPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>Bolívar (Tasa BCV)</span></>}
-                    {varPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>Bolívar (Paralelo)</span></>}
-                    {varPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolívar (Monto Fijo Bs)</span></>}
-                    {varPaymentMode === 'ves_euro' && <><span className="text-base">💶</span><span>Euro BCV (€/Bs)</span></>}
-                    {varPaymentMode === 'other' && <><span className="text-base">🌐</span><span>Otra Divisa / Forma</span></>}
+                    {varPaymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>CASH USD</span></>}
+                    {varPaymentMode === 'eur_cash' && <><span className="text-base">💶</span><span>CASH EURO</span></>}
+                    {varPaymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>DOLAR TASA BCV (BS)</span></>}
+                    {varPaymentMode === 'ves_euro' && <><span className="text-base">🇪🇺</span><span>EURO TASA BCV (BS)</span></>}
+                    {varPaymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>DOLAR PROMEDIO (BS)</span></>}
+                    {varPaymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolivar (Monto Fijo)</span></>}
+                    {varPaymentMode === 'other' && <><span className="text-base">🌐</span><span>OTROS</span></>}
                   </div>
                   <ChevronDown className="w-4 h-4 text-muted shrink-0" />
                 </button>
@@ -1147,14 +1160,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setIsVarPaymentDropdownOpen(false)} />
                     <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-56 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                      {[
-                        { id: 'usd_cash' as const, icon: '💵', label: 'Dólar Cash (USD)' },
-                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'Bolívar (Tasa BCV)' },
-                        { id: 'ves_parallel' as const, icon: '⚡', label: 'Bolívar (Paralelo)' },
-                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolívar (Monto Fijo Bs)' },
-                        { id: 'ves_euro' as const, icon: '💶', label: 'Euro BCV (€/Bs)' },
-                        { id: 'other' as const, icon: '🌐', label: 'Otra Divisa / Forma' },
-                      ].map((opt) => (
+                      {PAYMENT_MODES_LIST.map((opt) => (
                         <button
                           key={opt.id}
                           type="button"
@@ -1180,26 +1186,28 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               {/* Monto con conversiones dinámicas */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  {varPaymentMode === 'ves_bcv'
-                    ? 'Monto en Bolívares (Bs. a Tasa BCV)'
+                  {varPaymentMode === 'usd_cash'
+                    ? 'Monto en Dólares ($ USD)'
+                    : varPaymentMode === 'eur_cash'
+                    ? 'Monto en Euros (€ EUR)'
+                    : varPaymentMode === 'ves_bcv'
+                    ? 'Monto en Bolívares (DOLAR TASA BCV)'
+                    : varPaymentMode === 'ves_euro'
+                    ? 'Monto en Bolívares (EURO TASA BCV)'
                     : varPaymentMode === 'ves_parallel'
-                    ? 'Monto en Bolívares (Bs. a Tasa Paralelo)'
+                    ? 'Monto en Bolívares (DOLAR PROMEDIO)'
                     : varPaymentMode === 'ves_fixed'
                     ? 'Monto Fijo en Bolívares (Bs.)'
-                    : varPaymentMode === 'ves_euro'
-                    ? 'Monto en Euros (€)'
-                    : varPaymentMode === 'other'
-                    ? 'Monto ($ USD u Otra Divisa)'
-                    : 'Monto en Dólares ($ USD)'}
+                    : 'Monto ($ USD u Otra Divisa)'}
                 </label>
                 <MoneyInput
                   value={varAmount}
                   onChange={setVarAmount}
                   currencySymbol={
-                    varPaymentMode === 'ves_bcv' || varPaymentMode === 'ves_parallel' || varPaymentMode === 'ves_fixed'
-                      ? 'Bs'
-                      : varPaymentMode === 'ves_euro'
+                    varPaymentMode === 'eur_cash'
                       ? '€'
+                      : varPaymentMode === 'ves_bcv' || varPaymentMode === 'ves_euro' || varPaymentMode === 'ves_parallel' || varPaymentMode === 'ves_fixed'
+                      ? 'Bs'
                       : '$'
                   }
                   placeholder="0,00"
@@ -1209,19 +1217,19 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
-                  {varPaymentMode === 'ves_bcv' && (
+                  {varPaymentMode === 'usd_cash' && rates?.bcvDollar ? (
+                    <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                  ) : varPaymentMode === 'eur_cash' ? (
+                    <span>≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                  ) : varPaymentMode === 'ves_bcv' ? (
                     <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
-                  )}
-                  {varPaymentMode === 'ves_parallel' && (
-                    <span>≈ ${(varAmount / parallelUsd).toFixed(2)} USD (Tasa Paralelo: {parallelUsd.toFixed(2)})</span>
-                  )}
-                  {varPaymentMode === 'ves_fixed' && (
+                  ) : varPaymentMode === 'ves_euro' ? (
+                    <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)}) • ≈ €{(varAmount / bcvEur).toFixed(2)} EUR</span>
+                  ) : varPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
+                    <span>≈ ${(varAmount / parallelUsd).toFixed(2)} USD (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                  ) : varPaymentMode === 'ves_fixed' ? (
                     <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
-                  )}
-                  {varPaymentMode === 'ves_euro' && (
-                    <span>≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)}) • ≈ Bs. {(varAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                  )}
-                  {(varPaymentMode === 'usd_cash' || varPaymentMode === 'other') && rates?.bcvDollar ? (
+                  ) : varPaymentMode === 'other' && rates?.bcvDollar ? (
                     <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : null}
                 </div>
