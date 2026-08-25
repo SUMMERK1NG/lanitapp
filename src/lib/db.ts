@@ -510,7 +510,12 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.monthly_fixed_income_overrides.bulkPut(remoteIncomeOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
     }
     if (remoteVarIncomes && remoteVarIncomes.length > 0) {
-      await db.variable_incomes.bulkPut(remoteVarIncomes.map((v) => ({ ...v, sync_status: 'synced' })));
+      await db.variable_incomes.bulkPut(remoteVarIncomes.map((v: any) => ({
+        ...v,
+        id: ensureValidUuid(v.id),
+        description: v.description || v.name || 'Ingreso Variable',
+        sync_status: 'synced',
+      })));
     }
     if (remoteExpenses && remoteExpenses.length > 0) {
       await db.fixed_expenses.bulkPut(remoteExpenses.map((e: any) => ({
@@ -616,9 +621,14 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Variables
     const pendingVarIncomes = await db.variable_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingVarIncomes.filter((v) => !v.user_id || v.user_id === targetUid)) {
-      const { sync_status, category_id, ...rest } = item as any;
+      const { sync_status, category_id, description, ...rest } = item as any;
       if (!rest.account_id) delete rest.account_id;
-      const { error } = await supabase.from('variable_incomes').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const { error } = await supabase.from('variable_incomes').upsert({
+        ...rest,
+        name: item.description || (item as any).name || 'Ingreso Variable',
+        user_id: targetUid,
+        amount: Number(item.amount),
+      });
       if (!error) {
         await db.variable_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -1360,7 +1370,8 @@ export async function saveVariableIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, category_id, ...varPayload } = record as any;
+      const { sync_status, category_id, description, ...varPayload } = record as any;
+      varPayload.name = record.description;
       if (!varPayload.account_id) delete varPayload.account_id;
       const { error } = await supabase.from('variable_incomes').upsert(varPayload);
       if (!error) {

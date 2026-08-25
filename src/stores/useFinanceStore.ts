@@ -364,7 +364,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         sync_status: 'synced',
       }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
-      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({ ...v, id: ensureValidUuid(v.id), sync_status: 'synced' }));
+      const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => ({
+        ...v,
+        id: ensureValidUuid(v.id),
+        description: v.description || v.name || 'Ingreso Variable',
+        sync_status: 'synced',
+      }));
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
         ...e,
         id: ensureValidUuid(e.id),
@@ -527,7 +532,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: VariableIncome = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
+          const item: VariableIncome = {
+            ...newRow,
+            id: ensureValidUuid(newRow.id),
+            description: newRow.description || newRow.name || 'Ingreso Variable',
+            sync_status: 'synced',
+          };
           set((s) => ({
             variableIncomes: s.variableIncomes.some((v) => v.id === item.id)
               ? s.variableIncomes.map((v) => (v.id === item.id ? item : v))
@@ -1014,7 +1024,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.variable_incomes.put(record);
 
-    const { sync_status, category_id, ...payload } = record as any;
+    const { sync_status, category_id, description, ...payload } = record as any;
+    payload.name = record.description;
     if (!payload.account_id) delete (payload as any).account_id;
     console.log('[Supabase Variable Incomes Payload]:', payload);
 
