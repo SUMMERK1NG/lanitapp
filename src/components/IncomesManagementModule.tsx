@@ -1105,7 +1105,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
                 {fixedFortnight === 'split' && fixedAmount > 0 && (
                   <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
-                    💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).
+                    {fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro' ? (
+                      <>💡 Cobrarás €{(fixedAmount / 2).toFixed(2)} el día 15 y €{(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: €{fixedAmount.toFixed(2)}).</>
+                    ) : fixedPaymentMode === 'ves_fixed' ? (
+                      <>💡 Cobrarás Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 15 y Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 30 (Total mensual: Bs. {fixedAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}).</>
+                    ) : (
+                      <>💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).</>
+                    )}
                   </p>
                 )}
               </div>
@@ -1398,7 +1404,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       return (
                         <>
                           <span className="text-muted flex items-center text-sm">🚫</span>
-                          <span className="truncate text-muted">Ninguna (Opcional)</span>
+                          <span className="truncate text-muted">Ninguna</span>
                         </>
                       );
                     })()}
@@ -1438,7 +1444,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-sm">🚫</span>
-                          <span>Ninguna (No abonar a cuenta)</span>
+                          <span>Ninguna</span>
                         </div>
                       </button>
 
