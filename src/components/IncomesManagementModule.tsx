@@ -428,39 +428,52 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             </p>
           </div>
 
-          <MonthPicker
-            selectedYear={selectedYear}
-            selectedMonth={selectedMonth}
-            onChange={onChangePeriod}
-          />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <MonthPicker
+              selectedYear={selectedYear}
+              selectedMonth={selectedMonth}
+              onChange={onChangePeriod}
+              className="w-full sm:w-auto justify-between sm:justify-start"
+            />
+
+            <button
+              onClick={activeTab === 'fixed' ? handleOpenAddFixed : handleOpenAddVar}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{activeTab === 'fixed' ? 'Nuevo Ingreso Fijo' : 'Nuevo Ingreso Extra'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Tab Selector: Fijos vs Variables */}
-        <div className="flex items-center p-1 bg-card rounded-2xl border border-app max-w-md mx-auto sm:mx-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('fixed')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'fixed'
-                ? 'bg-surface text-app shadow-sm border border-app'
-                : 'text-muted hover:text-app'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Ingresos Fijos ({processedFixedIncomes.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('variable')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-              activeTab === 'variable'
-                ? 'bg-primary-custom text-white shadow-sm'
-                : 'text-muted hover:text-app'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Ingresos Variables ({currentMonthVariables.length})</span>
-          </button>
+        {/* Tab Selector: Fijos vs Variables (Centrado) */}
+        <div className="flex justify-center pt-1">
+          <div className="flex items-center p-1 bg-card rounded-2xl border border-app w-full max-w-md">
+            <button
+              type="button"
+              onClick={() => setActiveTab('fixed')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'fixed'
+                  ? 'bg-surface text-app shadow-sm border border-app'
+                  : 'text-muted hover:text-app'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Ingresos Fijos ({processedFixedIncomes.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('variable')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'variable'
+                  ? 'bg-primary-custom text-white shadow-sm'
+                  : 'text-muted hover:text-app'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Ingresos Variables ({currentMonthVariables.length})</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -519,13 +532,6 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               <Layers className="w-4 h-4 text-primary-custom" />
               Ingresos Fijos Recurrentes ({processedFixedIncomes.length})
             </h4>
-            <button
-              onClick={handleOpenAddFixed}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Nuevo Ingreso Fijo
-            </button>
           </div>
 
           {processedFixedIncomes.length === 0 ? (
@@ -673,13 +679,6 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               <Sparkles className="w-4 h-4 text-[#FF914D]" />
               Ingresos Variables del Mes ({currentMonthVariables.length})
             </h4>
-            <button
-              onClick={handleOpenAddVar}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Nuevo Ingreso Extra
-            </button>
           </div>
 
           {currentMonthVariables.length === 0 ? (
