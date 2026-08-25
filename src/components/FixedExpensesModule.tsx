@@ -569,7 +569,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                     {paymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>DOLAR TASA BCV (BS)</span></>}
                     {paymentMode === 'ves_euro' && <><span className="text-base">🇪🇺</span><span>EURO TASA BCV (BS)</span></>}
                     {paymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>DOLAR PROMEDIO (BS)</span></>}
-                    {paymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>Bolivar (Monto Fijo)</span></>}
+                    {paymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>BOLIVARES MONTO FIJO</span></>}
                     {paymentMode === 'other' && <><span className="text-base">🌐</span><span>OTROS</span></>}
                   </div>
                   <ChevronDown className="w-4 h-4 text-muted shrink-0" />
@@ -584,7 +584,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                         { id: 'ves_bcv' as const, icon: '🏛️', label: 'DOLAR TASA BCV (BS)' },
                         { id: 'ves_euro' as const, icon: '🇪🇺', label: 'EURO TASA BCV (BS)' },
                         { id: 'ves_parallel' as const, icon: '⚡', label: 'DOLAR PROMEDIO (BS)' },
-                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'Bolivar (Monto Fijo)' },
+                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'BOLIVARES MONTO FIJO' },
                         { id: 'other' as const, icon: '🌐', label: 'OTROS' },
                       ].map((opt) => (
                         <button
