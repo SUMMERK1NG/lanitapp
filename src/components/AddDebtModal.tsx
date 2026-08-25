@@ -193,12 +193,6 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   // Platform selection handler
   const handleSelectPlatform = (platId: DebtPlatformType) => {
     setPlatform(platId);
-    if (!editingDebt && !creditor.trim()) {
-      if (platId === 'cashea') setCreditor('Cashea - ');
-      else if (platId === 'creditotal') setCreditor('CrediTotal - ');
-      else if (platId === 'multimax') setCreditor('Multimax - ');
-      else if (platId === 'particular') setCreditor('Préstamo Familiar - ');
-    }
   };
 
   const remainingAmount = useMemo(() => {
@@ -385,25 +379,25 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
             </div>
           </div>
 
-          {/* 1. Nombre / Concepto de la Deuda */}
+          {/* Nombre de la Deuda */}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
-              1. Nombre / Concepto de la Deuda
+              Nombre de la Deuda
             </label>
             <input
               type="text"
               required
-              placeholder="Ej. Cashea - Teléfono, Préstamo Personal, Repuestos Moto..."
+              placeholder="Ej. Teléfono, Moto, Préstamo personal..."
               value={creditor}
               onChange={(e) => setCreditor(e.target.value)}
               className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
             />
           </div>
 
-          {/* 2. Categoría / Plataforma (Tipo de Acreedor) - Styled Dropdown */}
+          {/* Categoría */}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
-              2. Categoría / Plataforma (Tipo de Acreedor)
+              Categoría
             </label>
             <div className="relative">
               <select
@@ -711,10 +705,10 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
             </div>
           </div>
 
-          {/* Tipo / Modalidad de Pago */}
+          {/* Modalidad de Pago */}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
-              Tipo / Modalidad de Pago
+              Modalidad de Pago
             </label>
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-xl border border-app">
               {[
