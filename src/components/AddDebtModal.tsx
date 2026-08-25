@@ -407,7 +407,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
               >
                 <option value="cashea" className="bg-slate-900 text-white">🟡 Cashea</option>
                 <option value="creditotal" className="bg-slate-900 text-white">🔵 CrediTotal</option>
-                <option value="multimax" className="bg-slate-900 text-white">🏬 Multimax / Tiendas por Departamento</option>
+                <option value="multimax" className="bg-slate-900 text-white">🏪 Multimax / Tiendas por Departamento</option>
                 <option value="particular" className="bg-slate-900 text-white">🤝 Particular / Familiar / Amigo</option>
                 <option value="banco" className="bg-slate-900 text-white">🏦 Tarjeta de Crédito / Banco</option>
                 <option value="other" className="bg-slate-900 text-white">📌 Otro / General</option>
