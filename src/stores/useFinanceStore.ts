@@ -957,6 +957,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
   saveFixedExpense: async (expense, userId) => {
     const id = ensureValidUuid(expense.id);
+    const quincenaValue = expense.default_fortnight === 'q1' || (expense.default_fortnight as any) === 15 ? 15 : expense.default_fortnight === 'q2' || (expense.default_fortnight as any) === 30 ? 30 : null;
+
     const record: FixedExpense = {
       id,
       user_id: userId,
@@ -968,6 +970,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       currency: expense.currency || 'USD',
       payment_mode: expense.payment_mode || 'ves_bcv',
       default_fortnight: expense.default_fortnight,
+      quincena: quincenaValue,
       category_id: expense.category_id || 'cat_services',
       is_active: expense.is_active !== undefined ? expense.is_active : true,
       assumed_by_third_party: expense.assumed_by_third_party || false,
@@ -982,14 +985,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_expenses.put(record);
 
-    const fortnightToQuincena = (f: any): number | null => {
-      if (f === 'q1' || f === 15) return 15;
-      if (f === 'q2' || f === 30) return 30;
-      return null; // 'both'
-    };
-
     const { sync_status, default_quincena, ...payload } = record as any;
-    payload.default_fortnight = fortnightToQuincena(record.default_fortnight);
+    payload.default_fortnight = quincenaValue;
+    payload.quincena = quincenaValue;
     console.log('[Supabase Fixed Expenses Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
