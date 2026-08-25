@@ -100,22 +100,12 @@ export function useRealtimeSync(userId: string | null) {
     let channel = supabase.channel(channelName);
 
     SYNCED_TABLES.forEach((table) => {
-      // Filtrar por user_id en todas las tablas excepto en 'categories' (catálogo global)
-      const filterConfig: { event: '*' | 'INSERT' | 'UPDATE' | 'DELETE'; schema: string; table: string; filter?: string } = {
-        event: '*',
-        schema: 'public',
-        table,
-      };
-
-      if (table !== 'categories') {
-        filterConfig.filter = `user_id=eq.${userId}`;
-      }
-
       channel = channel.on(
         'postgres_changes',
-        filterConfig as any,
+        { event: '*', schema: 'public', table },
         (payload) => {
           if (!isMounted) return;
+          console.log(`[useRealtimeSync ${table} Event]:`, payload);
           handleRealtimePayload(table, payload, userId);
         }
       );

@@ -742,14 +742,16 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
     'categories',
     'debts',
     'debt_payments',
+    'fixed_incomes',
+    'monthly_fixed_income_overrides',
+    'variable_incomes',
     'fixed_expenses',
+    'monthly_fixed_overrides',
     'fortnight_item_states',
-    'incomes',
     'profiles',
     'saving_contributions',
     'savings_goals',
     'transactions',
-    'user_profiles',
   ];
 
   let channel = client.channel(channelName);
@@ -763,97 +765,72 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
         const newRow: any = payload.new;
         const oldRow: any = payload.old;
         try {
-          if (tableName === 'incomes') {
-            if (payload.eventType === 'DELETE' && oldRow?.id) {
-              await db.fixed_incomes.delete(oldRow.id);
-              await db.variable_incomes.delete(oldRow.id);
-            } else if (newRow?.id) {
-              const isFijo = newRow.income_type === 'fijo';
-              const q: FortnightType = newRow.quincena === 15 ? 'q1' : 'q2';
-              if (isFijo) {
-                await db.fixed_incomes.put({
+          const targetTable = (db as any)[tableName];
+          if (payload.eventType === 'DELETE') {
+            const oldId = oldRow?.id;
+            if (oldId && targetTable) {
+              await targetTable.delete(oldId);
+            }
+          } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            if (newRow?.id && targetTable && (!newRow.user_id || newRow.user_id === userId)) {
+              if (tableName === 'accounts') {
+                const normAcc = {
                   id: newRow.id,
                   user_id: newRow.user_id || userId,
-                  name: newRow.description || 'Ingreso Fijo',
-                  amount: Number(newRow.amount || 0),
+                  name: newRow.name,
+                  type: newRow.type || 'cash',
                   currency: newRow.currency || 'USD',
-                  default_fortnight: q,
+                  initial_balance: typeof newRow.balance === 'number' ? newRow.balance : typeof newRow.initial_balance === 'number' ? newRow.initial_balance : parseFloat(newRow.balance || newRow.initial_balance || 0) || 0,
+                  color: newRow.color,
+                  notes: newRow.notes || '',
+                  created_at: newRow.created_at,
+                  updated_at: newRow.updated_at,
+                  sync_status: 'synced' as SyncStatus,
+                };
+                await targetTable.put(normAcc);
+              } else if (tableName === 'debts') {
+                const normDebt = {
+                  ...newRow,
+                  id: ensureValidUuid(newRow.id),
+                  creditor: newRow.creditor || newRow.creditor_name || 'Deuda',
+                  currency: newRow.currency || newRow.currency_type || 'USD',
+                  sync_status: 'synced' as SyncStatus,
+                };
+                await targetTable.put(normDebt);
+              } else if (tableName === 'fixed_expenses') {
+                const normExpense = {
+                  ...newRow,
+                  id: ensureValidUuid(newRow.id),
+                  default_fortnight: (newRow.default_fortnight === 15 || newRow.default_quincena === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
+                    ? 'q1'
+                    : (newRow.default_fortnight === 30 || newRow.default_quincena === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
+                    ? 'q2'
+                    : 'both',
+                  sync_status: 'synced' as SyncStatus,
+                };
+                await targetTable.put(normExpense);
+              } else if (tableName === 'fixed_incomes') {
+                const normIncome = {
+                  ...newRow,
+                  id: ensureValidUuid(newRow.id),
+                  default_fortnight: (newRow.default_fortnight === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
+                    ? 'q1'
+                    : (newRow.default_fortnight === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
+                    ? 'q2'
+                    : 'both',
                   category_id: newRow.category_id || 'cat_salary',
                   is_active: newRow.is_active !== undefined ? newRow.is_active : true,
-                  notes: newRow.notes || '',
-                  sync_status: 'synced',
+                  sync_status: 'synced' as SyncStatus,
+                };
+                await targetTable.put(normIncome);
+              } else if (tableName === 'variable_incomes') {
+                await targetTable.put({
+                  ...newRow,
+                  id: ensureValidUuid(newRow.id),
+                  sync_status: 'synced' as SyncStatus,
                 });
               } else {
-                const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
-                const now = new Date();
-                await db.variable_incomes.put({
-                  id: newRow.id,
-                  user_id: newRow.user_id || userId,
-                  description: newRow.description || 'Ingreso Variable',
-                  amount: Number(newRow.amount || 0),
-                  year: !isNaN(yr) ? yr : now.getFullYear(),
-                  month: !isNaN(mo) ? mo - 1 : now.getMonth(),
-                  fortnight: q,
-                  category_id: newRow.category_id || 'cat_extras',
-                  account_id: newRow.account_id || '',
-                  currency: newRow.currency || 'USD',
-                  notes: newRow.notes || '',
-                  sync_status: 'synced',
-                  created_at: newRow.created_at || new Date().toISOString(),
-                  updated_at: newRow.updated_at || new Date().toISOString(),
-                });
-              }
-            }
-          } else {
-            const targetTable = (db as any)[tableName];
-            if (targetTable) {
-              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                if (!newRow.user_id || newRow.user_id === userId) {
-                  if (tableName === 'accounts') {
-                    const normAcc = {
-                      id: newRow.id,
-                      user_id: newRow.user_id || userId,
-                      name: newRow.name,
-                      type: newRow.type || 'cash',
-                      currency: newRow.currency || 'USD',
-                      initial_balance: typeof newRow.balance === 'number' ? newRow.balance : typeof newRow.initial_balance === 'number' ? newRow.initial_balance : parseFloat(newRow.balance || newRow.initial_balance || 0) || 0,
-                      color: newRow.color,
-                      notes: newRow.notes || '',
-                      created_at: newRow.created_at,
-                      updated_at: newRow.updated_at,
-                      sync_status: 'synced' as SyncStatus,
-                    };
-                    await targetTable.put(normAcc);
-                  } else if (tableName === 'debts') {
-                    const normDebt = {
-                      ...newRow,
-                      id: ensureValidUuid(newRow.id),
-                      creditor: newRow.creditor || newRow.creditor_name || 'Deuda',
-                      currency: newRow.currency || newRow.currency_type || 'USD',
-                      sync_status: 'synced' as SyncStatus,
-                    };
-                    await targetTable.put(normDebt);
-                  } else if (tableName === 'fixed_expenses') {
-                    const normExpense = {
-                      ...newRow,
-                      id: ensureValidUuid(newRow.id),
-                      default_fortnight: (newRow.default_fortnight === 15 || newRow.default_quincena === 15 || newRow.default_fortnight === '15' || newRow.default_fortnight === 'q1')
-                        ? 'q1'
-                        : (newRow.default_fortnight === 30 || newRow.default_quincena === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
-                        ? 'q2'
-                        : 'both',
-                      sync_status: 'synced' as SyncStatus,
-                    };
-                    await targetTable.put(normExpense);
-                  } else {
-                    await targetTable.put({ ...newRow, sync_status: 'synced' });
-                  }
-                }
-              } else if (payload.eventType === 'DELETE') {
-                const oldId = oldRow?.id;
-                if (oldId) {
-                  await targetTable.delete(oldId);
-                }
+                await targetTable.put({ ...newRow, sync_status: 'synced' as SyncStatus });
               }
             }
           }

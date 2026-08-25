@@ -489,10 +489,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== oldRow.id) }));
           await db.fixed_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: FixedIncome = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
             default_fortnight: quincenaToFortnight(newRow.default_fortnight),
+            category_id: newRow.category_id || 'cat_salary',
+            is_active: newRow.is_active !== undefined ? newRow.is_active : true,
             sync_status: 'synced',
           };
           set((s) => ({
