@@ -521,15 +521,20 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       await db.accounts.bulkPut(remoteAccounts);
     }
     if (remoteIncomes && remoteIncomes.length > 0) {
-      await db.fixed_incomes.bulkPut(remoteIncomes.map((i: any) => ({
-        ...i,
-        default_fortnight: (i.default_fortnight === 15 || i.default_fortnight === '15' || i.default_fortnight === 'q1')
-          ? 'q1'
-          : (i.default_fortnight === 30 || i.default_fortnight === '30' || i.default_fortnight === 'q2')
-          ? 'q2'
-          : 'both',
-        sync_status: 'synced',
-      })));
+      await db.fixed_incomes.bulkPut(remoteIncomes.map((i: any) => {
+        const isSplit = i.default_fortnight === 50 || i.default_fortnight === '50' || i.default_fortnight === 'split' || (i.notes && i.notes.includes('[split]'));
+        return {
+          ...i,
+          default_fortnight: (i.default_fortnight === 15 || i.default_fortnight === '15' || i.default_fortnight === 'q1')
+            ? 'q1'
+            : (i.default_fortnight === 30 || i.default_fortnight === '30' || i.default_fortnight === 'q2')
+            ? 'q2'
+            : isSplit
+            ? 'split'
+            : 'both',
+          sync_status: 'synced',
+        };
+      }));
     }
     if (remoteIncomeOverrides && remoteIncomeOverrides.length > 0) {
       await db.monthly_fixed_income_overrides.bulkPut(remoteIncomeOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
@@ -850,6 +855,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                 };
                 await db.fixed_expenses.put(normExpense);
               } else if (tableName === 'fixed_incomes') {
+                const isSplit = newRow.default_fortnight === 50 || newRow.default_fortnight === '50' || newRow.default_fortnight === 'split' || (newRow.notes && newRow.notes.includes('[split]'));
                 const normIncome = {
                   ...newRow,
                   id: ensureValidUuid(newRow.id),
@@ -857,6 +863,8 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                     ? 'q1'
                     : (newRow.default_fortnight === 30 || newRow.default_fortnight === '30' || newRow.default_fortnight === 'q2')
                     ? 'q2'
+                    : isSplit
+                    ? 'split'
                     : 'both',
                   category_id: newRow.category_id || 'cat_salary',
                   is_active: newRow.is_active !== undefined ? newRow.is_active : true,
@@ -1240,6 +1248,10 @@ export async function saveFixedIncome(
       // fallback
     }
   }
+  const cleanNotes = (income.notes || '').replace(/\s*\[split\]/g, '').trim();
+  const isSplit = income.default_fortnight === 'split';
+  const notesWithTag = isSplit ? (cleanNotes ? `${cleanNotes} [split]` : '[split]') : cleanNotes;
+
   const record: FixedIncome = {
     id,
     user_id: userId,
@@ -1251,19 +1263,32 @@ export async function saveFixedIncome(
     default_fortnight: income.default_fortnight,
     category_id: income.category_id || 'cat_salary',
     is_active: income.is_active !== undefined ? income.is_active : true,
-    notes: income.notes || '',
+    notes: notesWithTag,
     sync_status: 'pending',
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
-      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
+      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15
+        ? 15
+        : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30
+        ? 30
+        : isSplit
+        ? 50
+        : null;
+      payload.notes = notesWithTag;
       const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Fixed Income Error]:', error.message, error.details);
+        if (isSplit && payload.default_fortnight === 50) {
+          payload.default_fortnight = null;
+          const { error: errRetry } = await supabase.from('fixed_incomes').upsert(payload);
+          if (!errRetry) record.sync_status = 'synced';
+        } else {
+          console.error('[Supabase Fixed Income Error]:', error.message, error.details);
+        }
       }
     } catch (e) {
       console.warn('Direct fixed income upsert notice:', e);

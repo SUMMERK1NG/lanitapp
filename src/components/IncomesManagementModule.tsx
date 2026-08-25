@@ -182,12 +182,16 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       const finalAmountUSD = override?.custom_amount !== undefined ? override.custom_amount : usdEquivalent;
 
+      const isSplit = fi.default_fortnight === 'split' || (fi.default_fortnight as any) === 50 || (fi.notes && fi.notes.includes('[split]'));
+      const resolvedFortnight = isSplit ? 'split' : fi.default_fortnight;
+
       return {
         ...fi,
         payment_mode: mode,
         currency: rawCurrency,
         original_amount: origAmt,
         amount_usd: finalAmountUSD,
+        default_fortnight: resolvedFortnight,
         isActive,
         finalAmount: finalAmountUSD,
       };
@@ -258,7 +262,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setFixedAmount(exactOriginal || 0);
     setFixedFortnight(fi.default_fortnight || 'split');
     setFixedCategoryId(fi.category_id);
-    setFixedNotes(fi.notes || '');
+    setFixedNotes((fi.notes || '').replace(/\s*\[split\]/g, '').trim());
     setIsFixedCategoryDropdownOpen(false);
     setIsFixedPaymentDropdownOpen(false);
     setIsFixedModalOpen(true);

@@ -38,13 +38,15 @@ export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 export const fortnightToQuincena = (f: any): number | null => {
   if (f === 'q1' || f === 15 || f === '15') return 15;
   if (f === 'q2' || f === 30 || f === '30') return 30;
-  return null; // 'both' | 'split'
+  if (f === 'split' || f === 50 || f === '50') return 50;
+  return null; // 'both'
 };
 
-export const quincenaToFortnight = (q: any): 'q1' | 'q2' | 'both' | 'split' => {
+export const quincenaToFortnight = (q: any, notes?: string): 'q1' | 'q2' | 'both' | 'split' => {
+  if (notes && notes.includes('[split]')) return 'split';
   if (q === 15 || q === '15' || q === 'q1') return 'q1';
   if (q === 30 || q === '30' || q === 'q2') return 'q2';
-  if (q === 'split') return 'split';
+  if (q === 50 || q === '50' || q === 'split') return 'split';
   return 'both';
 };
 
@@ -361,7 +363,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
         ...i,
         id: ensureValidUuid(i.id),
-        default_fortnight: quincenaToFortnight(i.default_fortnight),
+        default_fortnight: quincenaToFortnight(i.default_fortnight, i.notes),
         sync_status: 'synced',
       }));
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
@@ -921,8 +923,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
+    const cleanNotes = (income.notes || '').replace(/\s*\[split\]/g, '').trim();
+    const isSplit = record.default_fortnight === 'split';
+    const notesWithTag = isSplit ? (cleanNotes ? `${cleanNotes} [split]` : '[split]') : cleanNotes;
+    record.notes = notesWithTag;
+
     const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
     payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
+    payload.notes = notesWithTag;
     console.log('[Supabase Fixed Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -931,6 +939,15 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         if (!error) {
           await db.fixed_incomes.update(id, { sync_status: 'synced' });
         } else {
+          // If check constraint fails on default_fortnight=50, fallback to null with notes tag
+          if (isSplit && payload.default_fortnight === 50) {
+            payload.default_fortnight = null;
+            const { error: errRetry } = await supabase.from('fixed_incomes').upsert(payload);
+            if (!errRetry) {
+              await db.fixed_incomes.update(id, { sync_status: 'synced' });
+              return record;
+            }
+          }
           console.error('[Supabase Fixed Incomes Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
