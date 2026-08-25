@@ -858,7 +858,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
-    const { sync_status, category_id, ...payload } = record as any;
+    const { sync_status, category_id, is_active, ...payload } = record as any;
     payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
     console.log('[Supabase Fixed Incomes Payload]:', payload);
 
