@@ -119,18 +119,17 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     else if (mode === 'bcv_eur') mode = 'ves_euro';
     else if (mode === 'parallel_ves') mode = 'ves_parallel';
 
-    const rawCurrency = fe.currency || (mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_parallel' || mode === 'ves_euro' ? 'VES' : mode === 'eur_cash' ? 'EUR' : 'USD');
+    const rawCurrency = fe.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'eur_cash' || mode === 'ves_euro' ? 'EUR' : 'USD');
     const origAmt = fe.original_amount !== undefined ? fe.original_amount : (fe.amount_in_ves !== undefined ? fe.amount_in_ves : fe.amount);
 
     // Compute USD amount (for calculation & balance)
     let usdEquivalent = 0;
-    if (mode === 'ves_parallel') {
-      usdEquivalent = Number((origAmt / parallelUsd).toFixed(2));
-    } else if (rawCurrency === 'VES' || mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_euro') {
+    if (mode === 'ves_fixed') {
       usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
-    } else if (rawCurrency === 'EUR' || mode === 'eur_cash') {
+    } else if (rawCurrency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
       usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
     } else {
+      // usd_cash, ves_bcv, ves_parallel, other are entered in USD!
       usdEquivalent = Number(origAmt.toFixed(2));
     }
 
@@ -196,16 +195,14 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     let finalAmountUSD = numInput;
     let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
 
-    if (paymentMode === 'ves_parallel') {
-      finalCurrency = 'VES';
-      finalAmountUSD = Number((numInput / parallelUsd).toFixed(2));
-    } else if (paymentMode === 'ves_fixed' || paymentMode === 'ves_bcv' || paymentMode === 'ves_euro') {
+    if (paymentMode === 'ves_fixed') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (paymentMode === 'eur_cash') {
+    } else if (paymentMode === 'eur_cash' || paymentMode === 'ves_euro') {
       finalCurrency = 'EUR';
       finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
     } else {
+      // usd_cash, ves_bcv, ves_parallel, other are entered in USD!
       finalCurrency = 'USD';
       finalAmountUSD = Number(numInput.toFixed(2));
     }
@@ -617,11 +614,11 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                     : paymentMode === 'eur_cash'
                     ? 'Monto en Euros (€ EUR)'
                     : paymentMode === 'ves_bcv'
-                    ? 'Monto en Bolívares (DOLAR TASA BCV)'
+                    ? 'Monto en Dólares ($ a Tasa BCV)'
                     : paymentMode === 'ves_euro'
-                    ? 'Monto en Bolívares (EURO TASA BCV)'
+                    ? 'Monto en Euros (€ a Tasa BCV)'
                     : paymentMode === 'ves_parallel'
-                    ? 'Monto en Bolívares (DOLAR PROMEDIO)'
+                    ? 'Monto en Dólares ($ a Tasa Promedio)'
                     : paymentMode === 'ves_fixed'
                     ? 'Monto Fijo en Bolívares (Bs.)'
                     : 'Monto ($ USD u Otra Divisa)'}
@@ -630,9 +627,9 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                   value={amount}
                   onChange={setAmount}
                   currencySymbol={
-                    paymentMode === 'eur_cash'
+                    paymentMode === 'eur_cash' || paymentMode === 'ves_euro'
                       ? '€'
-                      : paymentMode === 'ves_bcv' || paymentMode === 'ves_euro' || paymentMode === 'ves_parallel' || paymentMode === 'ves_fixed'
+                      : paymentMode === 'ves_fixed'
                       ? 'Bs'
                       : '$'
                   }
@@ -643,7 +640,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                 {/* Mensaje de conversión reactiva */}
                 {numEntered > 0 && (
                   <div className="mt-1 text-[11px] text-muted font-medium">
-                    {paymentMode === 'usd_cash' && rates?.bcvDollar ? (
+                    {(paymentMode === 'usd_cash' || paymentMode === 'ves_bcv') && rates?.bcvDollar ? (
                       <span className="text-emerald-400">
                         ≈ Bs. {formatCurrencyVE(numEntered * bcvUsd)} (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)})
                       </span>
@@ -651,17 +648,13 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                       <span className="text-purple-400">
                         ≈ ${((numEntered * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})
                       </span>
-                    ) : paymentMode === 'ves_bcv' ? (
-                      <span className="text-[#00C2C7]">
-                        ≈ ${formatCurrencyVE(numEntered / bcvUsd)} USD (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)})
-                      </span>
                     ) : paymentMode === 'ves_euro' ? (
                       <span className="text-purple-400">
-                        ≈ ${formatCurrencyVE(numEntered / bcvUsd)} USD (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)}) • ≈ €{formatCurrencyVE(numEntered / bcvEur)} EUR
+                        ≈ Bs. {formatCurrencyVE(numEntered * bcvEur)} (Tasa EUR BCV: Bs. {formatCurrencyVE(bcvEur)}) • ≈ ${((numEntered * bcvEur) / bcvUsd).toFixed(2)} USD
                       </span>
-                    ) : paymentMode === 'ves_parallel' ? (
+                    ) : paymentMode === 'ves_parallel' && rates?.parallelDollar ? (
                       <span className="text-[#FF914D]">
-                        ≈ ${formatCurrencyVE(numEntered / parallelUsd)} USD (Tasa Promedio: Bs. {formatCurrencyVE(parallelUsd)})
+                        ≈ Bs. {formatCurrencyVE(numEntered * parallelUsd)} (Tasa Promedio: Bs. {formatCurrencyVE(parallelUsd)})
                       </span>
                     ) : paymentMode === 'ves_fixed' ? (
                       <span className="text-[#00C2C7]">

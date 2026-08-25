@@ -182,17 +182,16 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       else if (mode === 'bcv_eur') mode = 'ves_euro';
       else if (mode === 'parallel_ves') mode = 'ves_parallel';
 
-      const rawCurrency = fi.currency || (mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_parallel' || mode === 'ves_euro' ? 'VES' : mode === 'eur_cash' ? 'EUR' : 'USD');
+      const rawCurrency = fi.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'eur_cash' || mode === 'ves_euro' ? 'EUR' : 'USD');
       const origAmt = fi.original_amount !== undefined ? fi.original_amount : fi.amount;
 
       let usdEquivalent = 0;
-      if (mode === 'ves_parallel') {
-        usdEquivalent = Number((origAmt / parallelUsd).toFixed(2));
-      } else if (rawCurrency === 'VES' || mode === 'ves_fixed' || mode === 'ves_bcv' || mode === 'ves_euro') {
+      if (mode === 'ves_fixed') {
         usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
-      } else if (rawCurrency === 'EUR' || mode === 'eur_cash') {
+      } else if (rawCurrency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
         usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
       } else {
+        // usd_cash, ves_bcv, ves_parallel, other are all entered in USD index!
         usdEquivalent = Number(origAmt.toFixed(2));
       }
 
@@ -286,22 +285,39 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
   const handleSaveFixed = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numInput = fixedAmount;
-    if (!fixedName.trim() || isNaN(numInput) || numInput <= 0) return;
+    if (!fixedName.trim()) {
+      alert('Por favor ingresa el nombre del ingreso fijo.');
+      return;
+    }
+    if (!fixedCategoryId) {
+      alert('Por favor selecciona una categoría.');
+      return;
+    }
+    if (!fixedPaymentMode) {
+      alert('Por favor selecciona una forma de cobro.');
+      return;
+    }
+    const numInput = Number(fixedAmount);
+    if (isNaN(numInput) || numInput <= 0) {
+      alert('Por favor ingresa un monto válido mayor a 0.');
+      return;
+    }
+    if (!fixedFortnight) {
+      alert('Por favor selecciona la distribución de sueldo.');
+      return;
+    }
 
     let finalAmountUSD = numInput;
     let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
 
-    if (fixedPaymentMode === 'ves_parallel') {
-      finalCurrency = 'VES';
-      finalAmountUSD = Number((numInput / parallelUsd).toFixed(2));
-    } else if (fixedPaymentMode === 'ves_fixed' || fixedPaymentMode === 'ves_bcv' || fixedPaymentMode === 'ves_euro') {
+    if (fixedPaymentMode === 'ves_fixed') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (fixedPaymentMode === 'eur_cash') {
+    } else if (fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro') {
       finalCurrency = 'EUR';
       finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
     } else {
+      // usd_cash, ves_bcv, ves_parallel, other are all entered in USD index!
       finalCurrency = 'USD';
       finalAmountUSD = Number(numInput.toFixed(2));
     }
@@ -358,7 +374,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setVarDescription(vi.description);
     const exactOriginal = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
     setVarAmount(exactOriginal || 0);
-    setVarPaymentMode(vi.payment_mode || (vi.currency === 'VES' ? 'ves_bcv' : vi.currency === 'EUR' ? 'eur_cash' : 'usd_cash'));
+    setVarPaymentMode(vi.payment_mode || (vi.currency === 'VES' ? 'ves_fixed' : vi.currency === 'EUR' ? 'eur_cash' : 'usd_cash'));
     setVarFortnight(vi.fortnight);
     setVarCategoryId(vi.category_id || 'cat_extras');
     setVarAccountId(vi.account_id || '');
@@ -371,22 +387,39 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
   const handleSaveVar = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numInput = varAmount;
-    if (!varDescription.trim() || isNaN(numInput) || numInput <= 0) return;
+    if (!varDescription.trim()) {
+      alert('Por favor ingresa el nombre del ingreso extra.');
+      return;
+    }
+    if (!varCategoryId) {
+      alert('Por favor selecciona una categoría.');
+      return;
+    }
+    if (!varPaymentMode) {
+      alert('Por favor selecciona una forma de cobro.');
+      return;
+    }
+    const numInput = Number(varAmount);
+    if (isNaN(numInput) || numInput <= 0) {
+      alert('Por favor ingresa un monto válido mayor a 0.');
+      return;
+    }
+    if (!varFortnight) {
+      alert('Por favor selecciona la quincena asignada.');
+      return;
+    }
 
     let finalAmountUSD = numInput;
     let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
 
-    if (varPaymentMode === 'ves_parallel') {
-      finalCurrency = 'VES';
-      finalAmountUSD = Number((numInput / parallelUsd).toFixed(2));
-    } else if (varPaymentMode === 'ves_fixed' || varPaymentMode === 'ves_bcv' || varPaymentMode === 'ves_euro') {
+    if (varPaymentMode === 'ves_fixed') {
       finalCurrency = 'VES';
       finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (varPaymentMode === 'eur_cash') {
+    } else if (varPaymentMode === 'eur_cash' || varPaymentMode === 'ves_euro') {
       finalCurrency = 'EUR';
       finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
     } else {
+      // usd_cash, ves_bcv, ves_parallel, other are all entered in USD index!
       finalCurrency = 'USD';
       finalAmountUSD = Number(numInput.toFixed(2));
     }
@@ -586,8 +619,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {processedFixedIncomes.map((fi) => {
                 const category = categories.find((c) => c.id === fi.category_id);
-                const isVes = fi.currency === 'VES' || fi.payment_mode === 'ves_fixed' || fi.payment_mode === 'ves_bcv' || fi.payment_mode === 'ves_parallel' || fi.payment_mode === 'ves_euro';
-                const isEur = fi.currency === 'EUR' || fi.payment_mode === 'eur_cash';
+                const isVesFixed = fi.payment_mode === 'ves_fixed';
+                const isEur = fi.currency === 'EUR' || fi.payment_mode === 'eur_cash' || fi.payment_mode === 'ves_euro';
 
                 return (
                   <div
@@ -631,7 +664,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       </div>
 
                       <div className="text-right">
-                        {isVes ? (
+                        {isVesFixed ? (
                           <>
                             <span className="text-base font-black text-[#00C2C7]">
                               +Bs. {(fi.original_amount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -654,7 +687,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                             <span className="text-base font-black text-[#00C2C7]">
                               +{currency}{fi.finalAmount.toFixed(2)}
                             </span>
-                            {rates?.bcvDollar ? (
+                            {fi.payment_mode === 'ves_parallel' && rates?.parallelDollar ? (
+                              <span className="text-[10px] text-muted block">
+                                ≈ Bs. {(fi.finalAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            ) : rates?.bcvDollar ? (
                               <span className="text-[10px] text-muted block">
                                 ≈ Bs. {(fi.finalAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
@@ -735,8 +772,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {currentMonthVariables.map((vi) => {
                 const category = categories.find((c) => c.id === vi.category_id);
-                const isVes = vi.currency === 'VES' || vi.payment_mode === 'ves_fixed' || vi.payment_mode === 'ves_bcv' || vi.payment_mode === 'ves_parallel' || vi.payment_mode === 'ves_euro';
-                const isEur = vi.currency === 'EUR' || vi.payment_mode === 'eur_cash';
+                const isVesFixed = vi.payment_mode === 'ves_fixed';
+                const isEur = vi.currency === 'EUR' || vi.payment_mode === 'eur_cash' || vi.payment_mode === 'ves_euro';
                 const origAmt = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
 
                 return (
@@ -776,7 +813,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       </div>
 
                       <div className="text-right">
-                        {isVes ? (
+                        {isVesFixed ? (
                           <>
                             <span className="text-base font-black text-[#FF914D]">
                               +Bs. {origAmt.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -799,7 +836,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                             <span className="text-base font-black text-[#FF914D]">
                               +{currency}{vi.amount.toFixed(2)}
                             </span>
-                            {rates?.bcvDollar ? (
+                            {vi.payment_mode === 'ves_parallel' && rates?.parallelDollar ? (
+                              <span className="text-[10px] text-muted block">
+                                ≈ Bs. {(vi.amount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            ) : rates?.bcvDollar ? (
                               <span className="text-[10px] text-muted block">
                                 ≈ Bs. {(vi.amount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
@@ -848,25 +889,25 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             </h3>
 
             <form onSubmit={handleSaveFixed} className="space-y-3.5">
-              {/* 1. Nombre del Ingreso */}
+              {/* 1. Nombre del Ingreso (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Nombre del Ingreso
+                  Nombre del Ingreso <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Sueldo, Bono..."
+                  placeholder="Ej. Sueldo, Honorarios..."
                   value={fixedName}
                   onChange={(e) => setFixedName(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              {/* 2. Categoría: Custom Styled Dropdown con Iconos Lucide */}
+              {/* 2. Categoría (Obligatorio) */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Categoría
+                  Categoría <span className="text-red-400">*</span>
                 </label>
                 <button
                   type="button"
@@ -931,10 +972,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* 3. Forma de Cobro: Custom Styled Dropdown con las 7 opciones exactas */}
+              {/* 3. Forma de Cobro (Obligatorio) */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Forma de Cobro
+                  Forma de Cobro <span className="text-red-400">*</span>
                 </label>
                 <button
                   type="button"
@@ -983,7 +1024,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* 4. Monto con conversiones dinámicas */}
+              {/* 4. Monto (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   {fixedPaymentMode === 'usd_cash'
@@ -991,22 +1032,22 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                     : fixedPaymentMode === 'eur_cash'
                     ? 'Monto en Euros (€ EUR)'
                     : fixedPaymentMode === 'ves_bcv'
-                    ? 'Monto en Bolívares (DOLAR TASA BCV)'
+                    ? 'Monto en Dólares ($ a Tasa BCV)'
                     : fixedPaymentMode === 'ves_euro'
-                    ? 'Monto en Bolívares (EURO TASA BCV)'
+                    ? 'Monto en Euros (€ a Tasa BCV)'
                     : fixedPaymentMode === 'ves_parallel'
-                    ? 'Monto en Bolívares (DOLAR PROMEDIO)'
+                    ? 'Monto en Dólares ($ a Tasa Promedio)'
                     : fixedPaymentMode === 'ves_fixed'
                     ? 'Monto Fijo en Bolívares (Bs.)'
-                    : 'Monto ($ USD u Otra Divisa)'}
+                    : 'Monto ($ USD u Otra Divisa)'} <span className="text-red-400">*</span>
                 </label>
                 <MoneyInput
                   value={fixedAmount}
                   onChange={setFixedAmount}
                   currencySymbol={
-                    fixedPaymentMode === 'eur_cash'
+                    fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro'
                       ? '€'
-                      : fixedPaymentMode === 'ves_bcv' || fixedPaymentMode === 'ves_euro' || fixedPaymentMode === 'ves_parallel' || fixedPaymentMode === 'ves_fixed'
+                      : fixedPaymentMode === 'ves_fixed'
                       ? 'Bs'
                       : '$'
                   }
@@ -1017,16 +1058,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
-                  {fixedPaymentMode === 'usd_cash' && rates?.bcvDollar ? (
+                  {(fixedPaymentMode === 'usd_cash' || fixedPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
                     <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'eur_cash' ? (
                     <span>≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
-                  ) : fixedPaymentMode === 'ves_bcv' ? (
-                    <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'ves_euro' ? (
-                    <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)}) • ≈ €{(fixedAmount / bcvEur).toFixed(2)} EUR</span>
+                    <span>≈ Bs. {(fixedAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD</span>
                   ) : fixedPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
-                    <span>≈ ${(fixedAmount / parallelUsd).toFixed(2)} USD (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {(fixedAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'ves_fixed' ? (
                     <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'other' && rates?.bcvDollar ? (
@@ -1035,10 +1074,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* 5. Distribución de Sueldo con botones compactos */}
+              {/* 5. Distribución de Sueldo (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Distribución de Sueldo
+                  Distribución de Sueldo <span className="text-red-400">*</span>
                 </label>
                 <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
                   {[
@@ -1066,19 +1105,19 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
                 {fixedFortnight === 'split' && fixedAmount > 0 && (
                   <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
-                    💡 Cobrarás {(fixedAmount / 2).toFixed(2)} el día 15 y {(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: {fixedAmount.toFixed(2)}).
+                    💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).
                   </p>
                 )}
               </div>
 
-              {/* 6. Notas */}
+              {/* 6. Notas (Opcional) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Notas
                 </label>
                 <input
                   type="text"
-                  placeholder="Detalles adicionales..."
+                  placeholder="Detalles adicionales (opcional)..."
                   value={fixedNotes}
                   onChange={(e) => setFixedNotes(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -1115,10 +1154,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             </h3>
 
             <form onSubmit={handleSaveVar} className="space-y-3.5">
-              {/* 1. Nombre del Ingreso Extra */}
+              {/* 1. Nombre del Ingreso Extra (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Nombre del Ingreso Extra
+                  Nombre del Ingreso Extra <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -1130,10 +1169,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 />
               </div>
 
-              {/* 2. Categoría: Custom Styled Dropdown con Iconos Lucide */}
+              {/* 2. Categoría (Obligatorio) */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Categoría
+                  Categoría <span className="text-red-400">*</span>
                 </label>
                 <button
                   type="button"
@@ -1199,10 +1238,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* 3. Forma de Cobro: Custom Styled Dropdown con las 7 opciones exactas */}
+              {/* 3. Forma de Cobro (Obligatorio) */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Forma de Cobro
+                  Forma de Cobro <span className="text-red-400">*</span>
                 </label>
                 <button
                   type="button"
@@ -1252,7 +1291,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* 4. Monto con conversiones dinámicas */}
+              {/* 4. Monto (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   {varPaymentMode === 'usd_cash'
@@ -1260,22 +1299,22 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                     : varPaymentMode === 'eur_cash'
                     ? 'Monto en Euros (€ EUR)'
                     : varPaymentMode === 'ves_bcv'
-                    ? 'Monto en Bolívares (DOLAR TASA BCV)'
+                    ? 'Monto en Dólares ($ a Tasa BCV)'
                     : varPaymentMode === 'ves_euro'
-                    ? 'Monto en Bolívares (EURO TASA BCV)'
+                    ? 'Monto en Euros (€ a Tasa BCV)'
                     : varPaymentMode === 'ves_parallel'
-                    ? 'Monto en Bolívares (DOLAR PROMEDIO)'
+                    ? 'Monto en Dólares ($ a Tasa Promedio)'
                     : varPaymentMode === 'ves_fixed'
                     ? 'Monto Fijo en Bolívares (Bs.)'
-                    : 'Monto ($ USD u Otra Divisa)'}
+                    : 'Monto ($ USD u Otra Divisa)'} <span className="text-red-400">*</span>
                 </label>
                 <MoneyInput
                   value={varAmount}
                   onChange={setVarAmount}
                   currencySymbol={
-                    varPaymentMode === 'eur_cash'
+                    varPaymentMode === 'eur_cash' || varPaymentMode === 'ves_euro'
                       ? '€'
-                      : varPaymentMode === 'ves_bcv' || varPaymentMode === 'ves_euro' || varPaymentMode === 'ves_parallel' || varPaymentMode === 'ves_fixed'
+                      : varPaymentMode === 'ves_fixed'
                       ? 'Bs'
                       : '$'
                   }
@@ -1286,16 +1325,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
-                  {varPaymentMode === 'usd_cash' && rates?.bcvDollar ? (
+                  {(varPaymentMode === 'usd_cash' || varPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
                     <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'eur_cash' ? (
                     <span>≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
-                  ) : varPaymentMode === 'ves_bcv' ? (
-                    <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'ves_euro' ? (
-                    <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Tasa BCV: {bcvUsd.toFixed(2)}) • ≈ €{(varAmount / bcvEur).toFixed(2)} EUR</span>
+                    <span>≈ Bs. {(varAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD</span>
                   ) : varPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
-                    <span>≈ ${(varAmount / parallelUsd).toFixed(2)} USD (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {(varAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'ves_fixed' ? (
                     <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'other' && rates?.bcvDollar ? (
@@ -1304,10 +1341,10 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* 5. Quincena Asignada */}
+              {/* 5. Quincena Asignada (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Quincena Asignada
+                  Quincena Asignada <span className="text-red-400">*</span>
                 </label>
                 <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-2xl border border-app">
                   {[
@@ -1330,7 +1367,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* 6. Cuenta Destino: Custom Styled Dropdown */}
+              {/* 6. Cuenta Destino: Custom Styled Dropdown (Opcional) */}
               <div className="relative">
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Cuenta Destino (Opcional)
@@ -1438,14 +1475,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 )}
               </div>
 
-              {/* 7. Notas */}
+              {/* 7. Notas (Opcional) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Notas
                 </label>
                 <input
                   type="text"
-                  placeholder="Detalles adicionales..."
+                  placeholder="Detalles adicionales (opcional)..."
                   value={varNotes}
                   onChange={(e) => setVarNotes(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -1494,7 +1531,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
             <form onSubmit={handleQuickCreateAccount} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Nombre de la Cuenta
+                  Nombre de la Cuenta <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
