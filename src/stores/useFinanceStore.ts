@@ -368,6 +368,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         ...v,
         id: ensureValidUuid(v.id),
         description: v.description || v.name || 'Ingreso Variable',
+        fortnight: (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1',
         sync_status: 'synced',
       }));
       const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
@@ -536,6 +537,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
             ...newRow,
             id: ensureValidUuid(newRow.id),
             description: newRow.description || newRow.name || 'Ingreso Variable',
+            fortnight: (newRow.quincena === 30 || newRow.fortnight === 'q2' || newRow.quincena === '30') ? 'q2' : 'q1',
             sync_status: 'synced',
           };
           set((s) => ({
@@ -1024,8 +1026,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.variable_incomes.put(record);
 
-    const { sync_status, category_id, description, ...payload } = record as any;
+    const { sync_status, category_id, description, fortnight, ...payload } = record as any;
     payload.name = record.description;
+    payload.quincena = record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30;
     if (!payload.account_id) delete (payload as any).account_id;
     console.log('[Supabase Variable Incomes Payload]:', payload);
 

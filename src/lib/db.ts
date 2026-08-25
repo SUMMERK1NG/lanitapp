@@ -514,6 +514,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
         ...v,
         id: ensureValidUuid(v.id),
         description: v.description || v.name || 'Ingreso Variable',
+        fortnight: (v.quincena === 30 || v.fortnight === 'q2' || v.quincena === '30') ? 'q2' : 'q1',
         sync_status: 'synced',
       })));
     }
@@ -621,11 +622,12 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Variables
     const pendingVarIncomes = await db.variable_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingVarIncomes.filter((v) => !v.user_id || v.user_id === targetUid)) {
-      const { sync_status, category_id, description, ...rest } = item as any;
+      const { sync_status, category_id, description, fortnight, ...rest } = item as any;
       if (!rest.account_id) delete rest.account_id;
       const { error } = await supabase.from('variable_incomes').upsert({
         ...rest,
         name: item.description || (item as any).name || 'Ingreso Variable',
+        quincena: item.fortnight === 'q1' || (item.fortnight as any) === 15 ? 15 : 30,
         user_id: targetUid,
         amount: Number(item.amount),
       });
@@ -844,6 +846,8 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                 await db.variable_incomes.put({
                   ...newRow,
                   id: ensureValidUuid(newRow.id),
+                  description: newRow.description || newRow.name || 'Ingreso Variable',
+                  fortnight: (newRow.quincena === 30 || newRow.fortnight === 'q2' || newRow.quincena === '30') ? 'q2' : 'q1',
                   sync_status: 'synced' as SyncStatus,
                 });
               } else if (tableName === 'incomes') {
@@ -1370,8 +1374,9 @@ export async function saveVariableIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, category_id, description, ...varPayload } = record as any;
+      const { sync_status, category_id, description, fortnight, ...varPayload } = record as any;
       varPayload.name = record.description;
+      varPayload.quincena = record.fortnight === 'q1' || (record.fortnight as any) === 15 ? 15 : 30;
       if (!varPayload.account_id) delete varPayload.account_id;
       const { error } = await supabase.from('variable_incomes').upsert(varPayload);
       if (!error) {
