@@ -64,6 +64,12 @@ export function useAuth() {
               localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
               localStorage.setItem('user_role', role);
               localStorage.setItem('user_avatar', avatarResolved);
+              if (userProfile.theme_mode) {
+                localStorage.setItem('lanitapp_theme_mode', userProfile.theme_mode);
+              }
+              if (userProfile.accent_color) {
+                localStorage.setItem('lanitapp_accent_color', userProfile.accent_color);
+              }
               setCurrentUser(userProfile);
               setLoading(false);
               return;
@@ -522,19 +528,42 @@ export function useAuth() {
     localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updated));
     setCurrentUser(updated);
 
+    if (updates.theme_mode) {
+      localStorage.setItem('lanitapp_theme_mode', updates.theme_mode);
+    }
+    if (updates.accent_color) {
+      localStorage.setItem('lanitapp_accent_color', updates.accent_color);
+    }
+
     if (isSupabaseConfigured() && supabase && navigator.onLine) {
       try {
-        const updatePayload = {
+        const updatePayload: any = {
           email: currentUser.email || `${currentUser.id}@lanitapp.local`,
           first_name: updated.first_name || updated.name?.split(' ')[0] || '',
           last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
+          avatar: updated.avatar || '👑',
+          avatar_url: updated.avatar_url || updated.avatar || '👑',
+          theme_mode: updated.theme_mode || 'navy',
+          accent_color: updated.accent_color || '#147DF0',
+          currency: updated.currency || 'USD',
           updated_at: new Date().toISOString(),
         };
         console.log('[Supabase Profiles Update Payload]:', updatePayload);
-        await supabase
+        const { error } = await supabase
           .from('profiles')
           .update(updatePayload)
           .eq('id', currentUser.id);
+
+        if (error) {
+          console.warn('[Supabase Profiles Update Notice]:', error.message);
+          const fallback = {
+            first_name: updated.first_name || updated.name?.split(' ')[0] || '',
+            last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
+            avatar: updated.avatar || '👑',
+            updated_at: new Date().toISOString(),
+          };
+          await supabase.from('profiles').update(fallback).eq('id', currentUser.id);
+        }
       } catch (e) {
         console.warn('Sync profile err:', e);
       }

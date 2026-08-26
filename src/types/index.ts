@@ -101,6 +101,7 @@ export interface FixedIncome {
   is_active: boolean;
   notes?: string;
   sync_status: SyncStatus;
+  created_at?: string;
 }
 
 export interface MonthlyFixedIncomeOverride {
@@ -154,6 +155,7 @@ export interface FixedExpense {
   assumed_by_third_party?: boolean;
   notes?: string;
   sync_status: SyncStatus;
+  created_at?: string;
 }
 
 export interface MonthlyFixedOverride {
@@ -166,6 +168,25 @@ export interface MonthlyFixedOverride {
   assumed_by_third_party?: boolean;
   notes?: string;
   sync_status: SyncStatus;
+}
+
+export interface VariableExpense {
+  id: string;
+  user_id?: string;
+  description: string;
+  amount: number; // in USD
+  original_amount?: number;
+  payment_mode?: FixedExpensePaymentMode;
+  year: number;
+  month: number; // 0-11
+  fortnight: FortnightType; // 'q1' (15) o 'q2' (30)
+  category_id?: string;
+  account_id?: string;
+  currency: string;
+  notes?: string;
+  sync_status: SyncStatus;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Debt {

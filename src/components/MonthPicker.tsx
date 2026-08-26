@@ -80,28 +80,28 @@ export const MonthPicker: React.FC<MonthPickerProps> = ({
       {isDropdownOpen && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setIsDropdownOpen(false)} />
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl w-64 animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-40 bg-surface border border-app rounded-2xl p-3 shadow-2xl w-64 animate-in fade-in zoom-in-95 duration-150">
             {/* Selector de Año */}
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+            <div className="flex items-center justify-between mb-2 pb-2 border-b border-app">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(Math.max(2020, selectedYear - 1), selectedMonth);
                 }}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
                 title="Año anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-bold text-white">{selectedYear}</span>
+              <span className="text-sm font-black text-app">{selectedYear}</span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(selectedYear + 1, selectedMonth);
                 }}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
                 title="Año siguiente"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -119,10 +119,10 @@ export const MonthPicker: React.FC<MonthPickerProps> = ({
                     onChange(selectedYear, idx);
                     setIsDropdownOpen(false);
                   }}
-                  className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
                     selectedMonth === idx
-                      ? 'bg-primary-custom text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-primary-custom text-white shadow-md font-black'
+                      : 'text-muted hover:bg-card hover:text-app'
                   }`}
                 >
                   {month.substring(0, 3)}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Receipt,
   Plus,
@@ -7,56 +7,98 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
+  Layers,
+  Sparkles,
+  X,
 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
-import type { FixedExpense, MonthlyFixedOverride, Category, ExchangeRatesData, FixedExpensePaymentMode } from '../types/index.ts';
-import { saveFixedExpense, deleteFixedExpense, toggleMonthlyFixedOverride } from '../lib/db.ts';
+import type {
+  FixedExpense,
+  MonthlyFixedOverride,
+  VariableExpense,
+  Category,
+  Account,
+  AccountType,
+  FortnightType,
+  ExchangeRatesData,
+  FixedExpensePaymentMode,
+} from '../types/index.ts';
+import {
+  saveFixedExpense,
+  deleteFixedExpense,
+  toggleMonthlyFixedOverride,
+  saveVariableExpense,
+  deleteVariableExpense,
+  saveAccount,
+} from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 
-const iconMap: Record<string, any> = {
-  film: LucideIcons.Film,
-  briefcase: LucideIcons.Briefcase,
-  car: LucideIcons.Car,
-  home: LucideIcons.Home,
-  'heart-pulse': LucideIcons.HeartPulse,
-  wallet: LucideIcons.Wallet,
-  TrendingUp: LucideIcons.TrendingUp,
-  CreditCard: LucideIcons.CreditCard,
-  Laptop: LucideIcons.Laptop,
-  ShoppingCart: LucideIcons.ShoppingCart,
-  Clock: LucideIcons.Clock,
-  HeartPulse: LucideIcons.HeartPulse,
-  MoreHorizontal: LucideIcons.MoreHorizontal,
-  PiggyBank: LucideIcons.PiggyBank,
-  DollarSign: LucideIcons.DollarSign,
-  Target: LucideIcons.Target,
-  UtensilsCrossed: LucideIcons.UtensilsCrossed,
-  Wifi: LucideIcons.Wifi,
-  Film: LucideIcons.Film,
-  Briefcase: LucideIcons.Briefcase,
-  Car: LucideIcons.Car,
-  Home: LucideIcons.Home,
-  Wallet: LucideIcons.Wallet,
-  Tag: LucideIcons.Tag,
-};
-
-const renderIcon = (iconName?: string) => {
-  if (!iconName) return <LucideIcons.DollarSign className="w-4 h-4" />;
-  const IconComponent =
-    iconMap[iconName] ||
-    iconMap[iconName.toLowerCase()] ||
-    (LucideIcons as Record<string, any>)[iconName] ||
-    LucideIcons.DollarSign;
-  return <IconComponent className="w-4 h-4" />;
-};
+export const PAYMENT_MODES_LIST: {
+  id: FixedExpensePaymentMode;
+  label: string;
+  sub: string;
+  badge: string;
+  badgeColor: string;
+  borderColor: string;
+}[] = [
+  {
+    id: 'usd_cash',
+    label: 'Efectivo / Divisas ($)',
+    sub: 'Monto fijo exacto en USD',
+    badge: 'CASH USD',
+    badgeColor: 'text-[#147DF0] bg-[#147DF0]/10 border-[#147DF0]/30',
+    borderColor: 'border-[#147DF0]',
+  },
+  {
+    id: 'ves_bcv',
+    label: 'Tasa BCV Oficial',
+    sub: 'Indexado a tasa oficial del día',
+    badge: 'BCV USD',
+    badgeColor: 'text-[#147DF0] bg-[#147DF0]/10 border-[#147DF0]/30',
+    borderColor: 'border-[#147DF0]',
+  },
+  {
+    id: 'ves_parallel',
+    label: 'Tasa Promedio',
+    sub: 'Indexado a cotización promedio',
+    badge: 'PROMEDIO USD',
+    badgeColor: 'text-[#FF914D] bg-[#FF914D]/10 border-[#FF914D]/30',
+    borderColor: 'border-[#FF914D]',
+  },
+  {
+    id: 'ves_euro',
+    label: 'Tasa Euro BCV',
+    sub: 'Indexado a Euro BCV',
+    badge: 'BCV EUR',
+    badgeColor: 'text-[#00C2C7] bg-[#00C2C7]/10 border-[#00C2C7]/30',
+    borderColor: 'border-[#00C2C7]',
+  },
+  {
+    id: 'eur_cash',
+    label: 'Efectivo (€)',
+    sub: 'Monto en Euros',
+    badge: 'CASH EUR',
+    badgeColor: 'text-[#00C2C7] bg-[#00C2C7]/10 border-[#00C2C7]/30',
+    borderColor: 'border-[#00C2C7]',
+  },
+  {
+    id: 'ves_fixed',
+    label: 'Bolívares Fijos (Bs.)',
+    sub: 'Monto fijo en moneda local',
+    badge: 'BS FIJO',
+    badgeColor: 'text-[#10B981] bg-[#10B981]/10 border-[#10B981]/30',
+    borderColor: 'border-[#10B981]',
+  },
+];
 
 interface FixedExpensesModuleProps {
   fixedExpenses: FixedExpense[];
+  variableExpenses?: VariableExpense[];
   monthlyOverrides: MonthlyFixedOverride[];
   categories: Category[];
+  accounts?: Account[];
   selectedYear: number;
   selectedMonth: number;
   onChangePeriod: (year: number, month: number) => void;
@@ -71,657 +113,1115 @@ const MONTH_NAMES = [
 
 export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   fixedExpenses,
+  variableExpenses = [],
   monthlyOverrides,
   categories,
+  accounts = [],
   selectedYear,
   selectedMonth,
   onChangePeriod,
   rates,
-  currency = '$',
 }) => {
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState<boolean>(false);
-  const [isPaymentDropdownOpen, setIsPaymentDropdownOpen] = useState<boolean>(false);
-  const [editingExpense, setEditingExpense] = useState<FixedExpense | null>(null);
-
-  // Form states
-  const [name, setName] = useState<string>('');
-  const [amount, setAmount] = useState<number>(0);
-  const [paymentMode, setPaymentMode] = useState<FixedExpensePaymentMode>('ves_bcv');
-  const [defaultFortnight, setDefaultFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
-  const [categoryId, setCategoryId] = useState<string>('cat_services');
-  const [notes, setNotes] = useState<string>('');
-
-  const expenseCategories = categories.filter((c) => c.type === 'expense');
+  const [activeTab, setActiveTab] = useState<'fixed' | 'variable'>('fixed');
 
   const bcvUsd = rates?.bcvDollar && rates.bcvDollar > 0 ? rates.bcvDollar : 1;
   const bcvEur = rates?.bcvEuro && rates.bcvEuro > 0 ? rates.bcvEuro : 1;
-  const parallelUsd = rates?.parallelDollar && rates.parallelDollar > 0 ? rates.parallelDollar : bcvUsd;
 
-  // Map monthly overrides
-  const overrideMap = new Map(
-    monthlyOverrides
-      .filter((o) => o.year === selectedYear && o.month === selectedMonth)
-      .map((o) => [o.fixed_expense_id, o])
+  // Fixed Expense Modal states
+  const [isFixedModalOpen, setIsFixedModalOpen] = useState<boolean>(false);
+  const [editingFixed, setEditingFixed] = useState<FixedExpense | null>(null);
+  const [fixedName, setFixedName] = useState<string>('');
+  const [fixedAmount, setFixedAmount] = useState<number>(0);
+  const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('ves_bcv');
+  const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
+  const [fixedCategoryId, setFixedCategoryId] = useState<string>('cat_services');
+  const [fixedNotes, setNotes] = useState<string>('');
+  const [isFixedCategoryDropdownOpen, setIsFixedCategoryDropdownOpen] = useState<boolean>(false);
+  const [isFixedPaymentDropdownOpen, setIsFixedPaymentDropdownOpen] = useState<boolean>(false);
+
+  // Variable Expense Modal states
+  const [isVarModalOpen, setIsVarModalOpen] = useState<boolean>(false);
+  const [editingVar, setEditingVar] = useState<VariableExpense | null>(null);
+  const [varDescription, setVarDescription] = useState<string>('');
+  const [varAmount, setVarAmount] = useState<number>(0);
+  const [varPaymentMode, setVarPaymentMode] = useState<FixedExpensePaymentMode>('usd_cash');
+  const [varFortnight, setVarFortnight] = useState<FortnightType>('q1');
+  const [varCategoryId, setVarCategoryId] = useState<string>('cat_food');
+  const [varAccountId, setVarAccountId] = useState<string>('');
+  const [varNotes, setVarNotes] = useState<string>('');
+  const [isVarCategoryDropdownOpen, setIsVarCategoryDropdownOpen] = useState<boolean>(false);
+  const [isVarPaymentDropdownOpen, setIsVarPaymentDropdownOpen] = useState<boolean>(false);
+
+  // Quick Account Creation
+  const [isQuickAccountModalOpen, setIsQuickAccountModalOpen] = useState<boolean>(false);
+  const [newAccountName, setNewAccountName] = useState<string>('');
+  const [newAccountType] = useState<AccountType>('cash');
+  const [newAccountCurrency, setNewAccountCurrency] = useState<'USD' | 'VES' | 'EUR'>('USD');
+  const [newAccountBalance, setNewAccountBalance] = useState<number>(0);
+  const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
+
+  const expenseCategories = categories.filter((c) => c.type === 'expense');
+
+  // --- FIXED EXPENSES CALCULATIONS ---
+  const overrideMap = useMemo(() => {
+    return new Map(
+      monthlyOverrides
+        .filter((o) => o.year === selectedYear && o.month === selectedMonth)
+        .map((o) => [o.fixed_expense_id, o])
+    );
+  }, [monthlyOverrides, selectedYear, selectedMonth]);
+
+  const processedFixedExpenses = useMemo(() => {
+    return fixedExpenses.map((fe) => {
+      const override = overrideMap.get(fe.id);
+      const isActive = override?.is_active !== undefined ? override.is_active : fe.is_active;
+
+      let mode: FixedExpensePaymentMode = fe.payment_mode || 'ves_bcv';
+      if (mode === 'cash') mode = 'usd_cash';
+      else if (mode === 'bcv_usd') mode = 'ves_bcv';
+      else if (mode === 'fixed_ves') mode = 'ves_fixed';
+      else if (mode === 'bcv_eur') mode = 'ves_euro';
+      else if (mode === 'parallel_ves') mode = 'ves_parallel';
+
+      const rawCurrency = fe.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'eur_cash' || mode === 'ves_euro' ? 'EUR' : 'USD');
+      const origAmt = fe.original_amount !== undefined ? fe.original_amount : fe.amount;
+
+      let usdEquivalent = 0;
+      if (mode === 'ves_fixed') {
+        usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
+      } else if (rawCurrency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
+        usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
+      } else {
+        usdEquivalent = Number(origAmt.toFixed(2));
+      }
+
+      const finalAmountUSD = override?.custom_amount !== undefined ? override.custom_amount : usdEquivalent;
+
+      return {
+        ...fe,
+        computedIsActive: isActive,
+        computedMode: mode,
+        computedOriginalAmount: origAmt,
+        computedUsdEquivalent: finalAmountUSD,
+        appliedCurrency: rawCurrency,
+      };
+    });
+  }, [fixedExpenses, overrideMap, bcvUsd, bcvEur]);
+
+  const activeFixedExpenses = processedFixedExpenses.filter((e) => e.computedIsActive);
+
+  const totalFixedMonth = activeFixedExpenses.reduce(
+    (acc, cur) => acc + (cur.default_fortnight === 'both' ? cur.computedUsdEquivalent * 2 : cur.computedUsdEquivalent),
+    0
   );
 
-  // Compute active costs for this month
-  const processedExpenses = fixedExpenses.map((fe) => {
-    const override = overrideMap.get(fe.id);
-    const isActive = override?.is_active !== undefined ? override.is_active : fe.is_active;
-    const isAssumed = override?.assumed_by_third_party !== undefined ? override.assumed_by_third_party : (fe.assumed_by_third_party || false);
+  const q1Fixed = activeFixedExpenses
+    .filter((e) => e.default_fortnight === 'q1' || e.default_fortnight === 'both')
+    .reduce((acc, cur) => acc + cur.computedUsdEquivalent, 0);
 
-    // Normalize payment mode
-    let mode: FixedExpensePaymentMode = fe.payment_mode || 'ves_bcv';
-    if (mode === 'bcv_usd') mode = 'ves_bcv';
-    else if (mode === 'fixed_ves') mode = 'ves_fixed';
-    else if (mode === 'cash') mode = 'usd_cash';
-    else if (mode === 'bcv_eur') mode = 'ves_euro';
-    else if (mode === 'parallel_ves') mode = 'ves_parallel';
+  const q2Fixed = activeFixedExpenses
+    .filter((e) => e.default_fortnight === 'q2' || e.default_fortnight === 'both')
+    .reduce((acc, cur) => acc + cur.computedUsdEquivalent, 0);
 
-    const rawCurrency = fe.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'eur_cash' || mode === 'ves_euro' ? 'EUR' : 'USD');
-    const origAmt = fe.original_amount !== undefined ? fe.original_amount : (fe.amount_in_ves !== undefined ? fe.amount_in_ves : fe.amount);
+  // --- VARIABLE EXPENSES CALCULATIONS ---
+  const currentMonthVarExpenses = useMemo(() => {
+    return variableExpenses.filter((v) => v.year === selectedYear && v.month === selectedMonth);
+  }, [variableExpenses, selectedYear, selectedMonth]);
 
-    // Compute USD amount (for calculation & balance)
-    let usdEquivalent = 0;
-    if (mode === 'ves_fixed') {
-      usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
-    } else if (rawCurrency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
-      usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
+  const processedVarExpenses = useMemo(() => {
+    return currentMonthVarExpenses.map((ve) => {
+      let mode: FixedExpensePaymentMode = ve.payment_mode || 'usd_cash';
+      const origAmt = ve.original_amount !== undefined ? ve.original_amount : ve.amount;
+      let usdEquivalent = 0;
+
+      if (mode === 'ves_fixed') {
+        usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
+      } else if (ve.currency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
+        usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
+      } else {
+        usdEquivalent = Number(origAmt.toFixed(2));
+      }
+
+      return {
+        ...ve,
+        computedMode: mode,
+        computedOriginalAmount: origAmt,
+        computedUsdEquivalent: usdEquivalent,
+      };
+    });
+  }, [currentMonthVarExpenses, bcvUsd, bcvEur]);
+
+  const totalVarMonth = processedVarExpenses.reduce((acc, cur) => acc + cur.computedUsdEquivalent, 0);
+  const q1Var = processedVarExpenses.filter((v) => v.fortnight === 'q1').reduce((acc, cur) => acc + cur.computedUsdEquivalent, 0);
+  const q2Var = processedVarExpenses.filter((v) => v.fortnight === 'q2').reduce((acc, cur) => acc + cur.computedUsdEquivalent, 0);
+
+  // Open Fixed Expense Modal
+  const handleOpenFixedModal = (expense?: FixedExpense) => {
+    if (expense) {
+      setEditingFixed(expense);
+      setFixedName(expense.name);
+      setFixedAmount(expense.original_amount !== undefined ? expense.original_amount : expense.amount);
+      setFixedPaymentMode(expense.payment_mode || 'ves_bcv');
+      setFixedFortnight(expense.default_fortnight || 'q1');
+      setFixedCategoryId(expense.category_id || 'cat_services');
+      setNotes(expense.notes || '');
     } else {
-      // usd_cash, ves_bcv, ves_parallel, other are entered in USD!
-      usdEquivalent = Number(origAmt.toFixed(2));
+      setEditingFixed(null);
+      setFixedName('');
+      setFixedAmount(0);
+      setFixedPaymentMode('ves_bcv');
+      setFixedFortnight('q1');
+      setFixedCategoryId('cat_services');
+      setNotes('');
     }
-
-    const finalAmountUSD = override?.custom_amount !== undefined ? override.custom_amount : usdEquivalent;
-
-    return {
-      ...fe,
-      payment_mode: mode,
-      currency: rawCurrency,
-      original_amount: origAmt,
-      amount_usd: finalAmountUSD,
-      isActive,
-      finalAmount: finalAmountUSD,
-      isAssumed,
-    };
-  });
-
-  const totalMonthlyCommitment = processedExpenses
-    .filter((e) => e.isActive && !e.isAssumed)
-    .reduce((sum, e) => sum + e.finalAmount, 0);
-
-  const q1Commitment = processedExpenses
-    .filter((e) => e.isActive && !e.isAssumed && (e.default_fortnight === 'q1' || e.default_fortnight === 'both'))
-    .reduce((sum, e) => sum + e.finalAmount, 0);
-
-  const q2Commitment = processedExpenses
-    .filter((e) => e.isActive && !e.isAssumed && (e.default_fortnight === 'q2' || e.default_fortnight === 'both'))
-    .reduce((sum, e) => sum + e.finalAmount, 0);
-
-  const handleOpenAdd = () => {
-    setEditingExpense(null);
-    setName('');
-    setAmount(0);
-    setPaymentMode('usd_cash');
-    setDefaultFortnight('q1');
-    setCategoryId(expenseCategories[0]?.id || 'cat_services');
-    setNotes('');
-    setIsCategoryDropdownOpen(false);
-    setIsPaymentDropdownOpen(false);
-    setIsModalOpen(true);
+    setIsFixedCategoryDropdownOpen(false);
+    setIsFixedPaymentDropdownOpen(false);
+    setIsFixedModalOpen(true);
   };
 
-  const handleOpenEdit = (expense: typeof processedExpenses[0]) => {
-    setEditingExpense(expense);
-    setName(expense.name);
-    setPaymentMode(expense.payment_mode || 'usd_cash');
-    // Load exact original native amount (e.g. 70000 Bs, NOT 89.74 USD)
-    const exactOriginal = expense.original_amount !== undefined ? expense.original_amount : expense.finalAmount;
-    setAmount(exactOriginal || 0);
-    setDefaultFortnight(expense.default_fortnight);
-    setCategoryId(expense.category_id);
-    setNotes(expense.notes || '');
-    setIsCategoryDropdownOpen(false);
-    setIsPaymentDropdownOpen(false);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveFixed = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numInput = amount;
-    if (!name.trim() || isNaN(numInput) || numInput <= 0) return;
+    if (!fixedName.trim() || fixedAmount <= 0) return;
 
-    let finalAmountUSD = numInput;
-    let finalCurrency: 'USD' | 'VES' | 'EUR' = 'USD';
+    let derivedCurrency = 'USD';
+    if (fixedPaymentMode === 'ves_fixed') derivedCurrency = 'VES';
+    else if (fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro') derivedCurrency = 'EUR';
 
-    if (paymentMode === 'ves_fixed') {
-      finalCurrency = 'VES';
-      finalAmountUSD = Number((numInput / bcvUsd).toFixed(2));
-    } else if (paymentMode === 'eur_cash' || paymentMode === 'ves_euro') {
-      finalCurrency = 'EUR';
-      finalAmountUSD = Number(((numInput * bcvEur) / bcvUsd).toFixed(2));
-    } else {
-      // usd_cash, ves_bcv, ves_parallel, other are entered in USD!
-      finalCurrency = 'USD';
-      finalAmountUSD = Number(numInput.toFixed(2));
+    let usdEquivalent = fixedAmount;
+    if (fixedPaymentMode === 'ves_fixed') {
+      usdEquivalent = Number((fixedAmount / bcvUsd).toFixed(2));
+    } else if (derivedCurrency === 'EUR' || fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro') {
+      usdEquivalent = Number(((fixedAmount * bcvEur) / bcvUsd).toFixed(2));
     }
 
     await saveFixedExpense({
-      id: editingExpense?.id,
-      name: name.trim(),
-      amount: finalAmountUSD,
-      amount_usd: finalAmountUSD,
-      original_amount: numInput,
-      amount_in_ves: paymentMode === 'ves_fixed' ? numInput : undefined,
-      currency: finalCurrency,
-      payment_mode: paymentMode,
-      default_fortnight: defaultFortnight,
-      category_id: categoryId,
-      notes,
+      id: editingFixed ? editingFixed.id : undefined,
+      name: fixedName.trim(),
+      amount: usdEquivalent,
+      original_amount: fixedAmount,
+      currency: derivedCurrency,
+      payment_mode: fixedPaymentMode,
+      default_fortnight: fixedFortnight,
+      category_id: fixedCategoryId,
+      is_active: editingFixed ? editingFixed.is_active : true,
+      notes: fixedNotes.trim(),
     });
 
-    setIsModalOpen(false);
+    setIsFixedModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Seguro que deseas eliminar este gasto fijo?')) {
+  const handleDeleteFixed = async (id: string) => {
+    if (window.confirm('¿Seguro que deseas eliminar este gasto fijo recurrente?')) {
       await deleteFixedExpense(id);
     }
   };
 
-  const handleToggleActive = async (expense: typeof processedExpenses[0]) => {
-    await toggleMonthlyFixedOverride(
-      expense.id,
-      selectedYear,
-      selectedMonth,
-      !expense.isActive,
-      expense.finalAmount,
-      false
-    );
+  const handleToggleFixedActive = async (id: string, currentStatus: boolean) => {
+    await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, !currentStatus);
   };
 
-  const numEntered = amount;
+  // Open Variable Expense Modal
+  const handleOpenVarModal = (varExp?: VariableExpense) => {
+    if (varExp) {
+      setEditingVar(varExp);
+      setVarDescription(varExp.description);
+      setVarAmount(varExp.original_amount !== undefined ? varExp.original_amount : varExp.amount);
+      setVarPaymentMode(varExp.payment_mode || 'usd_cash');
+      setVarFortnight(varExp.fortnight || 'q1');
+      setVarCategoryId(varExp.category_id || 'cat_food');
+      setVarAccountId(varExp.account_id || '');
+      setVarNotes(varExp.notes || '');
+    } else {
+      setEditingVar(null);
+      setVarDescription('');
+      setVarAmount(0);
+      setVarPaymentMode('usd_cash');
+      setVarFortnight('q1');
+      setVarCategoryId('cat_food');
+      setVarAccountId(accounts.length > 0 ? accounts[0].id : '');
+      setVarNotes('');
+    }
+    setIsVarCategoryDropdownOpen(false);
+    setIsVarPaymentDropdownOpen(false);
+    setIsVarModalOpen(true);
+  };
+
+  const handleSaveVar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!varDescription.trim() || varAmount <= 0) return;
+
+    let derivedCurrency = 'USD';
+    if (varPaymentMode === 'ves_fixed') derivedCurrency = 'VES';
+    else if (varPaymentMode === 'eur_cash' || varPaymentMode === 'ves_euro') derivedCurrency = 'EUR';
+
+    let usdEquivalent = varAmount;
+    if (varPaymentMode === 'ves_fixed') {
+      usdEquivalent = Number((varAmount / bcvUsd).toFixed(2));
+    } else if (derivedCurrency === 'EUR' || varPaymentMode === 'eur_cash' || varPaymentMode === 'ves_euro') {
+      usdEquivalent = Number(((varAmount * bcvEur) / bcvUsd).toFixed(2));
+    }
+
+    await saveVariableExpense({
+      id: editingVar ? editingVar.id : undefined,
+      description: varDescription.trim(),
+      amount: usdEquivalent,
+      original_amount: varAmount,
+      currency: derivedCurrency,
+      payment_mode: varPaymentMode,
+      year: selectedYear,
+      month: selectedMonth,
+      fortnight: varFortnight,
+      category_id: varCategoryId,
+      account_id: varAccountId || undefined,
+      notes: varNotes.trim(),
+    });
+
+    setIsVarModalOpen(false);
+  };
+
+  const handleDeleteVar = async (id: string) => {
+    if (window.confirm('¿Seguro que deseas eliminar este gasto variable?')) {
+      await deleteVariableExpense(id);
+    }
+  };
+
+  // Quick Account Creator Handler
+  const handleQuickCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAccountName.trim()) return;
+    setIsCreatingAccount(true);
+    try {
+      const created = await saveAccount({
+        name: newAccountName.trim(),
+        type: newAccountType,
+        currency: newAccountCurrency,
+        initial_balance: newAccountBalance,
+      });
+      setVarAccountId(created.id);
+      setIsQuickAccountModalOpen(false);
+      setNewAccountName('');
+      setNewAccountBalance(0);
+    } catch (err: any) {
+      alert(`Error al crear cuenta: ${err.message}`);
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  };
 
   return (
-    <div className="space-y-4">
-      {/* Top Header & Period Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-3xl bg-surface border border-app shadow-md">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-              <Receipt className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold text-app">Gastos Fijos</h3>
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* 1. Header Toolbar with Month Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-surface border border-app shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+            <Receipt className="w-5 h-5" />
           </div>
-          <p className="text-xs text-muted mt-1">
-            Periodo: <strong>{MONTH_NAMES[selectedMonth]} {selectedYear}</strong> • Activa o pausa gastos para este período
-          </p>
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-app tracking-tight">
+              Gestión de Gastos
+            </h2>
+            <p className="text-xs text-muted">
+              Período: {MONTH_NAMES[selectedMonth]} {selectedYear} • Fijos y variables por quincena
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="flex items-center gap-3 self-end sm:self-center">
           <MonthPicker
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             onChange={onChangePeriod}
-            className="w-full sm:w-auto justify-between sm:justify-start"
           />
 
           <button
-            onClick={handleOpenAdd}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer shrink-0"
+            onClick={() => {
+              if (activeTab === 'fixed') handleOpenFixedModal();
+              else handleOpenVarModal();
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-lg hover:opacity-95 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Nuevo Gasto Fijo
+            <span>{activeTab === 'fixed' ? 'Nuevo Gasto Fijo' : 'Nuevo Gasto Variable'}</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Cards: Resumen de Compromisos del Mes con Conversión Dual */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
-        {/* Total General */}
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[11px] sm:text-xs font-semibold text-muted">Compromiso Total del Mes</span>
-          <p className="text-lg sm:text-2xl font-black text-app">
-            {currency}{totalMonthlyCommitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
-            ≈ Bs. {(totalMonthlyCommitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV)
-          </span>
-        </div>
-
-        {/* Quincena 15 */}
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[11px] sm:text-xs font-semibold text-[#00C2C7]">Quincena 15</span>
-          <p className="text-lg sm:text-2xl font-black text-[#00C2C7]">
-            {currency}{q1Commitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
-            ≈ Bs. {(q1Commitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        {/* Quincena 30 */}
-        <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[11px] sm:text-xs font-semibold text-[#FF914D]">Quincena 30</span>
-          <p className="text-lg sm:text-2xl font-black text-[#FF914D]">
-            {currency}{q2Commitment.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] sm:text-[11px] text-muted font-medium block">
-            ≈ Bs. {(q2Commitment * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      </div>
-
-      {/* List of Fixed Expenses */}
-      {processedExpenses.length === 0 ? (
-        <div className="p-8 rounded-3xl bg-surface border border-app text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-primary-custom/15 text-primary-custom flex items-center justify-center mx-auto">
-            <Receipt className="w-6 h-6" />
-          </div>
-          <h4 className="text-sm font-bold text-app">No hay gastos fijos registrados</h4>
-          <p className="text-xs text-muted max-w-sm mx-auto">
-            Crea tu plantilla recurrente de servicios, alquiler, suscripciones o compras mensuales.
-          </p>
+      {/* 2. Top Segmented Tab Switcher */}
+      <div className="flex items-center justify-center">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app w-full max-w-md shadow-inner">
           <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 cursor-pointer"
+            onClick={() => setActiveTab('fixed')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'fixed'
+                ? 'bg-primary-custom text-white shadow-md'
+                : 'text-muted hover:text-app'
+            }`}
           >
-            + Agregar Primer Gasto Fijo
+            <Layers className="w-3.5 h-3.5" />
+            <span>Gastos Fijos ({fixedExpenses.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('variable')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              activeTab === 'variable'
+                ? 'bg-primary-custom text-white shadow-md'
+                : 'text-muted hover:text-app'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Gastos Variables ({currentMonthVarExpenses.length})</span>
           </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {processedExpenses.map((expense) => {
-            const cat = categories.find((c) => c.id === expense.category_id);
-            const isVes = expense.currency === 'VES' || expense.payment_mode === 'ves_fixed' || expense.payment_mode === 'ves_bcv' || expense.payment_mode === 'ves_parallel' || expense.payment_mode === 'ves_euro';
-            const isEur = expense.currency === 'EUR' || expense.payment_mode === 'eur_cash';
+      </div>
 
-            return (
-              <div
-                key={expense.id}
-                className={`p-4 rounded-3xl border transition-all flex flex-col justify-between space-y-3 ${
-                  !expense.isActive
-                    ? 'bg-surface/50 border-app opacity-60'
-                    : expense.isAssumed
-                    ? 'bg-surface border-emerald-500/40 shadow-sm'
-                    : 'bg-surface border-app shadow-sm hover:border-primary-custom/50'
-                }`}
+      {/* 3. Metric KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Total Month Card */}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
+            {activeTab === 'fixed' ? 'Compromiso Total Fijo' : 'Total Gastos Variables'}
+          </span>
+          <p className="text-2xl sm:text-3xl font-black text-app">
+            ${formatCurrencyVE(activeTab === 'fixed' ? totalFixedMonth : totalVarMonth)}
+          </p>
+          <p className="text-[11px] text-muted truncate">
+            ≈ Bs. {formatCurrencyVE((activeTab === 'fixed' ? totalFixedMonth : totalVarMonth) * bcvUsd)} (Tasa BCV)
+          </p>
+        </div>
+
+        {/* Quincena 15 Card */}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
+            Quincena 15 (Q1)
+          </span>
+          <p className="text-2xl sm:text-3xl font-black text-[#00C2C7]">
+            ${formatCurrencyVE(activeTab === 'fixed' ? q1Fixed : q1Var)}
+          </p>
+          <p className="text-[11px] text-muted truncate">
+            ≈ Bs. {formatCurrencyVE((activeTab === 'fixed' ? q1Fixed : q1Var) * bcvUsd)}
+          </p>
+        </div>
+
+        {/* Quincena 30 Card */}
+        <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">
+            Quincena 30 (Q2)
+          </span>
+          <p className="text-2xl sm:text-3xl font-black text-[#FF914D]">
+            ${formatCurrencyVE(activeTab === 'fixed' ? q2Fixed : q2Var)}
+          </p>
+          <p className="text-[11px] text-muted truncate">
+            ≈ Bs. {formatCurrencyVE((activeTab === 'fixed' ? q2Fixed : q2Var) * bcvUsd)}
+          </p>
+        </div>
+      </div>
+
+      {/* ================================================================ */}
+      {/* TAB 1: GASTOS FIJOS (RECURRENTES) */}
+      {/* ================================================================ */}
+      {activeTab === 'fixed' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-app flex items-center gap-2">
+              <Layers className="w-4 h-4 text-primary-custom" />
+              <span>Plantilla de Gastos Fijos ({processedFixedExpenses.length})</span>
+            </h3>
+          </div>
+
+          {processedFixedExpenses.length === 0 ? (
+            <div className="p-10 rounded-3xl bg-surface border border-app text-center space-y-3">
+              <Receipt className="w-10 h-10 text-muted mx-auto opacity-40" />
+              <h4 className="text-sm font-bold text-app">No tienes gastos fijos registrados</h4>
+              <p className="text-xs text-muted max-w-md mx-auto">
+                Registra alquileres, servicios, membresías o compromisos fijos que se debitan automáticamente de tus quincenas.
+              </p>
+              <button
+                onClick={() => handleOpenFixedModal()}
+                className="px-4 py-2 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-md cursor-pointer"
               >
-                {/* Card Top: Icon, Name & Fortnight Tag + Currency-aware Dual Amount */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-sm"
-                      style={{ backgroundColor: cat?.color || '#147df0' }}
-                    >
-                      <CategoryIcon iconName={cat?.icon || 'Receipt'} className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-app line-clamp-1">{expense.name}</h4>
-                      <span className="text-[10px] text-muted font-medium block">
-                        {cat?.name || 'Varios'} •{' '}
-                        <strong className="text-app">
-                          {expense.default_fortnight === 'q1'
-                            ? 'Quincena 15'
-                            : expense.default_fortnight === 'q2'
-                            ? 'Quincena 30'
-                            : 'Ambas Quincenas'}
-                        </strong>
-                        {expense.payment_mode && (
-                          <span className="text-muted ml-1">
-                            • {expense.payment_mode === 'usd_cash' && '💵 CASH USD'}
-                            {expense.payment_mode === 'eur_cash' && '💶 CASH EURO'}
-                            {expense.payment_mode === 'ves_bcv' && '🏛️ DOLAR BCV'}
-                            {expense.payment_mode === 'ves_euro' && '🇪🇺 EURO BCV'}
-                            {expense.payment_mode === 'ves_parallel' && '⚡ DOLAR PROMEDIO'}
-                            {expense.payment_mode === 'ves_fixed' && '🇻🇪 Bolivar Fijo'}
-                            {expense.payment_mode === 'other' && '🌐 OTROS'}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
+                + Crear Primer Gasto Fijo
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {processedFixedExpenses.map((expense) => {
+                const cat = categories.find((c) => c.id === expense.category_id);
+                const modeObj = PAYMENT_MODES_LIST.find((m) => m.id === expense.computedMode) || PAYMENT_MODES_LIST[1];
+                const isBoth = expense.default_fortnight === 'both';
+                const fortnightLabel = isBoth
+                  ? 'Ambas Quincenas (15 y 30)'
+                  : expense.default_fortnight === 'q1'
+                  ? 'Quincena 15'
+                  : 'Quincena 30';
 
-                  {/* Dual Amount with Proper Hierarchy according to native currency */}
-                  <div className="text-right shrink-0">
-                    {isVes ? (
-                      <>
-                        <p className={`text-base font-black ${expense.isActive ? 'text-[#FF914D]' : 'text-muted'}`}>
-                          Bs. {expense.original_amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <span className="text-[11px] text-muted font-semibold block text-right">
-                          ≈ ${expense.amount_usd.toFixed(2)} USD
-                        </span>
-                      </>
-                    ) : isEur ? (
-                      <>
-                        <p className={`text-base font-black ${expense.isActive ? 'text-purple-400' : 'text-muted'}`}>
-                          € {expense.original_amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <span className="text-[11px] text-muted font-semibold block text-right">
-                          ≈ Bs. {(expense.original_amount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <p className={`text-base font-black ${expense.isActive ? 'text-app' : 'text-muted'}`}>
-                          ${expense.amount_usd.toFixed(2)}
-                        </p>
-                        <span className="text-[11px] text-muted font-semibold block text-right">
-                          ≈ Bs. {(expense.amount_usd * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Card Bottom: Switches & Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-app text-xs">
-                  {/* Switch Activar/Pausar este mes */}
-                  <button
-                    onClick={() => handleToggleActive(expense)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-                      expense.isActive
-                        ? 'bg-primary-custom/15 text-primary-custom hover:bg-primary-custom/25'
-                        : 'bg-card text-muted hover:text-app'
+                return (
+                  <div
+                    key={expense.id}
+                    className={`p-4 rounded-3xl border transition-all duration-200 shadow-sm ${
+                      expense.computedIsActive
+                        ? 'bg-surface border-app hover:border-primary-custom/40'
+                        : 'bg-card/40 border-app/40 opacity-60'
                     }`}
-                    title={expense.isActive ? 'Gasto activo este mes. Clic para pausar' : 'Gasto pausado este mes. Clic para activar'}
                   >
-                    {expense.isActive ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-primary-custom" />
-                    ) : (
-                      <XCircle className="w-3.5 h-3.5 text-muted" />
-                    )}
-                    <span>{expense.isActive ? 'Activo' : 'Pausado'}</span>
-                  </button>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2.5 truncate">
+                        <div
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-inner"
+                          style={{ backgroundColor: cat?.color || '#00C2C7' }}
+                        >
+                          <CategoryIcon iconName={cat?.icon || 'Receipt'} className="w-5 h-5" />
+                        </div>
+                        <div className="truncate">
+                          <h4 className="text-sm font-bold text-app truncate">{expense.name}</h4>
+                          <span className="text-[10px] text-muted truncate block">
+                            {cat?.name || 'General'} • {fortnightLabel}
+                          </span>
+                        </div>
+                      </div>
 
-                  {/* Actions: Edit & Delete */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenEdit(expense)}
-                      className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
-                      title="Editar regla base"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(expense.id)}
-                      className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
-                      title="Eliminar gasto fijo"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                      <div className="text-right shrink-0">
+                        <span className="text-base font-black text-app block">
+                          ${formatCurrencyVE(expense.computedUsdEquivalent)}
+                        </span>
+                        <span className="text-[10px] text-muted block">
+                          ≈ Bs. {formatCurrencyVE(expense.computedUsdEquivalent * bcvUsd)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-app text-xs">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${modeObj.badgeColor}`}>
+                        {modeObj.badge}
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleToggleFixedActive(expense.id, expense.computedIsActive)}
+                          className={`p-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            expense.computedIsActive
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                          }`}
+                          title={expense.computedIsActive ? 'Pausar este mes' : 'Activar este mes'}
+                        >
+                          {expense.computedIsActive ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenFixedModal(expense)}
+                          className="p-1.5 rounded-xl bg-card hover:bg-surface-hover text-app border border-app transition-all cursor-pointer"
+                          title="Editar gasto fijo"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-primary-custom" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteFixed(expense.id)}
+                          className="p-1.5 rounded-xl bg-card hover:bg-surface-hover text-rose-400 border border-app transition-all cursor-pointer"
+                          title="Eliminar gasto fijo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Add / Edit Fixed Expense Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
-            <h3 className="text-base font-bold mb-4">
-              {editingExpense ? 'Editar Gasto Fijo' : 'Nuevo Gasto Fijo Recurrente'}
+      {/* ================================================================ */}
+      {/* TAB 2: GASTOS VARIABLES (POR QUINCENA) */}
+      {/* ================================================================ */}
+      {activeTab === 'variable' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-app flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#FF914D]" />
+              <span>Gastos Variables de {MONTH_NAMES[selectedMonth]} ({processedVarExpenses.length})</span>
             </h3>
+          </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              {/* Nombre del Gasto */}
+          {processedVarExpenses.length === 0 ? (
+            <div className="p-10 rounded-3xl bg-surface border border-app text-center space-y-3">
+              <Sparkles className="w-10 h-10 text-muted mx-auto opacity-40" />
+              <h4 className="text-sm font-bold text-app">No hay gastos variables en este mes</h4>
+              <p className="text-xs text-muted max-w-md mx-auto">
+                Registra salidas a comer, compras del día o gastos extraordinarios asignados a la Quincena 15 o Quincena 30.
+              </p>
+              <button
+                onClick={() => handleOpenVarModal()}
+                className="px-4 py-2 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-md cursor-pointer"
+              >
+                + Registrar Gasto Variable
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {processedVarExpenses.map((vExp) => {
+                const cat = categories.find((c) => c.id === vExp.category_id);
+                const acc = accounts.find((a) => a.id === vExp.account_id);
+                const modeObj = PAYMENT_MODES_LIST.find((m) => m.id === vExp.computedMode) || PAYMENT_MODES_LIST[0];
+                const isQ1 = vExp.fortnight === 'q1';
+
+                return (
+                  <div
+                    key={vExp.id}
+                    className="p-4 rounded-3xl bg-surface border border-app hover:border-[#FF914D]/40 transition-all shadow-sm space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 truncate">
+                        <div
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-inner"
+                          style={{ backgroundColor: cat?.color || '#FF914D' }}
+                        >
+                          <CategoryIcon iconName={cat?.icon || 'ShoppingCart'} className="w-5 h-5" />
+                        </div>
+                        <div className="truncate">
+                          <h4 className="text-sm font-bold text-app truncate">{vExp.description}</h4>
+                          <span className="text-[10px] text-muted truncate block">
+                            {cat?.name || 'Comida / Ocio'} • {acc ? acc.name : 'Sin cuenta vinculada'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-base font-black text-[#FF914D] block">
+                          -${formatCurrencyVE(vExp.computedUsdEquivalent)}
+                        </span>
+                        <span className="text-[10px] text-muted block">
+                          ≈ Bs. {formatCurrencyVE(vExp.computedUsdEquivalent * bcvUsd)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-app text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${
+                          isQ1
+                            ? 'bg-[#00C2C7]/15 text-[#00C2C7] border-[#00C2C7]/30'
+                            : 'bg-[#FF914D]/15 text-[#FF914D] border-[#FF914D]/30'
+                        }`}>
+                          {isQ1 ? 'QUINCENA 15' : 'QUINCENA 30'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${modeObj.badgeColor}`}>
+                          {modeObj.badge}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenVarModal(vExp)}
+                          className="p-1.5 rounded-xl bg-card hover:bg-surface-hover text-app border border-app transition-all cursor-pointer"
+                          title="Editar gasto variable"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-primary-custom" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteVar(vExp.id)}
+                          className="p-1.5 rounded-xl bg-card hover:bg-surface-hover text-rose-400 border border-app transition-all cursor-pointer"
+                          title="Eliminar gasto variable"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* MODAL 1: NUEVO / EDITAR GASTO FIJO */}
+      {/* ================================================================ */}
+      {isFixedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-app">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-primary-custom" />
+                <h3 className="text-base font-black text-app">
+                  {editingFixed ? 'Editar Gasto Fijo' : 'Nuevo Gasto Fijo Recurrente'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsFixedModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFixed} className="space-y-4">
+              {/* Concepto / Nombre */}
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Nombre del Gasto
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Nombre del Gasto Fijo *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Alquiler, Moto, Netflix..."
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  value={fixedName}
+                  onChange={(e) => setFixedName(e.target.value)}
+                  placeholder="Ej. Alquiler de Apartamento, Fibra Óptica, Condominio..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              {/* Categoría: Custom Styled Dropdown */}
-              <div className="relative">
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Categoría de Gasto
+              {/* Monto & Moneda */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Monto del Compromiso *
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {(() => {
-                      const selectedCat = expenseCategories.find((c) => c.id === categoryId);
-                      if (selectedCat) {
-                        return (
-                          <>
-                            <span className="text-primary-custom flex items-center">{renderIcon(selectedCat.icon)}</span>
-                            <span className="truncate">{selectedCat.name}</span>
-                          </>
-                        );
-                      }
-                      return (
-                        <>
-                          <span className="text-primary-custom flex items-center">{renderIcon('Tag')}</span>
-                          <span className="truncate">Seleccionar categoría</span>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-                </button>
-
-                {isCategoryDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setIsCategoryDropdownOpen(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                      {expenseCategories && expenseCategories.length > 0 ? (
-                        expenseCategories.map((cat) => (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => {
-                              setCategoryId(cat.id);
-                              setIsCategoryDropdownOpen(false);
-                            }}
-                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                              categoryId === cat.id
-                                ? 'bg-primary-custom text-white shadow-sm'
-                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                            }`}
-                          >
-                            <span className={`flex items-center ${categoryId === cat.id ? 'text-white' : 'text-primary-custom'}`}>
-                              {renderIcon(cat.icon)}
-                            </span>
-                            <span className="truncate">{cat.name}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="p-2 text-xs text-slate-400 text-center">No hay categorías disponibles</div>
-                      )}
-                    </div>
-                  </>
-                )}
+                <MoneyInput
+                  value={fixedAmount}
+                  onChange={setFixedAmount}
+                  placeholder="0,00"
+                  currencySymbol={fixedPaymentMode === 'ves_fixed' ? 'Bs.' : fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro' ? '€' : '$'}
+                />
               </div>
 
-              {/* Forma de Pago: Custom Styled Dropdown */}
-              {/* Forma de Pago: Custom Styled Dropdown */}
-              <div className="relative">
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Forma de Pago
+              {/* Modalidad de Pago */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Modalidad de Pago
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setIsPaymentDropdownOpen(!isPaymentDropdownOpen)}
-                  className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {paymentMode === 'usd_cash' && <><span className="text-base">💵</span><span>CASH USD</span></>}
-                    {paymentMode === 'eur_cash' && <><span className="text-base">💶</span><span>CASH EURO</span></>}
-                    {paymentMode === 'ves_bcv' && <><span className="text-base">🏛️</span><span>DOLAR TASA BCV (BS)</span></>}
-                    {paymentMode === 'ves_euro' && <><span className="text-base">🇪🇺</span><span>EURO TASA BCV (BS)</span></>}
-                    {paymentMode === 'ves_parallel' && <><span className="text-base">⚡</span><span>DOLAR PROMEDIO (BS)</span></>}
-                    {paymentMode === 'ves_fixed' && <><span className="text-base">🇻🇪</span><span>BOLIVARES MONTO FIJO</span></>}
-                    {paymentMode === 'other' && <><span className="text-base">🌐</span><span>OTROS</span></>}
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-                </button>
-                {isPaymentDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setIsPaymentDropdownOpen(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-56 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                      {[
-                        { id: 'usd_cash' as const, icon: '💵', label: 'CASH USD' },
-                        { id: 'eur_cash' as const, icon: '💶', label: 'CASH EURO' },
-                        { id: 'ves_bcv' as const, icon: '🏛️', label: 'DOLAR TASA BCV (BS)' },
-                        { id: 'ves_euro' as const, icon: '🇪🇺', label: 'EURO TASA BCV (BS)' },
-                        { id: 'ves_parallel' as const, icon: '⚡', label: 'DOLAR PROMEDIO (BS)' },
-                        { id: 'ves_fixed' as const, icon: '🇻🇪', label: 'BOLIVARES MONTO FIJO' },
-                        { id: 'other' as const, icon: '🌐', label: 'OTROS' },
-                      ].map((opt) => (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsFixedPaymentDropdownOpen(!isFixedPaymentDropdownOpen)}
+                    className="w-full p-2.5 rounded-xl bg-card border border-app text-left flex items-center justify-between text-xs font-bold text-app cursor-pointer"
+                  >
+                    <span>{PAYMENT_MODES_LIST.find((m) => m.id === fixedPaymentMode)?.label}</span>
+                    <ChevronDown className="w-4 h-4 text-muted" />
+                  </button>
+
+                  {isFixedPaymentDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 p-1 rounded-2xl bg-surface border border-app shadow-2xl z-20 space-y-1">
+                      {PAYMENT_MODES_LIST.map((mode) => (
                         <button
-                          key={opt.id}
+                          key={mode.id}
                           type="button"
                           onClick={() => {
-                            setPaymentMode(opt.id);
-                            setIsPaymentDropdownOpen(false);
+                            setFixedPaymentMode(mode.id);
+                            setIsFixedPaymentDropdownOpen(false);
                           }}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
-                            paymentMode === opt.id
-                              ? 'bg-primary-custom text-white shadow-sm'
-                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          className={`w-full p-2 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
+                            fixedPaymentMode === mode.id
+                              ? 'bg-primary-custom text-white'
+                              : 'text-app hover:bg-card'
                           }`}
                         >
-                          <span className="text-base">{opt.icon}</span>
-                          <span className="truncate">{opt.label}</span>
+                          <div className="flex items-center justify-between">
+                            <span>{mode.label}</span>
+                            <span className="text-[10px] opacity-80">{mode.sub}</span>
+                          </div>
                         </button>
                       ))}
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* Monto con cálculo dinámico e inverso */}
+              {/* Quincena Habitual */}
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  {paymentMode === 'usd_cash'
-                    ? 'Monto en Dólares ($ USD)'
-                    : paymentMode === 'eur_cash'
-                    ? 'Monto en Euros (€ EUR)'
-                    : paymentMode === 'ves_bcv'
-                    ? 'Monto en Dólares ($ a Tasa BCV)'
-                    : paymentMode === 'ves_euro'
-                    ? 'Monto en Euros (€ a Tasa BCV)'
-                    : paymentMode === 'ves_parallel'
-                    ? 'Monto en Dólares ($ a Tasa Promedio)'
-                    : paymentMode === 'ves_fixed'
-                    ? 'Monto Fijo en Bolívares (Bs.)'
-                    : 'Monto ($ USD u Otra Divisa)'}
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Quincena de Pago
                 </label>
-                <MoneyInput
-                  value={amount}
-                  onChange={setAmount}
-                  currencySymbol={
-                    paymentMode === 'eur_cash' || paymentMode === 'ves_euro'
-                      ? '€'
-                      : paymentMode === 'ves_fixed'
-                      ? 'Bs'
-                      : '$'
-                  }
-                  placeholder="0,00"
-                  required
-                />
-
-                {/* Mensaje de conversión reactiva */}
-                {numEntered > 0 && (
-                  <div className="mt-1 text-[11px] text-muted font-medium">
-                    {(paymentMode === 'usd_cash' || paymentMode === 'ves_bcv') && rates?.bcvDollar ? (
-                      <span className="text-emerald-400">
-                        ≈ Bs. {formatCurrencyVE(numEntered * bcvUsd)} (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)})
-                      </span>
-                    ) : paymentMode === 'eur_cash' ? (
-                      <span className="text-purple-400">
-                        ≈ ${((numEntered * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})
-                      </span>
-                    ) : paymentMode === 'ves_euro' ? (
-                      <span className="text-purple-400">
-                        ≈ Bs. {formatCurrencyVE(numEntered * bcvEur)} (Tasa EUR BCV: Bs. {formatCurrencyVE(bcvEur)}) • ≈ ${((numEntered * bcvEur) / bcvUsd).toFixed(2)} USD
-                      </span>
-                    ) : paymentMode === 'ves_parallel' && rates?.parallelDollar ? (
-                      <span className="text-[#FF914D]">
-                        ≈ Bs. {formatCurrencyVE(numEntered * parallelUsd)} (Tasa Promedio: Bs. {formatCurrencyVE(parallelUsd)})
-                      </span>
-                    ) : paymentMode === 'ves_fixed' ? (
-                      <span className="text-[#00C2C7]">
-                        ≈ ${formatCurrencyVE(numEntered / bcvUsd)} USD (Ref. BCV: Bs. {formatCurrencyVE(bcvUsd)})
-                      </span>
-                    ) : (
-                      <span className="text-primary-custom">
-                        ≈ Bs. {formatCurrencyVE(numEntered * bcvUsd)} (Tasa BCV: Bs. {formatCurrencyVE(bcvUsd)})
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Nomenclatura de Quincenas: Quincena 15, Quincena 30, Ambas Quincenas */}
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Quincena Asignada
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-card rounded-xl border border-app">
+                <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: 'q1' as const, label: 'Quincena 15' },
                     { id: 'q2' as const, label: 'Quincena 30' },
-                    { id: 'both' as const, label: 'Ambas Quincenas' },
-                  ].map((opt) => (
+                    { id: 'both' as const, label: 'Ambas (15 y 30)' },
+                  ].map((item) => (
                     <button
-                      key={opt.id}
+                      key={item.id}
                       type="button"
-                      onClick={() => setDefaultFortnight(opt.id)}
-                      className={`py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer text-center truncate ${
-                        defaultFortnight === opt.id
-                          ? 'bg-primary-custom text-white shadow-sm'
-                          : 'text-muted hover:text-app'
+                      onClick={() => setFixedFortnight(item.id)}
+                      className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        fixedFortnight === item.id
+                          ? 'bg-primary-custom text-white border-primary-custom shadow-md'
+                          : 'bg-card text-muted border-app hover:text-app'
                       }`}
                     >
-                      {opt.label}
+                      {item.label}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Categoría */}
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Notas / Detalles
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Categoría
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsFixedCategoryDropdownOpen(!isFixedCategoryDropdownOpen)}
+                    className="w-full p-2.5 rounded-xl bg-card border border-app text-left flex items-center justify-between text-xs font-bold text-app cursor-pointer"
+                  >
+                    <span>{expenseCategories.find((c) => c.id === fixedCategoryId)?.name || 'Selecciona Categoría'}</span>
+                    <ChevronDown className="w-4 h-4 text-muted" />
+                  </button>
+
+                  {isFixedCategoryDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 p-1 rounded-2xl bg-surface border border-app shadow-2xl z-20 max-h-48 overflow-y-auto space-y-1">
+                      {expenseCategories.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setFixedCategoryId(cat.id);
+                            setIsFixedCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full p-2 rounded-xl text-left text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                            fixedCategoryId === cat.id
+                              ? 'bg-primary-custom text-white'
+                              : 'text-app hover:bg-card'
+                          }`}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                          <span>{cat.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Notas Adicionales
                 </label>
                 <input
                   type="text"
-                  placeholder="Detalles adicionales..."
-                  value={notes}
+                  value={fixedNotes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  placeholder="Detalles, número de contrato o recordatorios..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-3">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-app">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold transition-all cursor-pointer"
+                  onClick={() => setIsFixedModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card hover:bg-surface border border-app text-xs font-bold text-muted hover:text-app cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-primary-custom text-white text-xs font-black shadow-lg hover:opacity-95 cursor-pointer"
                 >
-                  {editingExpense ? 'Actualizar Gasto Fijo' : 'Guardar Gasto Fijo'}
+                  {editingFixed ? 'Actualizar Gasto Fijo' : 'Guardar Gasto Fijo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================ */}
+      {/* MODAL 2: NUEVO / EDITAR GASTO VARIABLE */}
+      {/* ================================================================ */}
+      {isVarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-app">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#FF914D]" />
+                <h3 className="text-base font-black text-app">
+                  {editingVar ? 'Editar Gasto Variable' : 'Nuevo Gasto Variable'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsVarModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveVar} className="space-y-4">
+              {/* Descripción */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Descripción del Gasto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={varDescription}
+                  onChange={(e) => setVarDescription(e.target.value)}
+                  placeholder="Ej. Salida a comer, Taxi, Compra de farmacia..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                />
+              </div>
+
+              {/* Monto & Moneda */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Monto *
+                </label>
+                <MoneyInput
+                  value={varAmount}
+                  onChange={setVarAmount}
+                  placeholder="0,00"
+                  currencySymbol={varPaymentMode === 'ves_fixed' ? 'Bs.' : varPaymentMode === 'eur_cash' || varPaymentMode === 'ves_euro' ? '€' : '$'}
+                />
+              </div>
+
+              {/* Quincena Asignada */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Descontar de Quincena
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVarFortnight('q1')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      varFortnight === 'q1'
+                        ? 'bg-[#00C2C7] text-white border-[#00C2C7] shadow-md'
+                        : 'bg-card text-muted border-app hover:text-app'
+                    }`}
+                  >
+                    Quincena 15 (Q1)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVarFortnight('q2')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      varFortnight === 'q2'
+                        ? 'bg-[#FF914D] text-white border-[#FF914D] shadow-md'
+                        : 'bg-card text-muted border-app hover:text-app'
+                    }`}
+                  >
+                    Quincena 30 (Q2)
+                  </button>
+                </div>
+              </div>
+
+              {/* Modalidad de Pago */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Modalidad de Pago
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsVarPaymentDropdownOpen(!isVarPaymentDropdownOpen)}
+                    className="w-full p-2.5 rounded-xl bg-card border border-app text-left flex items-center justify-between text-xs font-bold text-app cursor-pointer"
+                  >
+                    <span>{PAYMENT_MODES_LIST.find((m) => m.id === varPaymentMode)?.label}</span>
+                    <ChevronDown className="w-4 h-4 text-muted" />
+                  </button>
+
+                  {isVarPaymentDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 p-1 rounded-2xl bg-surface border border-app shadow-2xl z-20 space-y-1">
+                      {PAYMENT_MODES_LIST.map((mode) => (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => {
+                            setVarPaymentMode(mode.id);
+                            setIsVarPaymentDropdownOpen(false);
+                          }}
+                          className={`w-full p-2 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
+                            varPaymentMode === mode.id
+                              ? 'bg-primary-custom text-white'
+                              : 'text-app hover:bg-card'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{mode.label}</span>
+                            <span className="text-[10px] opacity-80">{mode.sub}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Categoría */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Categoría
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsVarCategoryDropdownOpen(!isVarCategoryDropdownOpen)}
+                    className="w-full p-2.5 rounded-xl bg-card border border-app text-left flex items-center justify-between text-xs font-bold text-app cursor-pointer"
+                  >
+                    <span>{expenseCategories.find((c) => c.id === varCategoryId)?.name || 'Selecciona Categoría'}</span>
+                    <ChevronDown className="w-4 h-4 text-muted" />
+                  </button>
+
+                  {isVarCategoryDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 p-1 rounded-2xl bg-surface border border-app shadow-2xl z-20 max-h-48 overflow-y-auto space-y-1">
+                      {expenseCategories.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setVarCategoryId(cat.id);
+                            setIsVarCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full p-2 rounded-xl text-left text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                            varCategoryId === cat.id
+                              ? 'bg-primary-custom text-white'
+                              : 'text-app hover:bg-card'
+                          }`}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                          <span>{cat.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cuenta de Origen (Opcional) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-muted">
+                    Cuenta / Fondo a debitar (Opcional)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickAccountModalOpen(true)}
+                    className="text-[10px] font-bold text-primary-custom hover:underline"
+                  >
+                    + Nueva Cuenta
+                  </button>
+                </div>
+
+                <select
+                  value={varAccountId}
+                  onChange={(e) => setVarAccountId(e.target.value)}
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs font-bold text-app focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
+                >
+                  <option value="">(Ninguna cuenta vinculada)</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.currency})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">
+                  Notas
+                </label>
+                <input
+                  type="text"
+                  value={varNotes}
+                  onChange={(e) => setVarNotes(e.target.value)}
+                  placeholder="Detalles opcionales..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-app">
+                <button
+                  type="button"
+                  onClick={() => setIsVarModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-card hover:bg-surface border border-app text-xs font-bold text-muted hover:text-app cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-primary-custom text-white text-xs font-black shadow-lg hover:opacity-95 cursor-pointer"
+                >
+                  {editingVar ? 'Actualizar Gasto Variable' : 'Guardar Gasto Variable'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Create Account Sub-Modal */}
+      {isQuickAccountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-app">
+              <h4 className="text-sm font-black text-app">Crear Nueva Cuenta</h4>
+              <button onClick={() => setIsQuickAccountModalOpen(false)} className="p-1 rounded-full text-muted hover:text-app">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleQuickCreateAccount} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-muted block mb-1">Nombre de Cuenta</label>
+                <input
+                  type="text"
+                  required
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                  placeholder="Ej. Efectivo Cartera, Banesco..."
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-muted block mb-1">Moneda</label>
+                  <select
+                    value={newAccountCurrency}
+                    onChange={(e) => setNewAccountCurrency(e.target.value as any)}
+                    className="w-full bg-card border border-app rounded-xl px-2 py-2 text-xs text-app"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="VES">VES (Bs.)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-muted block mb-1">Saldo Inicial</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newAccountBalance}
+                    onChange={(e) => setNewAccountBalance(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAccountModalOpen(false)}
+                  className="px-3 py-1.5 rounded-xl bg-card text-xs font-bold text-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingAccount}
+                  className="px-4 py-1.5 rounded-xl bg-primary-custom text-white text-xs font-black"
+                >
+                  {isCreatingAccount ? 'Creando...' : 'Crear Cuenta'}
                 </button>
               </div>
             </form>

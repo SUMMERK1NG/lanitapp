@@ -8,6 +8,7 @@ import type {
   VariableIncome,
   FixedExpense,
   MonthlyFixedOverride,
+  VariableExpense,
   Debt,
   DebtPayment,
   SavingsGoal,
@@ -62,6 +63,7 @@ export const DEFAULT_ACCOUNTS: Account[] = [];
 export const DEFAULT_FIXED_INCOMES: FixedIncome[] = [];
 export const DEFAULT_VARIABLE_INCOMES: VariableIncome[] = [];
 export const DEFAULT_FIXED_EXPENSES: FixedExpense[] = [];
+export const DEFAULT_VARIABLE_EXPENSES: VariableExpense[] = [];
 export const DEFAULT_DEBTS: Debt[] = [];
 export const DEFAULT_SAVINGS_GOALS: SavingsGoal[] = [];
 
@@ -74,6 +76,7 @@ export class LanitappDatabase extends Dexie {
   variable_incomes!: Table<VariableIncome, string>;
   fixed_expenses!: Table<FixedExpense, string>;
   monthly_fixed_overrides!: Table<MonthlyFixedOverride, string>;
+  variable_expenses!: Table<VariableExpense, string>;
   debts!: Table<Debt, string>;
   debt_payments!: Table<DebtPayment, string>;
   savings_goals!: Table<SavingsGoal, string>;
@@ -83,7 +86,7 @@ export class LanitappDatabase extends Dexie {
 
   constructor() {
     super('lanitapp_db');
-    this.version(9).stores({
+    this.version(10).stores({
       transactions: 'id, user_id, type, category_id, account_id, transaction_date, sync_status',
       categories: 'id, name, type, sync_status',
       accounts: 'id, user_id, name, type, currency, sync_status',
@@ -92,6 +95,7 @@ export class LanitappDatabase extends Dexie {
       variable_incomes: 'id, user_id, year, month, fortnight, category_id, sync_status',
       fixed_expenses: 'id, user_id, default_fortnight, category_id, is_active, sync_status',
       monthly_fixed_overrides: 'id, fixed_expense_id, year, month, sync_status',
+      variable_expenses: 'id, user_id, year, month, fortnight, category_id, sync_status',
       debts: 'id, user_id, creditor, platform, debt_mode, status, payment_type, sync_status',
       debt_payments: 'id, user_id, debt_id, year, month, fortnight, sync_status',
       savings_goals: 'id, user_id, status, frequency, sync_status',
@@ -1265,6 +1269,7 @@ export async function saveFixedIncome(
     is_active: income.is_active !== undefined ? income.is_active : true,
     notes: notesWithTag,
     sync_status: 'pending',
+    created_at: income.created_at || new Date().toISOString(),
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -1470,6 +1475,98 @@ export async function deleteVariableIncome(id: string): Promise<void> {
 }
 
 /**
+ * Gastos Variables por Quincena
+ */
+export async function saveVariableExpense(
+  expense: Partial<VariableExpense> & {
+    description: string;
+    amount: number;
+    year: number;
+    month: number;
+    fortnight: FortnightType;
+    category_id?: string;
+    currency?: string;
+  }
+): Promise<VariableExpense> {
+  const id = ensureValidUuid(expense.id);
+  const userId = expense.user_id || getActiveUserId();
+  const existing = await db.variable_expenses.get(id);
+  const txId = (existing as any)?.transaction_id || ensureValidUuid();
+
+  const record: VariableExpense = {
+    id,
+    user_id: userId,
+    description: expense.description.trim(),
+    amount: Number(expense.amount),
+    original_amount: expense.original_amount !== undefined ? Number(expense.original_amount) : Number(expense.amount),
+    payment_mode: expense.payment_mode || 'usd_cash',
+    year: expense.year,
+    month: expense.month,
+    fortnight: expense.fortnight,
+    category_id: expense.category_id || 'cat_other_exp',
+    account_id: expense.account_id || undefined,
+    currency: expense.currency || 'USD',
+    notes: expense.notes || '',
+    sync_status: 'pending',
+    created_at: expense.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      const { sync_status, ...varPayload } = record;
+      const { error } = await supabase.from('variable_expenses').upsert(varPayload);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.warn('[Supabase Variable Expense Notice]:', error.message);
+      }
+    } catch (e) {
+      console.warn('Direct variable expense upsert notice:', e);
+    }
+  }
+
+  // Manage linked transaction in Capital & Cuentas if account_id is provided
+  if (record.account_id) {
+    const tx: Transaction = {
+      id: txId,
+      user_id: userId,
+      amount: Number(record.amount),
+      type: 'expense',
+      description: `Gasto Variable: ${record.description}`,
+      category_id: record.category_id || 'cat_other_exp',
+      account_id: record.account_id,
+      transaction_date: `${record.year}-${String(record.month + 1).padStart(2, '0')}-${record.fortnight === 'q1' ? '15' : '28'}`,
+      sync_status: 'pending',
+      created_at: record.created_at || new Date().toISOString(),
+    };
+    await db.transactions.put(tx);
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        const { sync_status, ...txPayload } = tx;
+        await supabase.from('transactions').upsert(txPayload);
+      } catch (e) {
+        console.warn('Direct transaction upsert notice:', e);
+      }
+    }
+  }
+
+  await db.variable_expenses.put(record);
+  return record;
+}
+
+export async function deleteVariableExpense(id: string): Promise<void> {
+  await db.variable_expenses.delete(id);
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('variable_expenses').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Delete remote var expense err:', e);
+    }
+  }
+}
+
+/**
  * Categorías
  */
 export async function saveCategory(category: Partial<Category> & { name: string; type: Category['type']; icon: string; color: string }): Promise<Category> {
@@ -1608,19 +1705,38 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const profilePayload = {
+      const profilePayload: any = {
         id,
         email: record.email || `${id}@lanitapp.local`,
         cedula: record.cedula || '',
         first_name: record.first_name || record.name?.split(' ')[0] || '',
         last_name: record.last_name || record.name?.split(' ').slice(1).join(' ') || '',
         role: record.role || 'user',
+        avatar: record.avatar || '👑',
+        avatar_url: record.avatar_url || record.avatar || '👑',
+        theme_mode: record.theme_mode || 'navy',
+        accent_color: record.accent_color || '#147DF0',
+        currency: record.currency || 'USD',
         updated_at: new Date().toISOString(),
       };
       console.log('[Supabase Profiles Payload (db.ts)]:', profilePayload);
       const { error } = await supabase.from('profiles').upsert(profilePayload);
-      if (!error) record.sync_status = 'synced';
-      else console.error('[Supabase Profiles Upsert Error]:', error.message, error.details);
+      if (!error) {
+        record.sync_status = 'synced';
+      } else {
+        console.warn('[Supabase Profiles Upsert Warning]:', error.message);
+        // Fallback for minimal schema
+        const fallbackPayload = {
+          id,
+          email: record.email || `${id}@lanitapp.local`,
+          cedula: record.cedula || '',
+          first_name: record.first_name || record.name?.split(' ')[0] || '',
+          last_name: record.last_name || record.name?.split(' ').slice(1).join(' ') || '',
+          role: record.role || 'user',
+          updated_at: new Date().toISOString(),
+        };
+        await supabase.from('profiles').upsert(fallbackPayload);
+      }
     } catch (e) {
       console.warn('Profile direct upsert notice:', e);
     }
@@ -1687,6 +1803,7 @@ export async function saveFixedExpense(
     assumed_by_third_party: expense.assumed_by_third_party || false,
     notes: expense.notes || '',
     sync_status: 'pending',
+    created_at: expense.created_at || new Date().toISOString(),
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {

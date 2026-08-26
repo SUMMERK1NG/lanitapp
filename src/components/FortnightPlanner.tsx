@@ -32,6 +32,7 @@ import type {
   VariableIncome,
   FixedExpense,
   MonthlyFixedOverride,
+  VariableExpense,
   Debt,
   DebtPayment,
   SavingsGoal,
@@ -70,6 +71,7 @@ interface FortnightPlannerProps {
   variableIncomes: VariableIncome[];
   fixedExpenses: FixedExpense[];
   monthlyOverrides: MonthlyFixedOverride[];
+  variableExpenses?: VariableExpense[];
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsGoals: SavingsGoal[];
@@ -101,6 +103,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   variableIncomes,
   fixedExpenses,
   monthlyOverrides,
+  variableExpenses = [],
   debts,
   debtPayments,
   savingsGoals,
@@ -534,8 +537,19 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       .reduce((sum, g) => sum + g.amount_per_period, 0);
   }, [fortnightSavingsGoals, actualContributions]);
 
-  // Total Committed (Fixed Expenses + Debt Commitments)
-  const totalCommitted = totalFixedCost + effectiveDebtCost;
+  // 4.5. Active Variable Expenses for this fortnight
+  const activeFortnightVariableExpenses = useMemo(() => {
+    return variableExpenses.filter(
+      (ve) => ve.year === selectedYear && ve.month === selectedMonth && ve.fortnight === selectedFortnight
+    );
+  }, [variableExpenses, selectedYear, selectedMonth, selectedFortnight]);
+
+  const totalVarExpensesCost = useMemo(() => {
+    return activeFortnightVariableExpenses.reduce((sum, ve) => sum + ve.amount, 0);
+  }, [activeFortnightVariableExpenses]);
+
+  // Total Committed (Fixed Expenses + Variable Expenses + Debt Commitments)
+  const totalCommitted = totalFixedCost + totalVarExpensesCost + effectiveDebtCost;
 
   // Dinero Libre Real (after expenses, debts, and planned savings)
   const netRemaining = totalAvailable - (totalCommitted + plannedSavingsTotal);

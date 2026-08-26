@@ -7,6 +7,7 @@ import type {
   FixedExpense,
   FixedIncome,
   VariableIncome,
+  VariableExpense,
   FortnightItemState,
   FortnightType,
   MonthlyFixedIncomeOverride,
@@ -68,6 +69,7 @@ export interface FinanceStoreState {
   variableIncomes: VariableIncome[];
   fixedExpenses: FixedExpense[];
   monthlyFixedOverrides: MonthlyFixedOverride[];
+  variableExpenses: VariableExpense[];
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsGoals: SavingsGoal[];
@@ -103,6 +105,9 @@ export interface FinanceStoreState {
 
   saveFixedExpense: (expense: Partial<FixedExpense> & { name: string; amount: number; default_fortnight: 'q1' | 'q2' | 'both' }, userId: string) => Promise<FixedExpense>;
   deleteFixedExpense: (id: string, userId: string) => Promise<void>;
+
+  saveVariableExpense: (expense: Partial<VariableExpense> & { description: string; amount: number; year: number; month: number; fortnight: FortnightType }, userId: string) => Promise<VariableExpense>;
+  deleteVariableExpense: (id: string, userId: string) => Promise<void>;
 
   saveDebt: (debt: Partial<Debt> & { creditor: string; total_amount: number; payment_type: Debt['payment_type'] }, userId: string) => Promise<Debt>;
   deleteDebt: (id: string, userId: string) => Promise<void>;
@@ -205,6 +210,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   variableIncomes: [],
   fixedExpenses: [],
   monthlyFixedOverrides: [],
+  variableExpenses: [],
   debts: [],
   debtPayments: [],
   savingsGoals: [],
@@ -234,6 +240,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         variableIncomes,
         fixedExpenses,
         monthlyFixedOverrides,
+        variableExpenses,
         debts,
         debtPayments,
         savingsGoals,
@@ -248,6 +255,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         db.variable_incomes.toArray(),
         db.fixed_expenses.toArray(),
         db.monthly_fixed_overrides.toArray(),
+        db.variable_expenses.toArray(),
         db.debts.toArray(),
         db.debt_payments.toArray(),
         db.savings_goals.toArray(),
@@ -262,6 +270,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredFixedIncomes = fixedIncomes.filter(matchesUser);
       const filteredVarIncomes = variableIncomes.filter(matchesUser);
       const filteredExpenses = fixedExpenses.filter(matchesUser);
+      const filteredVarExpenses = variableExpenses.filter(matchesUser);
       const filteredDebts = debts.filter(matchesUser);
       const filteredDebtPayments = debtPayments.filter(matchesUser);
       const filteredSavings = savingsGoals.filter(matchesUser);
@@ -277,6 +286,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         variableIncomes: filteredVarIncomes,
         fixedExpenses: filteredExpenses,
         monthlyFixedOverrides,
+        variableExpenses: filteredVarExpenses,
         debts: filteredDebts,
         debtPayments: filteredDebtPayments,
         savingsGoals: filteredSavings,
@@ -896,6 +906,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       is_active: income.is_active !== undefined ? income.is_active : true,
       notes: income.notes || '',
       sync_status: 'pending',
+      created_at: income.created_at || new Date().toISOString(),
     };
 
     set((s) => ({
@@ -1137,6 +1148,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       assumed_by_third_party: expense.assumed_by_third_party || false,
       notes: expense.notes || '',
       sync_status: 'pending',
+      created_at: expense.created_at || new Date().toISOString(),
     };
 
     set((s) => ({
@@ -1186,6 +1198,96 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'fixed_expenses', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
         }));
+      }
+    }
+  },
+
+  saveVariableExpense: async (expense, userId) => {
+    const id = ensureValidUuid(expense.id);
+    const supabaseUserId = userId || expense.user_id || getActiveUserId();
+    const existing = get().variableExpenses.find((v) => v.id === id);
+    const txId = (existing as any)?.transaction_id || ensureValidUuid();
+
+    const record: VariableExpense = {
+      id,
+      user_id: supabaseUserId,
+      description: expense.description.trim(),
+      amount: Number(expense.amount),
+      original_amount: expense.original_amount !== undefined ? Number(expense.original_amount) : Number(expense.amount),
+      payment_mode: expense.payment_mode || 'usd_cash',
+      year: expense.year,
+      month: expense.month,
+      fortnight: expense.fortnight,
+      category_id: expense.category_id || 'cat_other_exp',
+      account_id: expense.account_id || undefined,
+      currency: expense.currency || 'USD',
+      notes: expense.notes || '',
+      sync_status: 'pending',
+      created_at: expense.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    set((s) => ({
+      variableExpenses: s.variableExpenses.some((v) => v.id === id)
+        ? s.variableExpenses.map((v) => (v.id === id ? record : v))
+        : [...s.variableExpenses, record],
+    }));
+    await db.variable_expenses.put(record);
+
+    if (record.account_id) {
+      const tx: Transaction = {
+        id: txId,
+        user_id: supabaseUserId,
+        amount: Number(record.amount),
+        type: 'expense',
+        description: `Gasto Variable: ${record.description}`,
+        category_id: record.category_id || 'cat_other_exp',
+        account_id: record.account_id,
+        transaction_date: `${record.year}-${String(record.month + 1).padStart(2, '0')}-${record.fortnight === 'q1' ? '15' : '28'}`,
+        sync_status: 'pending',
+        created_at: record.created_at || new Date().toISOString(),
+      };
+      await db.transactions.put(tx);
+      set((s) => ({
+        transactions: s.transactions.some((t) => t.id === tx.id)
+          ? s.transactions.map((t) => (t.id === tx.id ? tx : t))
+          : [...s.transactions, tx],
+      }));
+      if (navigator.onLine && isSupabaseConfigured() && supabase) {
+        try {
+          const { sync_status, ...txPayload } = tx;
+          await supabase.from('transactions').upsert(txPayload);
+        } catch (e) {
+          console.warn('Sync var expense tx store err:', e);
+        }
+      }
+    }
+
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        const { sync_status, ...payload } = record;
+        const { error } = await supabase.from('variable_expenses').upsert(payload);
+        if (!error) {
+          await db.variable_expenses.update(id, { sync_status: 'synced' });
+        }
+      } catch (e) {
+        console.warn('Direct variable expense upsert notice in store:', e);
+      }
+    }
+
+    return record;
+  },
+
+  deleteVariableExpense: async (id, _userId) => {
+    const cleanId = ensureValidUuid(id);
+    set((s) => ({ variableExpenses: s.variableExpenses.filter((v) => v.id !== id && v.id !== cleanId) }));
+    await db.variable_expenses.delete(id);
+
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.from('variable_expenses').delete().eq('id', cleanId);
+      } catch (e) {
+        console.warn('Delete var expense remote notice:', e);
       }
     }
   },

@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db,
   addTransaction,
-  deleteTransaction,
   DEFAULT_CATEGORIES,
   migrateLocalDataToCloud,
   subscribeToRealtimeChanges,
@@ -22,10 +21,13 @@ import type {
   FixedIncome,
   VariableIncome,
   FixedExpense,
+  VariableExpense,
   Debt,
   DebtPayment,
   SavingsGoal,
   SavingContribution,
+  ThemeMode,
+  AccentColor,
 } from './types/index.ts';
 
 // Components
@@ -36,7 +38,7 @@ import { AuthScreen } from './components/AuthScreen.tsx';
 import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx';
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
-import { TransactionList } from './components/TransactionList.tsx';
+import { TransactionHistoryModule } from './components/TransactionHistoryModule.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
 import { FortnightPlanner } from './components/FortnightPlanner.tsx';
@@ -48,8 +50,9 @@ import { SettingsView } from './components/SettingsView.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
+import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
-import { Plus, TrendingUp, RefreshCw } from 'lucide-react';
+import { TrendingUp, RefreshCw } from 'lucide-react';
 
 export function App() {
   const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
@@ -76,6 +79,31 @@ export function App() {
   // Themes hook
   const { themeMode, accentColor, setThemeMode, setAccentColor } = useTheme();
 
+  // Cloud Sync for Theme & Accent Color
+  const handleChangeThemeMode = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    if (currentUser?.id) {
+      updateProfile({ theme_mode: mode });
+    }
+  };
+
+  const handleChangeAccentColor = (color: AccentColor) => {
+    setAccentColor(color);
+    if (currentUser?.id) {
+      updateProfile({ accent_color: color });
+    }
+  };
+
+  // Synchronize theme & accent color if currentUser profile is loaded or synced from another device
+  useEffect(() => {
+    if (currentUser?.theme_mode && currentUser.theme_mode !== themeMode) {
+      setThemeMode(currentUser.theme_mode);
+    }
+    if (currentUser?.accent_color && currentUser.accent_color !== accentColor) {
+      setAccentColor(currentUser.accent_color);
+    }
+  }, [currentUser?.theme_mode, currentUser?.accent_color]);
+
   // Modals state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState<boolean>(false);
@@ -84,6 +112,7 @@ export function App() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState<boolean>(false);
   const [transactionModalType, setTransactionModalType] = useState<TransactionType>('expense');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [preselectedDebtForPayment, setPreselectedDebtForPayment] = useState<string | undefined>(undefined);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -160,6 +189,7 @@ export function App() {
   const liveVariableIncomes = useLiveQuery(() => db.variable_incomes.toArray(), []) || [];
   const liveFixedExpenses = useLiveQuery(() => db.fixed_expenses.toArray(), []) || [];
   const liveMonthlyOverrides = useLiveQuery(() => db.monthly_fixed_overrides.toArray(), []) || [];
+  const liveVariableExpenses = useLiveQuery(() => db.variable_expenses.toArray(), []) || [];
   const liveDebts = useLiveQuery(() => db.debts.toArray(), []) || [];
   const liveDebtPayments = useLiveQuery(() => db.debt_payments.toArray(), []) || [];
   const liveSavingsGoals = useLiveQuery(() => db.savings_goals.toArray(), []) || [];
@@ -175,6 +205,7 @@ export function App() {
   const variableIncomes: VariableIncome[] = liveVariableIncomes.filter(isUserMatch);
   const monthlyIncomeOverrides = liveMonthlyIncomeOverrides;
   const fixedExpenses: FixedExpense[] = liveFixedExpenses.filter(isUserMatch);
+  const variableExpenses: VariableExpense[] = liveVariableExpenses.filter(isUserMatch);
   const debts: Debt[] = liveDebts.filter(isUserMatch);
   const monthlyOverrides = liveMonthlyOverrides;
   const debtPayments: DebtPayment[] = liveDebtPayments.filter(isUserMatch);
@@ -220,11 +251,6 @@ export function App() {
         ? 'Movimiento registrado y sincronizado'
         : 'Movimiento guardado localmente (Offline)'
     );
-  };
-
-  const handleDeleteTransaction = async (id: string) => {
-    await deleteTransaction(id);
-    showToast('Movimiento eliminado');
   };
 
   const handleOpenTransactionForType = (type: TransactionType) => {
@@ -321,9 +347,12 @@ export function App() {
           activeProfile={currentUser}
           debts={debts}
           fixedExpenses={fixedExpenses}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
           onSync={syncNow}
           onOpenConverter={() => setIsConverterOpen(true)}
           onOpenProfile={() => setIsProfileModalOpen(true)}
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
         />
 
         {/* Toast Alert */}
@@ -344,12 +373,14 @@ export function App() {
               fixedIncomes={fixedIncomes}
               variableIncomes={variableIncomes}
               fixedExpenses={fixedExpenses}
+              variableExpenses={variableExpenses}
               debts={debts}
               debtPayments={debtPayments}
               savingsGoals={savingsGoals}
               savingContributions={savingContributions}
               rates={rates}
               onNavigate={setActiveView}
+              userCreatedAt={currentUser?.created_at}
             />
           )}
 
@@ -368,6 +399,7 @@ export function App() {
                 variableIncomes={variableIncomes}
                 fixedExpenses={fixedExpenses}
                 monthlyOverrides={monthlyOverrides}
+                variableExpenses={variableExpenses}
                 debts={debts}
                 debtPayments={debtPayments}
                 savingsGoals={savingsGoals}
@@ -406,13 +438,15 @@ export function App() {
             </div>
           )}
 
-          {/* VIEW 4: PLANTILLA DE GASTOS FIJOS */}
+          {/* VIEW 4: GESTIÓN DE GASTOS (FIJOS & VARIABLES) */}
           {activeView === 'fixed_expenses' && (
             <div className="animate-in fade-in duration-200">
               <FixedExpensesModule
                 fixedExpenses={fixedExpenses}
+                variableExpenses={variableExpenses}
                 monthlyOverrides={monthlyOverrides}
                 categories={categories}
+                accounts={accounts}
                 rates={rates}
                 selectedYear={selectedYear}
                 selectedMonth={selectedMonth}
@@ -460,32 +494,29 @@ export function App() {
             </div>
           )}
 
-          {/* VIEW 7: HISTORIAL COMPLETO DE TRANSACCIONES */}
+          {/* VIEW 7: HISTORIAL INTEGRAL DE MOVIMIENTOS & AUDITORÍA */}
           {activeView === 'transactions' && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-app">Historial de Movimientos</h2>
-                  <p className="text-xs text-muted">
-                    {transactions.length} registros en total
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleOpenTransactionForType('expense')}
-                  className="px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold flex items-center gap-1.5 shadow-md hover:opacity-95 transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Nuevo Movimiento
-                </button>
-              </div>
-
-              <TransactionList
+            <div className="animate-in fade-in duration-200">
+              <TransactionHistoryModule
                 transactions={transactions}
                 categories={categories}
                 accounts={accounts}
-                onDelete={handleDeleteTransaction}
-                onOpenAdd={() => handleOpenTransactionForType('expense')}
-                showFilters={true}
+                fixedIncomes={fixedIncomes}
+                variableIncomes={variableIncomes}
+                fixedExpenses={fixedExpenses}
+                variableExpenses={variableExpenses}
+                debts={debts}
+                debtPayments={debtPayments}
+                savingsGoals={savingsGoals}
+                savingContributions={savingContributions}
+                rates={rates}
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+                onChangePeriod={(y, m) => {
+                  setSelectedYear(y);
+                  setSelectedMonth(m);
+                }}
+                userCreatedAt={currentUser?.created_at}
               />
             </div>
           )}
@@ -573,8 +604,8 @@ export function App() {
                 currentAccentColor={accentColor}
                 currentUserId={currentUser?.id}
                 initialTab={settingsInitialTab}
-                onChangeThemeMode={setThemeMode}
-                onChangeAccentColor={setAccentColor}
+                onChangeThemeMode={handleChangeThemeMode}
+                onChangeAccentColor={handleChangeAccentColor}
                 onSync={syncNow}
               />
             </div>
@@ -590,8 +621,8 @@ export function App() {
         isAdmin={isAdmin}
         currentThemeMode={themeMode}
         currentAccentColor={accentColor}
-        onChangeThemeMode={setThemeMode}
-        onChangeAccentColor={setAccentColor}
+        onChangeThemeMode={handleChangeThemeMode}
+        onChangeAccentColor={handleChangeAccentColor}
         onUpdateProfile={updateProfile}
         onShowToast={showToast}
         onNavigateToSettings={handleNavigateToSettings}
@@ -640,6 +671,16 @@ export function App() {
         isOpen={isConverterOpen}
         onClose={() => setIsConverterOpen(false)}
         rates={rates}
+      />
+
+      {/* Notifications & System Alerts Modal (Centered Viewport Modal) */}
+      <NotificationCenterModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        debts={debts}
+        fixedExpenses={fixedExpenses}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
       />
 
       {/* Mobile-First Fixed Bottom Navigation Bar */}

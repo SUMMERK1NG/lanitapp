@@ -5,8 +5,6 @@ import {
   PiggyBank,
   CreditCard,
   Calendar,
-  ChevronLeft,
-  ChevronRight,
   Printer,
   Sliders,
   ArrowRight,
@@ -41,6 +39,7 @@ import type {
   FixedIncome,
   VariableIncome,
   FixedExpense,
+  VariableExpense,
   Debt,
   DebtPayment,
   SavingsGoal,
@@ -49,6 +48,7 @@ import type {
 } from '../types/index.ts';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
+import { MonthPicker } from './MonthPicker.tsx';
 
 interface DashboardModuleProps {
   transactions: Transaction[];
@@ -57,18 +57,30 @@ interface DashboardModuleProps {
   fixedIncomes: FixedIncome[];
   variableIncomes: VariableIncome[];
   fixedExpenses: FixedExpense[];
+  variableExpenses?: VariableExpense[];
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsGoals: SavingsGoal[];
   savingContributions: SavingContribution[];
   rates: ExchangeRatesData;
   onNavigate: (view: any) => void;
+  userCreatedAt?: string;
 }
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
+
+function isCreatedInPeriod(createdAt: string | undefined, year: number, month: number, defaultUserCreated?: string): boolean {
+  const dateStr = createdAt || defaultUserCreated;
+  if (!dateStr) return true;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return true;
+  if (year < d.getFullYear()) return false;
+  if (year === d.getFullYear() && month < d.getMonth()) return false;
+  return true;
+}
 
 interface DashboardWidgetConfig {
   kpis: boolean;
@@ -97,12 +109,14 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   fixedIncomes,
   variableIncomes,
   fixedExpenses,
+  variableExpenses = [],
   debts,
   debtPayments,
   savingsGoals,
   savingContributions,
   rates,
   onNavigate,
+  userCreatedAt,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -133,25 +147,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
     localStorage.setItem('lanitapp_dashboard_widgets', JSON.stringify(DEFAULT_WIDGETS));
   };
 
-  // Month navigation
-  const handlePrevMonth = () => {
-    if (selectedMonth === 0) {
-      setSelectedMonth(11);
-      setSelectedYear((y) => y - 1);
-    } else {
-      setSelectedMonth((m) => m - 1);
-    }
-  };
-
-  const handleNextMonth = () => {
-    if (selectedMonth === 11) {
-      setSelectedMonth(0);
-      setSelectedYear((y) => y + 1);
-    } else {
-      setSelectedMonth((m) => m + 1);
-    }
-  };
-
   const handleGoToCurrentMonth = () => {
     setSelectedYear(today.getFullYear());
     setSelectedMonth(today.getMonth());
@@ -173,9 +168,13 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   // 2. Incomes for selected month
   const totalFixedIncomes = useMemo(() => {
     return fixedIncomes
-      .filter((f) => f.is_active !== false)
+      .filter((f) => {
+        if (f.is_active === false) return false;
+        if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return true;
+      })
       .reduce((sum, f) => sum + (f.default_fortnight === 'both' ? f.amount * 2 : f.amount), 0);
-  }, [fixedIncomes]);
+  }, [fixedIncomes, selectedYear, selectedMonth, userCreatedAt]);
 
   const totalVariableIncomes = useMemo(() => {
     return variableIncomes
@@ -194,9 +193,13 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   // 3. Expenses for selected month
   const totalFixedExpenses = useMemo(() => {
     return fixedExpenses
-      .filter((f) => f.is_active !== false)
+      .filter((f) => {
+        if (f.is_active === false) return false;
+        if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return true;
+      })
       .reduce((sum, f) => sum + (f.default_fortnight === 'both' ? f.amount * 2 : f.amount), 0);
-  }, [fixedExpenses]);
+  }, [fixedExpenses, selectedYear, selectedMonth, userCreatedAt]);
 
   const totalDebtPayments = useMemo(() => {
     return debtPayments
@@ -216,7 +219,13 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       .reduce((sum, t) => sum + t.amount, 0);
   }, [monthTransactions]);
 
-  const totalExpense = totalFixedExpenses + totalDebtPayments + totalDirectExpenses;
+  const totalVariableExpenses = useMemo(() => {
+    return variableExpenses
+      .filter((v) => v.year === selectedYear && v.month === selectedMonth)
+      .reduce((sum, v) => sum + v.amount, 0);
+  }, [variableExpenses, selectedYear, selectedMonth]);
+
+  const totalExpense = totalFixedExpenses + totalVariableExpenses + totalDebtPayments + totalDirectExpenses;
   const netBalance = totalIncome - totalExpense;
 
   // 4. Financial Health Score & Savings Rate
@@ -243,16 +252,36 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 
   // 6. Quincenas Breakdown for Selected Month
   const q1Expenses = useMemo(() => {
-    return fixedExpenses
-      .filter((f) => f.is_active !== false && (f.default_fortnight === 'q1' || f.default_fortnight === 'both'))
+    const fixedSum = fixedExpenses
+      .filter((f) => {
+        if (f.is_active === false) return false;
+        if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return f.default_fortnight === 'q1' || f.default_fortnight === 'both';
+      })
       .reduce((sum, f) => sum + f.amount, 0);
-  }, [fixedExpenses]);
+
+    const varSum = variableExpenses
+      .filter((v) => v.year === selectedYear && v.month === selectedMonth && v.fortnight === 'q1')
+      .reduce((sum, v) => sum + v.amount, 0);
+
+    return fixedSum + varSum;
+  }, [fixedExpenses, variableExpenses, selectedYear, selectedMonth, userCreatedAt]);
 
   const q2Expenses = useMemo(() => {
-    return fixedExpenses
-      .filter((f) => f.is_active !== false && (f.default_fortnight === 'q2' || f.default_fortnight === 'both'))
+    const fixedSum = fixedExpenses
+      .filter((f) => {
+        if (f.is_active === false) return false;
+        if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return f.default_fortnight === 'q2' || f.default_fortnight === 'both';
+      })
       .reduce((sum, f) => sum + f.amount, 0);
-  }, [fixedExpenses]);
+
+    const varSum = variableExpenses
+      .filter((v) => v.year === selectedYear && v.month === selectedMonth && v.fortnight === 'q2')
+      .reduce((sum, v) => sum + v.amount, 0);
+
+    return fixedSum + varSum;
+  }, [fixedExpenses, variableExpenses, selectedYear, selectedMonth, userCreatedAt]);
 
   // 7. Cashflow Chart Data (4 weeks / periods of the month)
   const cashflowData = useMemo(() => {
@@ -283,12 +312,20 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 
     // Fixed expenses by category
     fixedExpenses.forEach((f) => {
-      if (f.is_active !== false) {
+      if (f.is_active !== false && isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) {
         const catId = f.category_id || 'cat_other_exp';
         const amt = f.default_fortnight === 'both' ? f.amount * 2 : f.amount;
         categoryTotals[catId] = (categoryTotals[catId] || 0) + amt;
       }
     });
+
+    // Variable expenses for this month
+    variableExpenses
+      .filter((v) => v.year === selectedYear && v.month === selectedMonth)
+      .forEach((v) => {
+        const catId = v.category_id || 'cat_other_exp';
+        categoryTotals[catId] = (categoryTotals[catId] || 0) + v.amount;
+      });
 
     // Direct transaction expenses by category
     monthTransactions
@@ -318,26 +355,43 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
         };
       })
       .sort((a, b) => b.amount - a.amount);
-  }, [fixedExpenses, monthTransactions, totalDebtPayments, categories]);
+  }, [fixedExpenses, variableExpenses, monthTransactions, totalDebtPayments, categories, selectedYear, selectedMonth, userCreatedAt]);
 
   // 9. Savings and Debt Gauges
   const totalDebtBalance = useMemo(() => {
     return debts
-      .filter((d) => d.status === 'active')
+      .filter((d) => {
+        if (d.status === 'paid') return false;
+        if (d.start_year !== undefined && d.start_month !== undefined) {
+          if (selectedYear < d.start_year) return false;
+          if (selectedYear === d.start_year && selectedMonth < d.start_month) return false;
+        } else if (!isCreatedInPeriod(d.created_at, selectedYear, selectedMonth, userCreatedAt)) {
+          return false;
+        }
+        return true;
+      })
       .reduce((sum, d) => sum + (d.current_balance || d.total_amount || 0), 0);
-  }, [debts]);
+  }, [debts, selectedYear, selectedMonth, userCreatedAt]);
 
   const totalSavingsTarget = useMemo(() => {
     return savingsGoals
-      .filter((g) => g.status === 'active')
+      .filter((g) => {
+        if (g.status !== 'active') return false;
+        if (!isCreatedInPeriod(g.start_date || g.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return true;
+      })
       .reduce((sum, g) => sum + g.target_amount, 0);
-  }, [savingsGoals]);
+  }, [savingsGoals, selectedYear, selectedMonth, userCreatedAt]);
 
   const totalSavingsSaved = useMemo(() => {
     return savingsGoals
-      .filter((g) => g.status === 'active')
+      .filter((g) => {
+        if (g.status !== 'active') return false;
+        if (!isCreatedInPeriod(g.start_date || g.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+        return true;
+      })
       .reduce((sum, g) => sum + (g.current_amount || 0), 0);
-  }, [savingsGoals]);
+  }, [savingsGoals, selectedYear, selectedMonth, userCreatedAt]);
 
   const savingsProgressPct = totalSavingsTarget > 0 ? Math.min(100, Math.round((totalSavingsSaved / totalSavingsTarget) * 100)) : 0;
 
@@ -366,32 +420,19 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 
         {/* Period Selector & Action Buttons */}
         <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
-          {/* Month Stepper */}
-          <div className="flex items-center gap-1 p-1 bg-card rounded-2xl border border-app shadow-inner">
-            <button
-              onClick={handlePrevMonth}
-              className="p-1.5 rounded-xl hover:bg-surface text-muted hover:text-app transition-colors cursor-pointer"
-              title="Mes anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <span className="px-2 text-xs font-black text-app min-w-[110px] text-center">
-              {MONTH_NAMES[selectedMonth]} {selectedYear}
-            </span>
-
-            <button
-              onClick={handleNextMonth}
-              className="p-1.5 rounded-xl hover:bg-surface text-muted hover:text-app transition-colors cursor-pointer"
-              title="Mes siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Month Picker with interactive Dropdown Grid */}
+          <MonthPicker
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            onChange={(y, m) => {
+              setSelectedYear(y);
+              setSelectedMonth(m);
+            }}
+          />
 
           <button
             onClick={handleGoToCurrentMonth}
-            className="px-3 py-2 rounded-xl bg-card hover:bg-surface border border-app text-xs font-bold text-muted hover:text-app transition-all cursor-pointer"
+            className="px-3 py-2 rounded-2xl bg-card hover:bg-surface border border-app text-xs font-bold text-muted hover:text-app transition-all cursor-pointer shadow-sm"
           >
             Hoy
           </button>

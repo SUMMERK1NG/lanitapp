@@ -26,9 +26,12 @@ interface HeaderProps {
   activeProfile?: UserProfile | null;
   debts?: Debt[];
   fixedExpenses?: FixedExpense[];
+  selectedYear?: number;
+  selectedMonth?: number;
   onSync: () => void;
   onOpenConverter: () => void;
   onOpenProfile: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,14 +46,17 @@ export const Header: React.FC<HeaderProps> = ({
   activeProfile,
   debts = [],
   fixedExpenses = [],
+  selectedYear,
+  selectedMonth,
   onSync,
   onOpenConverter,
   onOpenProfile,
+  onOpenNotifications,
 }) => {
   const [isNotifOpen, setIsNotifOpen] = useState<boolean>(false);
 
   // Compute active notifications
-  const notifications = computeSystemNotifications(debts, fixedExpenses);
+  const notifications = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
   const unreadCount = notifications.length;
 
   // Resolve user avatar: profile.avatar_url > profile.avatar > localStorage('user_avatar') > '👑'
@@ -162,10 +168,16 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Calculadora</span>
           </button>
 
-          {/* Centro de Notificaciones (Icono de Campana + Dropdown Flotante) */}
+          {/* Centro de Notificaciones (Icono de Campana) */}
           <div className="relative">
             <button
-              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              onClick={() => {
+                if (onOpenNotifications) {
+                  onOpenNotifications();
+                } else {
+                  setIsNotifOpen(!isNotifOpen);
+                }
+              }}
               className="relative p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-app shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
               title="Centro de Notificaciones y Alertas"
             >
@@ -177,13 +189,17 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Dropdown Flotante */}
-            <NotificationCenterModal
-              isOpen={isNotifOpen}
-              onClose={() => setIsNotifOpen(false)}
-              debts={debts}
-              fixedExpenses={fixedExpenses}
-            />
+            {/* Fallback if onOpenNotifications not passed */}
+            {!onOpenNotifications && isNotifOpen && (
+              <NotificationCenterModal
+                isOpen={isNotifOpen}
+                onClose={() => setIsNotifOpen(false)}
+                debts={debts}
+                fixedExpenses={fixedExpenses}
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+              />
+            )}
           </div>
 
           {/* Indicador de Estado de Sincronización Realtime (4 Estados Visuales) */}

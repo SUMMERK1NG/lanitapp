@@ -1,21 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Bell,
   X,
   Calendar,
   CreditCard,
   Receipt,
-  CheckCircle2,
-  Volume2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
-import type { Debt, FixedExpense, FortnightType } from '../types/index.ts';
+import type { Debt, FixedExpense } from '../types/index.ts';
 
 interface NotificationCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
   debts?: Debt[];
   fixedExpenses?: FixedExpense[];
+  selectedYear?: number;
+  selectedMonth?: number;
 }
 
 export interface SystemNotification {
@@ -25,115 +26,108 @@ export interface SystemNotification {
   description: string;
   dateStr: string;
   priority: 'high' | 'normal';
+  month?: number;
+  year?: number;
 }
+
+const MONTH_NAMES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
 
 export function computeSystemNotifications(
   debts: Debt[] = [],
-  fixedExpenses: FixedExpense[] = []
+  fixedExpenses: FixedExpense[] = [],
+  targetYear?: number,
+  targetMonth?: number
 ): SystemNotification[] {
   const notifications: SystemNotification[] = [];
   const now = new Date();
   const currentDay = now.getDate();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
+  const currentMonth = targetMonth !== undefined ? targetMonth : now.getMonth();
+  const currentYear = targetYear !== undefined ? targetYear : now.getFullYear();
   const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  // 1. Aviso de Quincena (Ventana de <= 5 días)
+  // 1. Aviso de Quincena
   if (currentDay <= 15) {
     const daysLeft = 15 - currentDay;
-    if (daysLeft <= 5) {
-      notifications.push({
-        id: `notif_q1_${currentYear}_${currentMonth}`,
-        type: 'fortnight',
-        title:
-          daysLeft === 0
-            ? '¡Hoy es Quincena del 15!'
-            : daysLeft === 1
-            ? 'Falta 1 día para la Quincena del 15'
-            : `Faltan ${daysLeft} días para la Quincena del 15`,
-        description: 'Revisa tus asignaciones de gastos fijos y presupuesto para este periodo.',
-        dateStr: '15 de este mes',
-        priority: daysLeft <= 2 ? 'high' : 'normal',
-      });
-    }
+    notifications.push({
+      id: `notif_q1_${currentYear}_${currentMonth}`,
+      type: 'fortnight',
+      title:
+        daysLeft === 0
+          ? '¡Hoy es Quincena del 15!'
+          : daysLeft === 1
+          ? 'Falta 1 día para la Quincena 15'
+          : `Faltan ${daysLeft} días para la Quincena 15`,
+      description: `Revisa tus asignaciones de gastos y compromisos para el 15 de ${MONTH_NAMES[currentMonth]}.`,
+      dateStr: `15 ${MONTH_NAMES[currentMonth]}`,
+      priority: daysLeft <= 2 ? 'high' : 'normal',
+      year: currentYear,
+      month: currentMonth,
+    });
   } else {
     const daysLeft = lastDayOfMonth - currentDay;
-    if (daysLeft <= 5) {
-      notifications.push({
-        id: `notif_q2_${currentYear}_${currentMonth}`,
-        type: 'fortnight',
-        title:
-          daysLeft === 0
-            ? '¡Hoy es Cierre de Mes / Quincena 30!'
-            : daysLeft === 1
-            ? 'Falta 1 día para la Quincena del 30'
-            : `Faltan ${daysLeft} días para el Cierre de Mes / Quincena 30`,
-        description: 'Momento de conciliar pagos del mes y preparar el nuevo ciclo.',
-        dateStr: `${lastDayOfMonth} de este mes`,
-        priority: daysLeft <= 2 ? 'high' : 'normal',
-      });
-    }
-  }
-
-  // 2. Deudas / Cuotas Próximas (<= 5 días o ciclo actual)
-  const currentFortnight: FortnightType = currentDay <= 15 ? 'q1' : 'q2';
-  const activeDebts = debts.filter((d) => d.status === 'active' && d.current_balance > 0);
-
-  for (const debt of activeDebts) {
-    const amountDue = debt.installment_amount || (debt.current_balance > 0 ? debt.current_balance : 0);
-
-    if (debt.due_date) {
-      const dueDate = new Date(debt.due_date + 'T00:00:00');
-      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const diffMs = dueDate.getTime() - todayDate.getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-      if (diffDays >= 0 && diffDays <= 5) {
-        notifications.push({
-          id: `notif_debt_due_${debt.id}`,
-          type: 'debt',
-          title:
-            diffDays === 0
-              ? `¡Cuota de ${debt.creditor} ($${amountDue.toFixed(2)}) vence hoy!`
-              : diffDays === 1
-              ? `Cuota de ${debt.creditor} ($${amountDue.toFixed(2)}) vence mañana`
-              : `Cuota de ${debt.creditor} ($${amountDue.toFixed(2)}) vence en ${diffDays} días`,
-          description: `Plataforma: ${debt.platform || 'particular'}. Saldo pendiente total: $${debt.current_balance.toFixed(2)}.`,
-          dateStr: debt.due_date,
-          priority: diffDays <= 2 ? 'high' : 'normal',
-        });
-        continue;
-      }
-    }
-
-    // Si coincide con la quincena actual
-    if (debt.fortnight_due === currentFortnight || debt.fortnight_due === 'both') {
-      notifications.push({
-        id: `notif_debt_period_${debt.id}`,
-        type: 'debt',
-        title: `Cuota asignada: ${debt.creditor} ($${amountDue.toFixed(2)})`,
-        description: `Planificada para ${currentFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'}.`,
-        dateStr: currentFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30',
-        priority: 'high',
-      });
-    }
-  }
-
-  // 3. Gastos Fijos del Ciclo
-  const cycleExpenses = fixedExpenses.filter(
-    (f) => f.is_active && (f.default_fortnight === currentFortnight || f.default_fortnight === 'both')
-  );
-  if (cycleExpenses.length > 0) {
-    const totalCycle = cycleExpenses.reduce((sum, f) => sum + f.amount, 0);
     notifications.push({
-      id: `notif_cycle_expenses_${currentMonth}_${currentFortnight}`,
-      type: 'fixed_expense',
-      title: `Gastos fijos del ciclo: $${totalCycle.toFixed(2)} (${cycleExpenses.length} conceptos)`,
-      description: `Asignados para la ${currentFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'}. Asegúrate de reservar el monto.`,
-      dateStr: currentFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30',
-      priority: 'normal',
+      id: `notif_q2_${currentYear}_${currentMonth}`,
+      type: 'fortnight',
+      title:
+        daysLeft === 0
+          ? '¡Hoy es Cierre de Mes / Quincena 30!'
+          : daysLeft === 1
+          ? 'Falta 1 día para la Quincena 30'
+          : `Faltan ${daysLeft} días para el Cierre de Mes`,
+      description: `Concilia los pagos de ${MONTH_NAMES[currentMonth]} y prepara el nuevo ciclo quincenal.`,
+      dateStr: `${lastDayOfMonth} ${MONTH_NAMES[currentMonth]}`,
+      priority: daysLeft <= 3 ? 'high' : 'normal',
+      year: currentYear,
+      month: currentMonth,
     });
   }
+
+  // 2. Alertas de Cuotas de Deuda
+  debts.forEach((debt) => {
+    if (debt.status === 'paid') return;
+    const remaining = debt.current_balance || debt.total_amount || 0;
+    if (remaining <= 0) return;
+
+    const installment = debt.installment_amount || remaining;
+    const fnLabel = debt.fortnight_due === 'q1' ? 'Quincena 15' : 'Quincena 30';
+
+    notifications.push({
+      id: `notif_debt_${debt.id}`,
+      type: 'debt',
+      title: `Cuota asignada: ${debt.creditor || 'Deuda'} ($${installment.toFixed(2)})`,
+      description: `Planificada para ${fnLabel} de ${MONTH_NAMES[currentMonth]}. Saldo restante: $${remaining.toFixed(2)}.`,
+      dateStr: `${fnLabel}`,
+      priority: 'high',
+      year: currentYear,
+      month: currentMonth,
+    });
+  });
+
+  // 3. Alertas de Gastos Fijos de alto impacto (> $50)
+  fixedExpenses.forEach((exp) => {
+    if (exp.is_active === false) return;
+    if (exp.amount >= 50) {
+      const fnLabel = exp.default_fortnight === 'both'
+        ? 'Ambas Quincenas (15 y 30)'
+        : exp.default_fortnight === 'q2'
+        ? 'Quincena 30'
+        : 'Quincena 15';
+
+      notifications.push({
+        id: `notif_exp_${exp.id}`,
+        type: 'fixed_expense',
+        title: `Compromiso fijo: ${exp.name} ($${exp.amount.toFixed(2)})`,
+        description: `Asignado en ${fnLabel}. Asegura disponibilidad de saldo.`,
+        dateStr: fnLabel.includes('Ambas') ? '15 y 30' : fnLabel.includes('30') ? '30' : '15',
+        priority: 'normal',
+        year: currentYear,
+        month: currentMonth,
+      });
+    }
+  });
 
   return notifications;
 }
@@ -143,113 +137,120 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   onClose,
   debts = [],
   fixedExpenses = [],
+  selectedYear,
+  selectedMonth,
 }) => {
-  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(
-    typeof Notification !== 'undefined' ? Notification.permission : 'default'
-  );
+  const today = new Date();
+  const activeYear = selectedYear ?? today.getFullYear();
+  const activeMonth = selectedMonth ?? today.getMonth();
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'debt' | 'fortnight' | 'fixed_expense'>('all');
 
-  const notifications = computeSystemNotifications(debts, fixedExpenses);
+  const rawNotifications = useMemo(() => {
+    return computeSystemNotifications(debts, fixedExpenses, activeYear, activeMonth);
+  }, [debts, fixedExpenses, activeYear, activeMonth]);
 
-  const handleRequestPush = async () => {
-    if (typeof Notification !== 'undefined') {
-      const result = await Notification.requestPermission();
-      setPermissionStatus(result);
-      if (result === 'granted') {
-        new Notification('LANITAPP Alertas', {
-          body: '¡Notificaciones habilitadas! Recibirás avisos oportunos de quincenas y cuotas.',
-          icon: '/icon.png',
-        });
-      }
-    }
+  const visibleNotifications = useMemo(() => {
+    return rawNotifications.filter((n) => {
+      if (dismissedIds.has(n.id)) return false;
+      if (activeFilterTab !== 'all' && n.type !== activeFilterTab) return false;
+      return true;
+    });
+  }, [rawNotifications, dismissedIds, activeFilterTab]);
+
+  const handleDismissAll = () => {
+    const newSet = new Set(dismissedIds);
+    rawNotifications.forEach((n) => newSet.add(n.id));
+    setDismissedIds(newSet);
+  };
+
+  const handleDismissSingle = (id: string) => {
+    setDismissedIds((prev) => new Set(prev).add(id));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
       {/* Backdrop click to close */}
       <div className="fixed inset-0" onClick={onClose} />
 
       {/* Main Centered Modal Window */}
-      <div className="relative z-10 w-full max-w-md bg-[#162032] border border-slate-700/70 rounded-2xl p-5 sm:p-6 shadow-2xl text-white max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 shrink-0">
+      <div className="relative z-10 w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Header without redundant date filter */}
+        <div className="flex items-center justify-between pb-3 border-b border-app mb-3 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold relative">
-              <Bell className="w-4 h-4" />
-              {notifications.length > 0 && (
+            <div className="w-9 h-9 rounded-2xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold relative shadow-inner">
+              <Bell className="w-5 h-5" />
+              {visibleNotifications.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FF914D] text-white text-[9px] font-black flex items-center justify-center animate-pulse">
-                  {notifications.length}
+                  {visibleNotifications.length}
                 </span>
               )}
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white leading-tight">Centro de Notificaciones</h3>
-              <p className="text-[10px] text-slate-400">Avisos de quincenas, deudas y gastos del ciclo</p>
+              <h3 className="text-sm sm:text-base font-black text-app leading-tight">Centro de Alertas</h3>
+              <p className="text-[11px] text-muted">Avisos y compromisos pendientes</p>
             </div>
           </div>
+
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Browser Push Banner */}
-        <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 mb-3 flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2 text-xs">
-            <Volume2 className="w-4 h-4 text-[#00C2C7] shrink-0" />
-            <div>
-              <span className="font-bold text-white block text-[11px]">Notificaciones del Navegador</span>
-              <span className="text-[10px] text-slate-400">
-                {permissionStatus === 'granted'
-                  ? 'Activas en este dispositivo'
-                  : 'Recibe alertas automáticas'}
-              </span>
-            </div>
-          </div>
-          {permissionStatus !== 'granted' ? (
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-2 shrink-0">
+          {[
+            { id: 'all' as const, label: 'Todas' },
+            { id: 'debt' as const, label: 'Deudas & Cuotas' },
+            { id: 'fortnight' as const, label: 'Quincenas' },
+            { id: 'fixed_expense' as const, label: 'Gastos Fijos' },
+          ].map((tab) => (
             <button
-              onClick={handleRequestPush}
-              className="px-2.5 py-1 rounded-lg bg-primary-custom text-white text-[11px] font-bold shadow-sm hover:opacity-95 cursor-pointer whitespace-nowrap"
+              key={tab.id}
+              onClick={() => setActiveFilterTab(tab.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeFilterTab === tab.id
+                  ? 'bg-primary-custom text-white shadow-sm'
+                  : 'bg-card text-muted border border-app hover:text-app'
+              }`}
             >
-              Habilitar
+              {tab.label}
             </button>
-          ) : (
-            <span className="text-emerald-400 text-[11px] font-bold flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Activo
-            </span>
-          )}
+          ))}
         </div>
 
         {/* Notification Items List */}
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar max-h-[50vh]">
-          {notifications.length === 0 ? (
-            <div className="text-center py-8 space-y-2.5 text-slate-400">
+        <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 no-scrollbar max-h-[50vh]">
+          {visibleNotifications.length === 0 ? (
+            <div className="text-center py-10 space-y-3 text-muted">
               <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/5">
                 <Sparkles className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white">Estás al día con tus pagos y quincenas 🎉</p>
-                <p className="text-[11px] text-slate-400 mt-0.5 max-w-xs mx-auto">
-                  No tienes deudas urgentes ni alertas de quincena en este momento.
+                <p className="text-xs font-bold text-app">Sin alertas pendientes para este mes 🎉</p>
+                <p className="text-[11px] text-muted mt-0.5 max-w-xs mx-auto">
+                  Tus pagos y compromisos de {MONTH_NAMES[activeMonth]} {activeYear} están al día.
                 </p>
               </div>
             </div>
           ) : (
-            notifications.map((notif) => (
+            visibleNotifications.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-3 rounded-xl border transition-all ${
+                className={`p-3.5 rounded-2xl border transition-all shadow-sm ${
                   notif.priority === 'high'
                     ? 'bg-[#FF914D]/10 border-[#FF914D]/30'
-                    : 'bg-slate-800/60 border-slate-700/60'
+                    : 'bg-card border-app'
                 }`}
               >
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-3">
                   <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                       notif.type === 'fortnight'
                         ? 'bg-primary-custom/20 text-primary-custom'
                         : notif.type === 'debt'
@@ -258,33 +259,52 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                     }`}
                   >
                     {notif.type === 'fortnight' ? (
-                      <Calendar className="w-3.5 h-3.5" />
+                      <Calendar className="w-4 h-4" />
                     ) : notif.type === 'debt' ? (
-                      <CreditCard className="w-3.5 h-3.5" />
+                      <CreditCard className="w-4 h-4" />
                     ) : (
-                      <Receipt className="w-3.5 h-3.5" />
+                      <Receipt className="w-4 h-4" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <h4 className="text-xs font-bold text-white truncate">{notif.title}</h4>
-                      <span className="text-[9px] text-slate-400 font-medium shrink-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <h4 className="text-xs font-bold text-app">{notif.title}</h4>
+                      <span className="text-[9px] text-muted font-black px-2 py-0.5 rounded-full bg-surface border border-app shrink-0">
                         {notif.dateStr}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">{notif.description}</p>
+                    <p className="text-[11px] text-muted leading-relaxed">{notif.description}</p>
                   </div>
+                  <button
+                    onClick={() => handleDismissSingle(notif.id)}
+                    className="p-1 rounded-lg text-muted hover:text-app hover:bg-surface transition-all cursor-pointer shrink-0"
+                    title="Descartar alerta"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
 
-        {/* Footer */}
-        <div className="pt-2.5 border-t border-slate-800 mt-2.5 shrink-0">
+        {/* Footer Actions */}
+        <div className="pt-3 border-t border-app mt-3 shrink-0 flex items-center justify-between gap-2">
+          {visibleNotifications.length > 0 ? (
+            <button
+              onClick={handleDismissAll}
+              className="text-xs font-bold text-muted hover:text-rose-400 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Descartar todas</span>
+            </button>
+          ) : (
+            <div />
+          )}
+
           <button
             onClick={onClose}
-            className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all cursor-pointer text-center"
+            className="px-5 py-2 rounded-xl bg-card hover:bg-surface border border-app text-app text-xs font-bold transition-all cursor-pointer"
           >
             Cerrar Alertas
           </button>
