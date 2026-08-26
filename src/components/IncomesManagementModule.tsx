@@ -11,6 +11,8 @@ import {
   ChevronDown,
   Wallet,
   X,
+  RotateCcw,
+  ArrowLeftRight,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import type {
@@ -448,6 +450,38 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     }
   };
 
+  const handleReverseAllocation = async (vi: VariableIncome) => {
+    if (
+      !window.confirm(
+        `¿Deseas reversar esta asignación de sueldo ($${Math.abs(vi.amount).toFixed(
+          2
+        )} USD) y restaurar los montos originales de ambas quincenas?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteVariableIncome(vi.id);
+
+      // Find companion allocation in same year and month
+      const companion = variableIncomes.find(
+        (v) =>
+          v.id !== vi.id &&
+          v.year === vi.year &&
+          v.month === vi.month &&
+          Math.abs(Math.abs(v.amount) - Math.abs(vi.amount)) < 0.01 &&
+          (v.description.includes('Asignación de Sueldo') ||
+            v.description.includes('Reserva asignada') ||
+            v.description.includes('Tomado de Sueldo'))
+      );
+      if (companion) {
+        await deleteVariableIncome(companion.id);
+      }
+    } catch (err) {
+      console.error('Error reversing salary allocation:', err);
+    }
+  };
+
   // Quick create account action
   const handleQuickCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -776,22 +810,43 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 const isEur = vi.currency === 'EUR' || vi.payment_mode === 'eur_cash' || vi.payment_mode === 'ves_euro';
                 const origAmt = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
 
+                const isAllocation =
+                  vi.description.includes('Asignación de Sueldo') ||
+                  vi.description.includes('Reserva asignada') ||
+                  vi.description.includes('Tomado de Sueldo');
+                const isNegative = vi.amount < 0;
+
                 return (
                   <div
                     key={vi.id}
-                    className="p-4 rounded-3xl bg-surface border border-app shadow-md hover:border-[#FF914D] transition-all"
+                    className={`p-4 rounded-3xl bg-surface border shadow-md transition-all ${
+                      isAllocation
+                        ? 'border-primary-custom/40 bg-gradient-to-br from-surface via-surface to-primary-custom/5'
+                        : 'border-app hover:border-[#FF914D]'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm"
-                          style={{ backgroundColor: category?.color || '#FF914D' }}
+                          style={{ backgroundColor: isAllocation ? '#00C2C7' : category?.color || '#FF914D' }}
                         >
-                          <CategoryIcon iconName={category?.icon || 'Sparkles'} size={20} className="w-5 h-5" />
+                          {isAllocation ? (
+                            <ArrowLeftRight className="w-5 h-5" />
+                          ) : (
+                            <CategoryIcon iconName={category?.icon || 'Sparkles'} size={20} className="w-5 h-5" />
+                          )}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-app">{vi.description}</h4>
-                          <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-sm font-bold text-app">{vi.description}</h4>
+                            {isAllocation && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/20 text-primary-custom font-bold">
+                                Asignación Quincenal
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted mt-0.5 flex-wrap">
                             <span className="px-2 py-0.5 rounded bg-card text-[10px] font-semibold text-app">
                               {vi.fortnight === 'q1'
                                 ? `Quincena 15 de ${MONTH_NAMES[selectedMonth]}`
@@ -815,34 +870,34 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                       <div className="text-right">
                         {isVesFixed ? (
                           <>
-                            <span className="text-base font-black text-[#FF914D]">
-                              +Bs. {origAmt.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : 'text-[#FF914D]'}`}>
+                              {isNegative ? '-' : '+'}Bs. {Math.abs(origAmt).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {currency}{vi.amount.toFixed(2)} USD
+                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount).toFixed(2)} USD
                             </span>
                           </>
                         ) : isEur ? (
                           <>
-                            <span className="text-base font-black text-[#FF914D]">
-                              +€{origAmt.toFixed(2)}
+                            <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : 'text-[#FF914D]'}`}>
+                              {isNegative ? '-' : '+'}€{Math.abs(origAmt).toFixed(2)}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {currency}{vi.amount.toFixed(2)} USD
+                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount).toFixed(2)} USD
                             </span>
                           </>
                         ) : (
                           <>
-                            <span className="text-base font-black text-[#FF914D]">
-                              +{currency}{vi.amount.toFixed(2)}
+                            <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : isAllocation ? 'text-[#00C2C7]' : 'text-[#FF914D]'}`}>
+                              {isNegative ? '-' : '+'}{currency}{Math.abs(vi.amount).toFixed(2)}
                             </span>
                             {vi.payment_mode === 'ves_parallel' && rates?.parallelDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ Bs. {(vi.amount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : rates?.bcvDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ Bs. {(vi.amount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : null}
                           </>
@@ -855,21 +910,35 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         {vi.notes || 'Ingreso puntual registrado'}
                       </span>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenEditVar(vi)}
-                          className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
-                          title="Editar ingreso variable"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVar(vi.id)}
-                          className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
-                          title="Eliminar ingreso variable"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex items-center gap-1.5">
+                        {isAllocation ? (
+                          <button
+                            type="button"
+                            onClick={() => handleReverseAllocation(vi)}
+                            className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Reversar y restaurar sueldo original"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Reversar Asignación</span>
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleOpenEditVar(vi)}
+                              className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
+                              title="Editar ingreso variable"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteVar(vi.id)}
+                              className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
+                              title="Eliminar ingreso variable"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

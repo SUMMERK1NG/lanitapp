@@ -21,6 +21,9 @@ import {
   ShieldCheck,
   Coins,
   ArrowLeftRight,
+  PartyPopper,
+  Trophy,
+  Flame,
 } from 'lucide-react';
 import type {
   FortnightType,
@@ -49,6 +52,7 @@ import {
   unmarkFortnightDebtSkipped,
   addTransaction,
   saveVariableIncome,
+  deleteVariableIncome,
 } from '../lib/db.ts';
 import { AddPaymentModal } from './AddPaymentModal.tsx';
 import { AddDebtModal } from './AddDebtModal.tsx';
@@ -215,6 +219,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           finalAmount,
           notes: cleanNotes || (fi.default_fortnight === 'split' ? '50% distribución de sueldo' : 'Ingreso fijo'),
           isFixed: true,
+          isAllocation: false,
         };
       });
   }, [fixedIncomes, monthlyIncomeOverrides, selectedYear, selectedMonth, selectedFortnight]);
@@ -228,13 +233,21 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           vi.month === selectedMonth &&
           vi.fortnight === selectedFortnight
       )
-      .map((vi) => ({
-        id: vi.id,
-        name: vi.description,
-        finalAmount: vi.amount,
-        notes: vi.notes || 'Ingreso extra',
-        isFixed: false,
-      }));
+      .map((vi) => {
+        const isAllocation =
+          vi.description.includes('Asignación de Sueldo') ||
+          vi.description.includes('Reserva asignada') ||
+          vi.description.includes('Tomado de Sueldo');
+
+        return {
+          id: vi.id,
+          name: vi.description,
+          finalAmount: vi.amount,
+          notes: vi.notes || 'Ingreso extra',
+          isFixed: false,
+          isAllocation,
+        };
+      });
   }, [variableIncomes, selectedYear, selectedMonth, selectedFortnight]);
 
   // All combined incomes for this fortnight
@@ -448,9 +461,21 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   // Dinero Libre Real (after expenses, debts, and planned savings)
   const netRemaining = totalAvailable - (totalCommitted + plannedSavingsTotal);
 
+  // Solvency & Progress Computations for Financial Coach
+  const totalCommitmentsCount = activeFortnightFixedExpenses.length + debtsDueThisFortnight.length;
+  const paidFixedCount = activeFortnightFixedExpenses.filter((f) => f.isPaid).length;
+  const skippedFixedCount = activeFortnightFixedExpenses.filter((f) => f.isSkipped).length;
+  const paidDebtsCount = debtsDueThisFortnight.filter((d) => d.isPaid).length;
+  const skippedDebtsCount = debtsDueThisFortnight.filter((d) => d.isSkipped).length;
+
+  const totalHandledCount = paidFixedCount + skippedFixedCount + paidDebtsCount + skippedDebtsCount;
+  const totalActuallyPaidCount = paidFixedCount + paidDebtsCount;
+  const isAllCommitmentsHandled = totalCommitmentsCount > 0 && totalHandledCount === totalCommitmentsCount;
+  const is100PercentSolvent = totalCommitmentsCount > 0 && isAllCommitmentsHandled && totalActuallyPaidCount > 0;
+  const progressPercent = totalCommitmentsCount > 0 ? Math.round((totalHandledCount / totalCommitmentsCount) * 100) : 0;
+
   // Actions for Fixed Expenses
   const handleRequestMarkExpensePaid = (expense: FixedExpense, amount: number) => {
-    // If in deficit / negative Dinero Libre or 0 available income, show the friendly option modal
     if (netRemaining < 0 || totalAvailable <= 0) {
       setDeficitWarningData({
         isOpen: true,
@@ -460,7 +485,6 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       return;
     }
 
-    // Otherwise mark paid directly
     handleExecuteMarkPaid(expense, amount, accounts[0]?.id || '');
   };
 
@@ -689,6 +713,40 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
+  // Reverse salary allocation action
+  const handleReverseAllocation = async (incomeId: string) => {
+    const target = variableIncomes.find((v) => v.id === incomeId);
+    if (!target) return;
+    if (
+      !window.confirm(
+        `¿Deseas reversar esta asignación de sueldo ($${Math.abs(target.amount).toFixed(
+          2
+        )} USD) y restaurar los montos originales de ambas quincenas?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteVariableIncome(target.id);
+
+      const companion = variableIncomes.find(
+        (v) =>
+          v.id !== target.id &&
+          v.year === target.year &&
+          v.month === target.month &&
+          Math.abs(Math.abs(v.amount) - Math.abs(target.amount)) < 0.01 &&
+          (v.description.includes('Asignación de Sueldo') ||
+            v.description.includes('Reserva asignada') ||
+            v.description.includes('Tomado de Sueldo'))
+      );
+      if (companion) {
+        await deleteVariableIncome(companion.id);
+      }
+    } catch (err) {
+      console.error('Error reversing salary allocation in planner:', err);
+    }
+  };
+
   // Batch Postpone all active pending expenses to next fortnight
   const handleBatchPostponeToNextFortnight = async () => {
     if (!window.confirm(`¿Deseas posponer todos los gastos pendientes de esta ${selectedFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'} para el siguiente corte?`)) {
@@ -883,6 +941,110 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       </div>
 
+      {/* 🌟 Financial Coach: Smart Motivation & Solvency Notification Banners */}
+      {is100PercentSolvent ? (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-500/15 via-surface to-[#00C2C7]/15 border border-emerald-500/40 shadow-lg animate-in fade-in space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-sm">
+                {netRemaining > 0 ? <Trophy className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-app flex items-center gap-1.5">
+                    <span>{netRemaining > 0 ? '🎉 ¡Felicidades! Esta quincena estás 100% solvente' : '👏 ¡Misión cumplida: Presupuesto Balanceado y Solvente!'}</span>
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
+                    {totalActuallyPaidCount} pagos al día
+                  </span>
+                </div>
+                <p className="text-xs text-muted leading-relaxed">
+                  {netRemaining > 0 ? (
+                    <>
+                      Has cubierto todos tus gastos y compromisos. Tienes <strong>${netRemaining.toFixed(2)} USD</strong> de Dinero Libre disponible.
+                      {fortnightSavingsGoals.length === 0 ? (
+                        <span className="block mt-1 text-app font-medium">
+                          🐷 <em>¿Por qué no creas una meta de ahorro? Ahorrar parte de este excedente te acerca a tus sueños y a tu fondo de tranquilidad.</em>
+                        </span>
+                      ) : (
+                        <span className="block mt-1 text-app font-medium">
+                          🎯 <em>¡Gran disciplina! Has cumplido con tus gastos y con tu aporte de ahorro planificado (${plannedSavingsTotal.toFixed(2)} USD).</em>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      ¡Ups! No nos quedó dinero libre en este corte ($0.00), pero <strong>todos tus compromisos están 100% pagados y al día</strong>. Estás solvente y sin atrasos, ¡sigue con esa gran disciplina!
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {netRemaining > 0 && (
+              <div className="shrink-0 flex items-center gap-2">
+                {fortnightSavingsGoals.length === 0 ? (
+                  onNavigateToSavings && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToSavings}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-[#00C2C7] text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <PiggyBank className="w-4 h-4" />
+                      <span>Crear Meta de Ahorro</span>
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenSavingsSurplus}
+                    className="px-3.5 py-2 rounded-xl bg-[#00C2C7] text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <PartyPopper className="w-4 h-4" />
+                    <span>Ahorrar Excedente</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Additional Debt & Savings Positive Badges */}
+          <div className="flex items-center gap-2 pt-1 border-t border-app/40 flex-wrap text-xs text-muted">
+            {debtsDueThisFortnight.length > 0 && debtsDueThisFortnight.every((d) => d.isPaid) && (
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold text-[11px] bg-emerald-500/10 px-2.5 py-1 rounded-xl">
+                <Flame className="w-3.5 h-3.5 text-[#FF914D]" /> Cuotas de deuda saldadas este corte. ¡Cada abono te acerca a tu libertad financiera!
+              </span>
+            )}
+            {debtsDueThisFortnight.length === 0 && (
+              <span className="flex items-center gap-1 text-app font-semibold text-[11px] bg-card px-2.5 py-1 rounded-xl border border-app">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary-custom" /> Cero deudas pendientes en este corte.
+              </span>
+            )}
+          </div>
+        </div>
+      ) : totalCommitmentsCount > 0 && totalActuallyPaidCount > 0 && netRemaining >= 0 ? (
+        <div className="p-3.5 sm:p-4 rounded-3xl bg-surface border border-primary-custom/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-app flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-primary-custom" />
+                Progreso del Corte: {totalActuallyPaidCount} de {totalCommitmentsCount} pagos cubiertos ({progressPercent}%)
+              </span>
+              <span className="text-[11px] text-muted">{totalCommitmentsCount - totalActuallyPaidCount} pendientes</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-card overflow-hidden border border-app">
+              <div
+                className="h-full bg-gradient-to-r from-primary-custom to-[#00C2C7] transition-all duration-300 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-muted">
+              Vas por buen camino. Tienes dinero libre presupuestado (${netRemaining.toFixed(2)}) para cubrir los pagos restantes.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Smart Suggestions & Assistance Banner (Cobro Único / Déficit) */}
       {netRemaining < 0 && (
         <div className="p-4 rounded-3xl bg-surface border border-amber-500/30 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
@@ -985,29 +1147,58 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           <p className="text-xs text-muted py-3 text-center">Sin ingresos activos asignados para este corte.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            {allFortnightIncomes.map((inc) => (
-              <div
-                key={inc.id}
-                className="p-3 rounded-2xl bg-card border border-app flex items-center justify-between shadow-sm"
-              >
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="text-xs font-bold text-app">{inc.name}</h4>
-                    {inc.isFixed ? (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/15 text-primary-custom font-semibold">
-                        Fijo
-                      </span>
-                    ) : (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#FF914D]/15 text-[#FF914D] font-semibold flex items-center gap-0.5">
-                        <Sparkles className="w-2.5 h-2.5" /> Extra
-                      </span>
+            {allFortnightIncomes.map((inc) => {
+              const isNegative = inc.finalAmount < 0;
+
+              return (
+                <div
+                  key={inc.id}
+                  className={`p-3 rounded-2xl bg-card border flex items-center justify-between shadow-sm transition-all ${
+                    inc.isAllocation ? 'border-primary-custom/40 bg-primary-custom/5' : 'border-app'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-xs font-bold text-app truncate">{inc.name}</h4>
+                      {inc.isFixed ? (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/15 text-primary-custom font-semibold">
+                          Fijo
+                        </span>
+                      ) : inc.isAllocation ? (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/20 text-primary-custom font-bold flex items-center gap-0.5">
+                          <ArrowLeftRight className="w-2.5 h-2.5" /> Asignación
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#FF914D]/15 text-[#FF914D] font-semibold flex items-center gap-0.5">
+                          <Sparkles className="w-2.5 h-2.5" /> Extra
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted block truncate">{inc.notes}</span>
+
+                    {/* Reversar button for allocation */}
+                    {inc.isAllocation && (
+                      <button
+                        type="button"
+                        onClick={() => handleReverseAllocation(inc.id)}
+                        className="mt-1 text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer underline"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" /> Reversar Asignación
+                      </button>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted">{inc.notes}</span>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`text-sm font-black ${
+                        isNegative ? 'text-[#ef4444]' : 'text-[#00C2C7]'
+                      }`}
+                    >
+                      {isNegative ? '-' : '+'}{currency}{Math.abs(inc.finalAmount).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-sm font-black text-[#00C2C7]">+{currency}{inc.finalAmount.toFixed(2)}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
