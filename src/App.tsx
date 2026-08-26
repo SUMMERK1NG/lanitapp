@@ -173,44 +173,19 @@ export function App() {
 
   // System Categories & Accounts
   const categories: Category[] = liveCategories.length > 0 ? liveCategories : DEFAULT_CATEGORIES;
-  const accounts: Account[] = activeUserId
-    ? liveAccounts.filter((a) => a.user_id === activeUserId)
-    : liveAccounts;
+  const isUserMatch = (item: { user_id?: string }) => !activeUserId || !item.user_id || item.user_id === activeUserId;
 
-  // Datasets strictly bound to active user ID
-  const transactions: Transaction[] = liveTransactions.filter(
-    (t) => activeUserId ? t.user_id === activeUserId : true
-  );
-
-  const fixedIncomes: FixedIncome[] = liveFixedIncomes.filter(
-    (i) => activeUserId ? i.user_id === activeUserId : true
-  );
-
-  const variableIncomes: VariableIncome[] = liveVariableIncomes.filter(
-    (v) => activeUserId ? v.user_id === activeUserId : true
-  );
-
+  const accounts: Account[] = liveAccounts.filter(isUserMatch);
+  const transactions: Transaction[] = liveTransactions.filter(isUserMatch);
+  const fixedIncomes: FixedIncome[] = liveFixedIncomes.filter(isUserMatch);
+  const variableIncomes: VariableIncome[] = liveVariableIncomes.filter(isUserMatch);
   const monthlyIncomeOverrides = liveMonthlyIncomeOverrides;
-
-  const fixedExpenses: FixedExpense[] = liveFixedExpenses.filter(
-    (f) => activeUserId ? f.user_id === activeUserId : true
-  );
-
-  const debts: Debt[] = liveDebts.filter(
-    (d) => activeUserId ? d.user_id === activeUserId : true
-  );
-
+  const fixedExpenses: FixedExpense[] = liveFixedExpenses.filter(isUserMatch);
+  const debts: Debt[] = liveDebts.filter(isUserMatch);
   const monthlyOverrides = liveMonthlyOverrides;
-  const debtPayments: DebtPayment[] = liveDebtPayments.filter(
-    (dp) => activeUserId ? dp.user_id === activeUserId : true
-  );
-
-  const savingsGoals: SavingsGoal[] = liveSavingsGoals.filter(
-    (s) => activeUserId ? s.user_id === activeUserId : true
-  );
-  const savingContributions: SavingContribution[] = liveSavingContributions.filter(
-    (sc) => activeUserId ? sc.user_id === activeUserId : true
-  );
+  const debtPayments: DebtPayment[] = liveDebtPayments.filter(isUserMatch);
+  const savingsGoals: SavingsGoal[] = liveSavingsGoals.filter(isUserMatch);
+  const savingContributions: SavingContribution[] = liveSavingContributions.filter(isUserMatch);
 
   // If standard user lands on settings view, automatically redirect to dashboard
   if (!isAdmin && activeView === 'settings') {

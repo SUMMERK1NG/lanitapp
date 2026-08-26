@@ -256,16 +256,18 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         db.transactions.toArray(),
       ]);
 
-      const filteredAccounts = userId ? accounts.filter((a) => !a.user_id || a.user_id === userId) : accounts;
-      const filteredFixedIncomes = userId ? fixedIncomes.filter((f) => f.user_id === userId) : fixedIncomes;
-      const filteredVarIncomes = userId ? variableIncomes.filter((v) => v.user_id === userId) : variableIncomes;
-      const filteredExpenses = userId ? fixedExpenses.filter((e) => e.user_id === userId) : fixedExpenses;
-      const filteredDebts = userId ? debts.filter((d) => d.user_id === userId) : debts;
-      const filteredDebtPayments = userId ? debtPayments.filter((d) => d.user_id === userId) : debtPayments;
-      const filteredSavings = userId ? savingsGoals.filter((s) => s.user_id === userId) : savingsGoals;
-      const filteredContribs = userId ? savingContributions.filter((c) => c.user_id === userId) : savingContributions;
-      const filteredStates = userId ? fortnightItemStates.filter((s) => s.user_id === userId) : fortnightItemStates;
-      const filteredTxs = userId ? transactions.filter((t) => t.user_id === userId) : transactions;
+      const matchesUser = (item: { user_id?: string }) => !userId || !item.user_id || item.user_id === userId;
+
+      const filteredAccounts = accounts.filter(matchesUser);
+      const filteredFixedIncomes = fixedIncomes.filter(matchesUser);
+      const filteredVarIncomes = variableIncomes.filter(matchesUser);
+      const filteredExpenses = fixedExpenses.filter(matchesUser);
+      const filteredDebts = debts.filter(matchesUser);
+      const filteredDebtPayments = debtPayments.filter(matchesUser);
+      const filteredSavings = savingsGoals.filter(matchesUser);
+      const filteredContribs = savingContributions.filter(matchesUser);
+      const filteredStates = fortnightItemStates.filter(matchesUser);
+      const filteredTxs = transactions.filter(matchesUser);
 
       set({
         accounts: filteredAccounts,
@@ -405,41 +407,21 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => ({ ...st, id: ensureValidUuid(st.id), sync_status: 'synced' }));
       const transactions: Transaction[] = rawTxs.map((t: any) => ({ ...t, id: ensureValidUuid(t.id), sync_status: 'synced' }));
 
-      // Sincronizar Dexie en segundo plano
+      // Sincronizar Dexie en segundo plano de manera no destructiva (Upsert inteligente)
       await Promise.all([
-        db.accounts.where('user_id').equals(userId).delete().then(() => {
-          if (accounts.length > 0) db.accounts.bulkPut(accounts);
-        }),
-        db.categories.bulkPut(categories),
-        db.fixed_incomes.where('user_id').equals(userId).delete().then(() => {
-          if (fixedIncomes.length > 0) db.fixed_incomes.bulkPut(fixedIncomes);
-        }),
-        db.monthly_fixed_income_overrides.bulkPut(monthlyIncomeOverrides),
-        db.variable_incomes.where('user_id').equals(userId).delete().then(() => {
-          if (variableIncomes.length > 0) db.variable_incomes.bulkPut(variableIncomes);
-        }),
-        db.fixed_expenses.where('user_id').equals(userId).delete().then(() => {
-          if (fixedExpenses.length > 0) db.fixed_expenses.bulkPut(fixedExpenses);
-        }),
-        db.monthly_fixed_overrides.bulkPut(monthlyFixedOverrides),
-        db.debts.where('user_id').equals(userId).delete().then(() => {
-          if (debts.length > 0) db.debts.bulkPut(debts);
-        }),
-        db.debt_payments.where('user_id').equals(userId).delete().then(() => {
-          if (debtPayments.length > 0) db.debt_payments.bulkPut(debtPayments);
-        }),
-        db.savings_goals.where('user_id').equals(userId).delete().then(() => {
-          if (savingsGoals.length > 0) db.savings_goals.bulkPut(savingsGoals);
-        }),
-        db.saving_contributions.where('user_id').equals(userId).delete().then(() => {
-          if (savingContributions.length > 0) db.saving_contributions.bulkPut(savingContributions);
-        }),
-        db.fortnight_item_states.where('user_id').equals(userId).delete().then(() => {
-          if (fortnightItemStates.length > 0) db.fortnight_item_states.bulkPut(fortnightItemStates);
-        }),
-        db.transactions.where('user_id').equals(userId).delete().then(() => {
-          if (transactions.length > 0) db.transactions.bulkPut(transactions);
-        }),
+        accounts.length > 0 ? db.accounts.bulkPut(accounts) : Promise.resolve(),
+        categories.length > 0 ? db.categories.bulkPut(categories) : Promise.resolve(),
+        fixedIncomes.length > 0 ? db.fixed_incomes.bulkPut(fixedIncomes) : Promise.resolve(),
+        monthlyIncomeOverrides.length > 0 ? db.monthly_fixed_income_overrides.bulkPut(monthlyIncomeOverrides) : Promise.resolve(),
+        variableIncomes.length > 0 ? db.variable_incomes.bulkPut(variableIncomes) : Promise.resolve(),
+        fixedExpenses.length > 0 ? db.fixed_expenses.bulkPut(fixedExpenses) : Promise.resolve(),
+        monthlyFixedOverrides.length > 0 ? db.monthly_fixed_overrides.bulkPut(monthlyFixedOverrides) : Promise.resolve(),
+        debts.length > 0 ? db.debts.bulkPut(debts) : Promise.resolve(),
+        debtPayments.length > 0 ? db.debt_payments.bulkPut(debtPayments) : Promise.resolve(),
+        savingsGoals.length > 0 ? db.savings_goals.bulkPut(savingsGoals) : Promise.resolve(),
+        savingContributions.length > 0 ? db.saving_contributions.bulkPut(savingContributions) : Promise.resolve(),
+        fortnightItemStates.length > 0 ? db.fortnight_item_states.bulkPut(fortnightItemStates) : Promise.resolve(),
+        transactions.length > 0 ? db.transactions.bulkPut(transactions) : Promise.resolve(),
       ]);
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
