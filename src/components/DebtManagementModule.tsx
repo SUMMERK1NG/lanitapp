@@ -287,10 +287,13 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                         Modalidad:{' '}
                         <strong className="text-app">
                           {debt.debt_mode === 'open' ? 'Monto Abierto' : 'Por Cuotas'} (
-                          {debt.payment_type === 'bcv_usd' && 'Tasa BCV'}
-                          {debt.payment_type === 'cash' && 'Cash USD'}
-                          {debt.payment_type === 'bcv_eur' && 'Euro BCV'}
-                          {debt.payment_type === 'other' && 'Transferencia'}
+                          {debt.payment_mode === 'usd_cash' && '💵 Cash USD'}
+                          {debt.payment_mode === 'eur_cash' && '💶 Cash Euro'}
+                          {debt.payment_mode === 'ves_bcv' && '🏛️ Dólar Tasa BCV'}
+                          {debt.payment_mode === 'ves_euro' && '🇪🇺 Euro Tasa BCV'}
+                          {debt.payment_mode === 'ves_parallel' && '⚡ Dólar Promedio'}
+                          {debt.payment_mode === 'ves_fixed' && '🇻🇪 Bs Fijo'}
+                          {(!debt.payment_mode || debt.payment_mode === 'other') && (debt.payment_type === 'bcv_usd' ? '🏛️ Tasa BCV' : debt.payment_type === 'cash' ? '💵 Cash USD' : '🌐 Otros')}
                           )
                         </strong>
                       </span>
@@ -312,9 +315,15 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                       )}
 
                       {(debt.has_interest || (debt.interest_rate !== undefined && debt.interest_rate > 0)) && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FF914D]/15 text-[#FF914D] border border-[#FF914D]/30 flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
                           <span>Interés: {debt.interest_rate}%</span>
                           {debt.interest_amount ? <span>(${debt.interest_amount.toFixed(2)} {debt.interest_frequency === 'fortnightly' ? 'Q' : 'M'})</span> : null}
+                        </span>
+                      )}
+
+                      {debt.has_late_fee && (debt.late_fee_amount || 0) > 0 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FF914D]/15 text-[#FF914D] border border-[#FF914D]/30 flex items-center gap-1">
+                          <span>Mora: +${Number(debt.late_fee_amount || 0).toFixed(2)}</span>
                         </span>
                       )}
 

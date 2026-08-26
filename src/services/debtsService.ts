@@ -68,6 +68,15 @@ export const sanitizeDebtPayload = (debt: Partial<Debt> & Record<string, any>, u
   if (debt.priority) {
     payload.priority = debt.priority;
   }
+  if (debt.has_late_fee !== undefined) {
+    payload.has_late_fee = Boolean(debt.has_late_fee);
+  }
+  if (debt.late_fee_amount !== undefined) {
+    payload.late_fee_amount = Number(debt.late_fee_amount);
+  }
+  if (debt.payment_mode) {
+    payload.payment_mode = debt.payment_mode;
+  }
 
   return payload;
 };
@@ -99,11 +108,14 @@ export const normalizeDebtRow = (row: any): Debt => {
     currency: (row.currency || row.currency_type || 'USD') as 'USD' | 'EUR' | 'VES',
     currency_type: row.currency_type || row.currency || 'USD',
     payment_type: row.payment_type || 'bcv_usd',
+    payment_mode: row.payment_mode || (row.payment_type === 'bcv_usd' ? 'ves_bcv' : row.payment_type === 'cash_usd' ? 'usd_cash' : row.payment_type === 'bcv_euro' ? 'ves_euro' : 'usd_cash'),
     has_interest: Boolean(row.has_interest),
     interest_rate: row.interest_rate !== undefined ? Number(row.interest_rate) : undefined,
     interest_amount: row.interest_amount !== undefined ? Number(row.interest_amount) : undefined,
     interest_frequency: row.interest_frequency,
     interest_fortnight: row.interest_fortnight,
+    has_late_fee: Boolean(row.has_late_fee),
+    late_fee_amount: row.late_fee_amount !== undefined ? Number(row.late_fee_amount) : undefined,
     due_date: row.due_date,
     status,
     priority: row.priority || 'medium',

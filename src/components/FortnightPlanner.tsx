@@ -1760,10 +1760,22 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex-1 min-w-0">
-                        <span className={`text-xs font-bold block truncate ${d.isPaid ? 'line-through text-muted' : 'text-app'}`}>
-                          {d.creditor}
-                        </span>
-                        <span className="text-[10px] text-muted block">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-xs font-bold truncate ${d.isPaid ? 'line-through text-muted' : 'text-app'}`}>
+                            {d.creditor}
+                          </span>
+                          {d.has_late_fee && (d.late_fee_amount || 0) > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#FF914D]/20 text-[#FF914D] font-bold">
+                              Mora: +${d.late_fee_amount}
+                            </span>
+                          )}
+                          {d.has_interest && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold">
+                              {d.interest_rate ? `${d.interest_rate}% Int.` : `$${d.interest_amount} Int.`}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted block mt-0.5">
                           Saldo: ${Number(d.current_balance).toFixed(2)} {d.debt_mode === 'open' ? '(Pago Abierto)' : d.pending_installments ? `(${d.pending_installments} cuotas rest.)` : ''}
                         </span>
                       </div>

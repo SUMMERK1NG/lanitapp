@@ -181,11 +181,14 @@ export interface Debt {
   currency: 'USD' | 'EUR' | 'VES';
   currency_type?: string;
   payment_type: PaymentMethodType;
+  payment_mode?: FixedExpensePaymentMode;
   has_interest?: boolean;
   interest_rate?: number; // percentage
   interest_amount?: number; // fixed interest amount in USD
   interest_frequency?: 'monthly' | 'fortnightly';
   interest_fortnight?: FortnightType;
+  has_late_fee?: boolean;
+  late_fee_amount?: number; // Penalización por cuota vencida o no pagada (ej. Cashea $4)
   due_date?: string;
   status: 'active' | 'paid';
   priority?: 'low' | 'medium' | 'high' | string;
