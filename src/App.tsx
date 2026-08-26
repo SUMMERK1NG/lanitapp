@@ -36,9 +36,6 @@ import { AuthScreen } from './components/AuthScreen.tsx';
 import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx';
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
-import { MetricsCards } from './components/MetricsCards.tsx';
-import { ExpenseChart } from './components/ExpenseChart.tsx';
-import { AccountsOverview } from './components/AccountsOverview.tsx';
 import { TransactionList } from './components/TransactionList.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
@@ -51,12 +48,8 @@ import { SettingsView } from './components/SettingsView.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
-import { Plus, ArrowRight, Calendar, TrendingUp, RefreshCw } from 'lucide-react';
-
-const MONTH_NAMES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
+import { DashboardModule } from './components/DashboardModule.tsx';
+import { Plus, TrendingUp, RefreshCw } from 'lucide-react';
 
 export function App() {
   const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
@@ -205,81 +198,6 @@ export function App() {
     );
   }, [transactions, debts, fixedIncomes, variableIncomes, fixedExpenses, savingsGoals]);
 
-  // Financial Stats Calculation (Current Selected Month)
-  const stats = useMemo(() => {
-    const currentMonthTxs = transactions.filter((t) => {
-      const txDate = new Date(t.transaction_date);
-      return (
-        txDate.getFullYear() === selectedYear &&
-        txDate.getMonth() === selectedMonth
-      );
-    });
-
-    const totalIncome = currentMonthTxs
-      .filter((t) => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const totalExpense = currentMonthTxs
-      .filter((t) => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const bcvUsd = rates.bcvDollar > 0 ? rates.bcvDollar : 1;
-    const bcvEur = rates.bcvEuro > 0 ? rates.bcvEuro : 1;
-
-    let balance = 0;
-    accounts.forEach((acc) => {
-      const accTxs = transactions.filter((t) => t.account_id === acc.id);
-      const accIncome = accTxs
-        .filter((t) => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const accExpense = accTxs
-        .filter((t) => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const accBalance = acc.initial_balance + accIncome - accExpense;
-
-      if (acc.currency === 'VES') {
-        balance += accBalance / bcvUsd;
-      } else if (acc.currency === 'EUR') {
-        balance += (accBalance * bcvEur) / bcvUsd;
-      } else {
-        balance += accBalance;
-      }
-    });
-
-    // Expenses grouped by category
-    const catMap = new Map(categories.map((c) => [c.id, c]));
-    const expenseByCat: { [key: string]: number } = {};
-
-    currentMonthTxs
-      .filter((t) => t.type === 'expense')
-      .forEach((t) => {
-        expenseByCat[t.category_id] = (expenseByCat[t.category_id] || 0) + t.amount;
-      });
-
-    const categoryExpenses = Object.entries(expenseByCat)
-      .map(([catId, amount]) => {
-        const cat = catMap.get(catId);
-        const percentage = totalExpense > 0 ? Math.round((amount / totalExpense) * 100) : 0;
-        return {
-          category_id: catId,
-          category_name: cat?.name || 'Varios',
-          amount,
-          color: cat?.color || '#9BA3AF',
-          icon: cat?.icon || 'MoreHorizontal',
-          percentage,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-
-    return {
-      balance,
-      totalIncome,
-      totalExpense,
-      categoryExpenses,
-      monthName: `${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
-    };
-  }, [transactions, categories, accounts, rates, selectedYear, selectedMonth]);
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -417,95 +335,22 @@ export function App() {
 
         {/* Main Workspace Body */}
         <div className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 space-y-6">
-          {/* VIEW 1: DASHBOARD GENERAL */}
+          {/* VIEW 1: DASHBOARD GENERAL (INTERACTIVO Y MODULAR) */}
           {activeView === 'dashboard' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Financial Metrics Summary */}
-              <MetricsCards
-                balance={stats.balance}
-                totalIncome={stats.totalIncome}
-                totalExpense={stats.totalExpense}
-                monthName={stats.monthName}
-                bcvRate={rates.bcvDollar}
-              />
-
-              {/* Quick Quincena Glimpse Hero */}
-              <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-app">Planificación de Quincenas</h3>
-                      <p className="text-xs text-muted">Ingresos, gastos fijos y remanente</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setActiveView('fortnight')}
-                    className="text-xs font-bold text-primary-custom hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    Ver detalle completo <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div className="p-3 rounded-2xl bg-card border border-app">
-                    <span className="text-[10px] text-muted font-bold block uppercase tracking-wider">
-                      Quincena 15 de {MONTH_NAMES[selectedMonth]}
-                    </span>
-                    <span className="text-xs text-muted mt-0.5 block">Gastos asignados:</span>
-                    <span className="text-sm font-black text-[#FF914D]">
-                      ${fixedExpenses.filter(f => f.default_fortnight === 'q1' || f.default_fortnight === 'both').reduce((s, f) => s + f.amount, 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-card border border-app">
-                    <span className="text-[10px] text-muted font-bold block uppercase tracking-wider">
-                      Quincena 30 de {MONTH_NAMES[selectedMonth]}
-                    </span>
-                    <span className="text-xs text-muted mt-0.5 block">Gastos asignados:</span>
-                    <span className="text-sm font-black text-[#FF914D]">
-                      ${fixedExpenses.filter(f => f.default_fortnight === 'q2' || f.default_fortnight === 'both').reduce((s, f) => s + f.amount, 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Desktop Grid: Charts & Accounts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <ExpenseChart data={stats.categoryExpenses} />
-                <AccountsOverview
-                  accounts={accounts}
-                  transactions={transactions}
-                  onNavigateToAccounts={() => setActiveView('accounts')}
-                />
-              </div>
-
-              {/* Recent Transactions Snippet */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-app">Últimos Movimientos</h3>
-                    <p className="text-xs text-muted">Actividad reciente en tus cuentas</p>
-                  </div>
-                  <button
-                    onClick={() => setActiveView('transactions')}
-                    className="text-xs text-primary-custom font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                  >
-                    Ver todos ({transactions.length})
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <TransactionList
-                  transactions={transactions.slice(0, 5)}
-                  categories={categories}
-                  accounts={accounts}
-                  onDelete={handleDeleteTransaction}
-                  showFilters={false}
-                />
-              </div>
-            </div>
+            <DashboardModule
+              transactions={transactions}
+              categories={categories}
+              accounts={accounts}
+              fixedIncomes={fixedIncomes}
+              variableIncomes={variableIncomes}
+              fixedExpenses={fixedExpenses}
+              debts={debts}
+              debtPayments={debtPayments}
+              savingsGoals={savingsGoals}
+              savingContributions={savingContributions}
+              rates={rates}
+              onNavigate={setActiveView}
+            />
           )}
 
           {/* VIEW 2: PLANIFICACIÓN POR QUINCENAS (15 / 30) */}
