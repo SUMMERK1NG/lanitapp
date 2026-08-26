@@ -199,6 +199,21 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         .map((o) => [o.fixed_income_id, o])
     );
 
+    // Reservation deductions assigned in this fortnight (e.g. Sueldo del 30 con reserva para el 15)
+    const reservationVariables = variableIncomes.filter(
+      (vi) =>
+        vi.year === selectedYear &&
+        vi.month === selectedMonth &&
+        vi.fortnight === selectedFortnight &&
+        vi.amount < 0 &&
+        (vi.description.includes('Reserva asignada') ||
+          vi.description.includes('Asignación de Sueldo') ||
+          vi.description.includes('Tomado de Sueldo'))
+    );
+
+    const totalReservation = reservationVariables.reduce((sum, v) => sum + Math.abs(v.amount), 0);
+    const reservationIds = reservationVariables.map((v) => v.id);
+
     return fixedIncomes
       .filter((fi) => {
         const override = overrideMap.get(fi.id);
@@ -208,24 +223,35 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         if (fi.default_fortnight === 'both' || fi.default_fortnight === 'split') return true;
         return fi.default_fortnight === selectedFortnight;
       })
-      .map((fi) => {
+      .map((fi, index) => {
         const override = overrideMap.get(fi.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fi.amount;
-        const finalAmount = fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount;
+        const baseAmount = fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount;
         const cleanNotes = (fi.notes || '').replace(/\[split\]/gi, '').trim();
+
+        // Attach reservation deduction to the first fixed income
+        const attachedReservation = index === 0 ? totalReservation : 0;
+        const attachedReservationIds = index === 0 ? reservationIds : [];
+        const netAmount = Math.max(0, baseAmount - attachedReservation);
+
         return {
           id: fi.id,
           name: fi.name,
-          finalAmount,
+          baseAmount,
+          finalAmount: attachedReservation > 0 ? netAmount : baseAmount,
+          reservationAmount: attachedReservation,
+          reservationIds: attachedReservationIds,
           notes: cleanNotes || (fi.default_fortnight === 'split' ? '50% distribución de sueldo' : 'Ingreso fijo'),
           isFixed: true,
           isAllocation: false,
         };
       });
-  }, [fixedIncomes, monthlyIncomeOverrides, selectedYear, selectedMonth, selectedFortnight]);
+  }, [fixedIncomes, monthlyIncomeOverrides, variableIncomes, selectedYear, selectedMonth, selectedFortnight]);
 
   // 2. Active variable incomes for this month and fortnight
   const activeFortnightVariables = useMemo(() => {
+    const hasFixedSalary = activeFortnightFixedIncomes.length > 0;
+
     return variableIncomes
       .filter(
         (vi) =>
@@ -233,6 +259,19 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           vi.month === selectedMonth &&
           vi.fortnight === selectedFortnight
       )
+      .filter((vi) => {
+        // If it's a negative reservation and we have a fixed salary, it's integrated inside the salary card!
+        if (
+          hasFixedSalary &&
+          vi.amount < 0 &&
+          (vi.description.includes('Reserva asignada') ||
+            vi.description.includes('Asignación de Sueldo') ||
+            vi.description.includes('Tomado de Sueldo'))
+        ) {
+          return false;
+        }
+        return true;
+      })
       .map((vi) => {
         const isAllocation =
           vi.description.includes('Asignación de Sueldo') ||
@@ -242,13 +281,16 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         return {
           id: vi.id,
           name: vi.description,
+          baseAmount: vi.amount,
           finalAmount: vi.amount,
+          reservationAmount: 0,
+          reservationIds: [],
           notes: vi.notes || 'Ingreso extra',
           isFixed: false,
           isAllocation,
         };
       });
-  }, [variableIncomes, selectedYear, selectedMonth, selectedFortnight]);
+  }, [variableIncomes, selectedYear, selectedMonth, selectedFortnight, activeFortnightFixedIncomes]);
 
   // All combined incomes for this fortnight
   const allFortnightIncomes = useMemo(() => {
@@ -1153,49 +1195,86 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               return (
                 <div
                   key={inc.id}
-                  className={`p-3 rounded-2xl bg-card border flex items-center justify-between shadow-sm transition-all ${
+                  className={`p-3.5 rounded-2xl bg-card border shadow-sm transition-all space-y-2.5 ${
                     inc.isAllocation ? 'border-primary-custom/40 bg-primary-custom/5' : 'border-app'
                   }`}
                 >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h4 className="text-xs font-bold text-app truncate">{inc.name}</h4>
-                      {inc.isFixed ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/15 text-primary-custom font-semibold">
-                          Fijo
-                        </span>
-                      ) : inc.isAllocation ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/20 text-primary-custom font-bold flex items-center gap-0.5">
-                          <ArrowLeftRight className="w-2.5 h-2.5" /> Asignación
-                        </span>
-                      ) : (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#FF914D]/15 text-[#FF914D] font-semibold flex items-center gap-0.5">
-                          <Sparkles className="w-2.5 h-2.5" /> Extra
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-xs font-bold text-app truncate">{inc.name}</h4>
+                        {inc.isFixed ? (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/15 text-primary-custom font-semibold">
+                            Fijo
+                          </span>
+                        ) : inc.isAllocation ? (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary-custom/20 text-primary-custom font-bold flex items-center gap-0.5">
+                            <ArrowLeftRight className="w-2.5 h-2.5" /> Asignación
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#FF914D]/15 text-[#FF914D] font-semibold flex items-center gap-0.5">
+                            <Sparkles className="w-2.5 h-2.5" /> Extra
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted block truncate">{inc.notes}</span>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`text-sm font-black ${
+                          isNegative ? 'text-[#ef4444]' : 'text-[#00C2C7]'
+                        }`}
+                      >
+                        {isNegative ? '-' : '+'}{currency}{Math.abs(inc.finalAmount).toFixed(2)}
+                      </span>
+                      {inc.reservationAmount > 0 && (
+                        <span className="text-[9px] text-muted block">
+                          Neto disponible
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-muted block truncate">{inc.notes}</span>
+                  </div>
 
-                    {/* Reversar button for allocation */}
-                    {inc.isAllocation && (
+                  {/* Integrated breakdown if there is an allocation reservation attached */}
+                  {inc.reservationAmount > 0 ? (
+                    <div className="pt-2 border-t border-app/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-surface/50 p-2.5 rounded-xl border border-app">
+                      <div className="text-[11px] space-y-0.5">
+                        <div className="flex items-center gap-2 text-muted">
+                          <span>Sueldo base:</span>
+                          <span className="font-bold text-app">+{currency}{inc.baseAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-amber-400 font-medium">
+                          <span>Reserva asignada a {otherFortnightLabel}:</span>
+                          <span className="font-bold">-{currency}{inc.reservationAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (inc.reservationIds.length > 0) {
+                            handleReverseAllocation(inc.reservationIds[0]);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-xs self-start sm:self-center"
+                        title="Reversar y restaurar sueldo completo"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reversar Asignación</span>
+                      </button>
+                    </div>
+                  ) : inc.isAllocation ? (
+                    <div className="pt-1.5 border-t border-app/40 flex justify-end">
                       <button
                         type="button"
                         onClick={() => handleReverseAllocation(inc.id)}
-                        className="mt-1 text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer underline"
+                        className="text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer underline"
                       >
                         <RotateCcw className="w-2.5 h-2.5" /> Reversar Asignación
                       </button>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span
-                      className={`text-sm font-black ${
-                        isNegative ? 'text-[#ef4444]' : 'text-[#00C2C7]'
-                      }`}
-                    >
-                      {isNegative ? '-' : '+'}{currency}{Math.abs(inc.finalAmount).toFixed(2)}
-                    </span>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
