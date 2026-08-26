@@ -504,20 +504,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
     const remoteStates = resStates.data;
     const remoteTxs = resTxs.data;
 
-    // 3. Limpiar registros locales previos del usuario y reemplazar con la verdad de la nube
-    await Promise.all([
-      db.fixed_incomes.where('user_id').equals(activeUid).delete(),
-      db.variable_incomes.where('user_id').equals(activeUid).delete(),
-      db.fixed_expenses.where('user_id').equals(activeUid).delete(),
-      db.debts.where('user_id').equals(activeUid).delete(),
-      db.debt_payments.where('user_id').equals(activeUid).delete(),
-      db.savings_goals.where('user_id').equals(activeUid).delete(),
-      db.saving_contributions.where('user_id').equals(activeUid).delete(),
-      db.fortnight_item_states.where('user_id').equals(activeUid).delete(),
-      db.transactions.where('user_id').equals(activeUid).delete(),
-    ]);
-
-    // 4. Volcar datos remotos marcados como 'synced'
+    // 3. Volcar datos remotos marcados como 'synced' de manera segura (no destructiva)
     if (remoteCategories && remoteCategories.length > 0) {
       await db.categories.bulkPut(remoteCategories.map((c) => ({ ...c, sync_status: 'synced' })));
     }
@@ -692,17 +679,30 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Deudas
     const pendingDebts = await db.debts.where('sync_status').equals('pending').toArray();
     for (const item of pendingDebts.filter((d) => !d.user_id || d.user_id === targetUid)) {
-      const { sync_status, currency, creditor, ...rest } = item;
-      const { error } = await supabase.from('debts').upsert({
-        ...rest,
-        creditor_name: item.creditor || item.creditor_name || (item as any).name || 'Deuda',
-        currency_type: item.currency || item.currency_type || 'USD',
+      const debtPayload = {
+        id: ensureValidUuid(item.id),
         user_id: targetUid,
-        total_amount: Number(item.total_amount),
-        original_amount: Number(item.total_amount),
-        remaining_amount: Number(item.current_balance),
-        current_balance: Number(item.current_balance),
-      });
+        creditor_name: item.creditor || item.creditor_name || (item as any).name || 'Deuda',
+        platform: item.platform || 'particular',
+        debt_mode: item.debt_mode || 'installments',
+        total_amount: Number(item.total_amount || 0),
+        original_amount: Number(item.total_amount || 0),
+        remaining_amount: Number(item.current_balance !== undefined ? item.current_balance : item.total_amount || 0),
+        current_balance: Number(item.current_balance !== undefined ? item.current_balance : item.total_amount || 0),
+        status: (item.current_balance !== undefined && item.current_balance <= 0) ? 'paid' : (item.status || 'active'),
+        currency_type: item.currency || item.currency_type || 'USD',
+        payment_type: item.payment_type || 'bcv_usd',
+        fortnight_due: item.fortnight_due || 'q1',
+        start_year: item.start_year || new Date().getFullYear(),
+        start_month: item.start_month !== undefined ? item.start_month : new Date().getMonth(),
+        start_fortnight: item.start_fortnight || (new Date().getDate() <= 15 ? 'q1' : 'q2'),
+        has_interest: Boolean(item.has_interest),
+        interest_rate: Number(item.interest_rate || 0),
+        interest_amount: Number(item.interest_amount || 0),
+        notes: item.notes || '',
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('debts').upsert(debtPayload);
       if (!error) {
         await db.debts.update(item.id, { sync_status: 'synced' });
         pushed++;
