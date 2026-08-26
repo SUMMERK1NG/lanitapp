@@ -14,6 +14,8 @@ import {
   Sparkles,
   Wallet,
   TrendingUp,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import type { SavingsGoal, SavingContribution, FortnightType, Account } from '../types/index.ts';
 import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution } from '../lib/db.ts';
@@ -65,6 +67,8 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [isStartPeriodDropdownOpen, setIsStartPeriodDropdownOpen] = useState<boolean>(false);
+  const [isTargetPeriodDropdownOpen, setIsTargetPeriodDropdownOpen] = useState<boolean>(false);
 
   // Helper para cálculo inteligente de quincena y mes según Fecha de Inicio
   const getFortnightInfoFromDate = (dateStr: string) => {
@@ -644,41 +648,106 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
               {/* Fechas con Selectores Quincenales estilizados */}
               <div className="space-y-1.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
+                  {/* Dropdown: Fecha / Quincena de Inicio */}
+                  <div className="relative">
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Fecha / Quincena de Inicio <span className="text-[#00C2C7] font-bold">*</span>
                     </label>
-                    <select
-                      value={startDate}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-[#00C2C7] cursor-pointer"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsStartPeriodDropdownOpen(!isStartPeriodDropdownOpen);
+                        setIsTargetPeriodDropdownOpen(false);
+                      }}
+                      className="w-full bg-card border border-app hover:border-app-hover rounded-xl px-3 py-2.5 text-xs text-app font-bold flex items-center justify-between transition-all cursor-pointer text-left"
                     >
-                      {startPeriodOptions.map((opt) => (
-                        <option key={opt.key} value={opt.dateStr} className="bg-surface text-app">
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="truncate">{startPeriodOptions.find((o) => o.dateStr === startDate)?.label || 'Seleccionar quincena'}</span>
+                      <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ml-1 ${isStartPeriodDropdownOpen ? 'rotate-180 text-[#00C2C7]' : ''}`} />
+                    </button>
+
+                    {isStartPeriodDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 max-h-48 overflow-y-auto space-y-1 animate-in fade-in-50 zoom-in-95">
+                        {startPeriodOptions.map((opt) => {
+                          const isSelected = opt.dateStr === startDate;
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() => {
+                                handleStartDateChange(opt.dateStr);
+                                setIsStartPeriodDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                                isSelected ? 'bg-[#00C2C7]/15 text-[#00C2C7] font-bold' : 'hover:bg-card text-app'
+                              }`}
+                            >
+                              <span className="text-xs">{opt.label}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[#00C2C7] shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
-                  <div>
+                  {/* Dropdown: Fecha Límite Estimada */}
+                  <div className="relative">
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Fecha Límite Estimada <span className="text-[10px] text-muted">(Opcional)</span>
                     </label>
-                    <select
-                      value={targetDate}
-                      onChange={(e) => setTargetDate(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-[#00C2C7] cursor-pointer"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTargetPeriodDropdownOpen(!isTargetPeriodDropdownOpen);
+                        setIsStartPeriodDropdownOpen(false);
+                      }}
+                      className="w-full bg-card border border-app hover:border-app-hover rounded-xl px-3 py-2.5 text-xs text-app font-bold flex items-center justify-between transition-all cursor-pointer text-left"
                     >
-                      <option value="" className="bg-surface text-muted">Sin fecha límite (Indefinido)</option>
-                      {startPeriodOptions
-                        .filter((opt) => !startDate || opt.dateStr > startDate)
-                        .map((opt) => (
-                          <option key={opt.key} value={opt.dateStr} className="bg-surface text-app">
-                            {opt.label}
-                          </option>
-                        ))}
-                    </select>
+                      <span className="truncate">
+                        {targetDate ? (startPeriodOptions.find((o) => o.dateStr === targetDate)?.label || targetDate) : 'Sin fecha límite (Indefinido)'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ml-1 ${isTargetPeriodDropdownOpen ? 'rotate-180 text-[#00C2C7]' : ''}`} />
+                    </button>
+
+                    {isTargetPeriodDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 max-h-48 overflow-y-auto space-y-1 animate-in fade-in-50 zoom-in-95">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetDate('');
+                            setIsTargetPeriodDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                            !targetDate ? 'bg-[#00C2C7]/15 text-[#00C2C7] font-bold' : 'hover:bg-card text-app'
+                          }`}
+                        >
+                          <span className="text-xs text-muted">Sin fecha límite (Indefinido)</span>
+                          {!targetDate && <Check className="w-3.5 h-3.5 text-[#00C2C7] shrink-0" />}
+                        </button>
+
+                        {startPeriodOptions
+                          .filter((opt) => !startDate || opt.dateStr > startDate)
+                          .map((opt) => {
+                            const isSelected = opt.dateStr === targetDate;
+                            return (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={() => {
+                                  setTargetDate(opt.dateStr);
+                                  setIsTargetPeriodDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                                  isSelected ? 'bg-[#00C2C7]/15 text-[#00C2C7] font-bold' : 'hover:bg-card text-app'
+                                }`}
+                              >
+                                <span className="text-xs">{opt.label}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-[#00C2C7] shrink-0" />}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

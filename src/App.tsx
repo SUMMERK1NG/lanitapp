@@ -50,6 +50,7 @@ import { AccountsManagementModule } from './components/AccountsManagementModule.
 import { SettingsView } from './components/SettingsView.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
+import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { Plus, ArrowRight, Calendar, TrendingUp, RefreshCw } from 'lucide-react';
 
 const MONTH_NAMES = [
@@ -701,6 +702,9 @@ export function App() {
                   <span className="text-xl font-black text-[#FF914D]">+{rates.spreadPercentage}%</span>
                 </div>
               </div>
+
+              {/* Historical Exchange Rates Chart & Logs */}
+              <RatesHistoryModule />
             </div>
           )}
 

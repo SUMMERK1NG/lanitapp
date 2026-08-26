@@ -316,14 +316,14 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
           </span>
         </div>
 
-        {/* Card 2: Cash / USD */}
+        {/* Card 2: Divisas / USD & EUR */}
         <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
-          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Efectivo & Divisas ($)</span>
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Divisas ($ / €)</span>
           <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
             ${totalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <span className="text-[11px] text-muted block truncate">
-            {totalEUR > 0 ? `+ €${totalEUR.toFixed(2)} EUR en cuentas` : 'Billeteras y efectivo'}
+            {totalEUR > 0 ? `+ €${totalEUR.toFixed(2)} EUR en cuentas` : 'Billeteras digitales y efectivo'}
           </span>
         </div>
 
@@ -364,7 +364,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
             filterType === 'cash' ? 'bg-primary-custom text-white shadow-sm' : 'text-muted hover:text-app'
           }`}
         >
-          Efectivo & Divisas ({accounts.filter((a) => a.currency !== 'VES').length})
+          Divisas ({accounts.filter((a) => a.currency !== 'VES').length})
         </button>
         <button
           onClick={() => setFilterType('bank')}
