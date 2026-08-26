@@ -2243,3 +2243,72 @@ export async function unmarkFortnightDebtSkipped(params: {
     }
   }
 }
+
+/**
+ * Aportes de Ahorro para Plan Quincenal
+ */
+export async function setSavingContributionSkipped(data: {
+  goal_id: string;
+  year: number;
+  month: number;
+  fortnight: FortnightType;
+  notes?: string;
+}): Promise<void> {
+  const goalId = ensureValidUuid(data.goal_id);
+  const goal = (await db.savings_goals.get(goalId)) || (await db.savings_goals.get(data.goal_id));
+  const userId = goal?.user_id || getActiveUserId();
+
+  const record: SavingContribution = {
+    id: generateUuid(),
+    user_id: userId,
+    goal_id: data.goal_id,
+    amount: 0,
+    year: data.year,
+    month: data.month,
+    fortnight: data.fortnight,
+    is_skipped: true,
+    contribution_date: new Date().toISOString().split('T')[0],
+    notes: data.notes || 'Aporte omitido este corte',
+    sync_status: 'pending',
+    created_at: new Date().toISOString(),
+  };
+
+  await db.saving_contributions.put(record);
+
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      const { sync_status, ...payload } = record;
+      await supabase.from('saving_contributions').upsert(payload);
+    } catch (e) {
+      console.warn('Supabase skip saving contribution notice:', e);
+    }
+  }
+}
+
+export async function unmarkSavingContribution(contributionId: string): Promise<void> {
+  const contrib = await db.saving_contributions.get(contributionId);
+  if (!contrib) return;
+
+  if (!contrib.is_skipped && contrib.amount > 0) {
+    const goal = await db.savings_goals.get(contrib.goal_id);
+    if (goal) {
+      const updatedGoal: SavingsGoal = {
+        ...goal,
+        current_amount: Math.max(0, Number(goal.current_amount || 0) - Number(contrib.amount)),
+        updated_at: new Date().toISOString(),
+      };
+      await db.savings_goals.put(updatedGoal);
+    }
+  }
+
+  await db.saving_contributions.delete(contributionId);
+
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('saving_contributions').delete().eq('id', contributionId);
+    } catch (e) {
+      console.warn('Supabase delete contribution notice:', e);
+    }
+  }
+}
+

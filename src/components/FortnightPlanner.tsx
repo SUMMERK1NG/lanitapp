@@ -53,6 +53,9 @@ import {
   addTransaction,
   saveVariableIncome,
   deleteVariableIncome,
+  addSavingContribution,
+  setSavingContributionSkipped,
+  unmarkSavingContribution,
 } from '../lib/db.ts';
 import { AddPaymentModal } from './AddPaymentModal.tsx';
 import { AddDebtModal } from './AddDebtModal.tsx';
@@ -128,9 +131,13 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   // Surplus modal form inputs
   const [selectedSurplusGoalId, setSelectedSurplusGoalId] = useState<string>('');
   const [surplusSavingsAmount, setSurplusSavingsAmount] = useState<number>(0);
+  const [surplusPresetType, setSurplusPresetType] = useState<'cuota' | 'all' | 'custom'>('cuota');
   const [selectedSurplusAccountId, setSelectedSurplusAccountId] = useState<string>('');
   const [surplusBalanceAmount, setSurplusBalanceAmount] = useState<number>(0);
   const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
+
+  // Celebration Alert / Motivational Toast State
+  const [savingCelebrationMessage, setSavingCelebrationMessage] = useState<string | null>(null);
 
   // Smart Deficit / Cover Modals State
   const [isCoverDeficitModalOpen, setIsCoverDeficitModalOpen] = useState<boolean>(false);
@@ -141,14 +148,17 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const [isAdvanceSalaryModalOpen, setIsAdvanceSalaryModalOpen] = useState<boolean>(false);
   const [advanceSalaryAmount, setAdvanceSalaryAmount] = useState<number>(0);
 
-  // Skip Modal Confirmation State
+  // Skip Modal Confirmation State (Expenses, Debts, Savings)
   const [skipModalData, setSkipModalData] = useState<{
     isOpen: boolean;
     expense?: FixedExpense;
     debtId?: string;
     debtName?: string;
+    goalId?: string;
+    goalName?: string;
     amount?: number;
     isDebt?: boolean;
+    isGoal?: boolean;
   }>({ isOpen: false });
 
   // Deficit Payment Warning Modal State (when clicking 'Pagado' with insufficient funds)
@@ -191,7 +201,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   }, [selectedYear, selectedMonth, selectedFortnight]);
 
-  // 1. Active fixed incomes for this fortnight
+  // 1. Active fixed incomes for this fortnight (Consolidated with paired salary reservation deductions)
   const activeFortnightFixedIncomes = useMemo(() => {
     const overrideMap = new Map(
       monthlyIncomeOverrides
@@ -229,7 +239,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const baseAmount = fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount;
         const cleanNotes = (fi.notes || '').replace(/\[split\]/gi, '').trim();
 
-        // Attach reservation deduction to the first fixed income
+        // Attach reservation deduction to the first fixed salary income
         const attachedReservation = index === 0 ? totalReservation : 0;
         const attachedReservationIds = index === 0 ? reservationIds : [];
         const netAmount = Math.max(0, baseAmount - attachedReservation);
@@ -248,7 +258,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
   }, [fixedIncomes, monthlyIncomeOverrides, variableIncomes, selectedYear, selectedMonth, selectedFortnight]);
 
-  // 2. Active variable incomes for this month and fortnight
+  // 2. Active variable incomes for this month and fortnight (excluding integrated salary deductions)
   const activeFortnightVariables = useMemo(() => {
     const hasFixedSalary = activeFortnightFixedIncomes.length > 0;
 
@@ -485,9 +495,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
   }, [savingsGoals, selectedFortnight]);
 
-  const plannedSavingsTotal = fortnightSavingsGoals.reduce((sum, g) => sum + g.amount_per_period, 0);
-
-  // Check actual contributions in this fortnight
+  // Actual savings contributions in this fortnight
   const actualContributions = useMemo(() => {
     return savingContributions.filter(
       (sc) =>
@@ -496,6 +504,16 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         sc.fortnight === selectedFortnight
     );
   }, [savingContributions, selectedYear, selectedMonth, selectedFortnight]);
+
+  // Planned savings total (excludes goals that have been skipped this fortnight)
+  const plannedSavingsTotal = useMemo(() => {
+    return fortnightSavingsGoals
+      .filter((g) => {
+        const contrib = actualContributions.find((ac) => ac.goal_id === g.id);
+        return !contrib?.is_skipped;
+      })
+      .reduce((sum, g) => sum + g.amount_per_period, 0);
+  }, [fortnightSavingsGoals, actualContributions]);
 
   // Total Committed (Fixed Expenses + Debt Commitments)
   const totalCommitted = totalFixedCost + effectiveDebtCost;
@@ -515,6 +533,11 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const isAllCommitmentsHandled = totalCommitmentsCount > 0 && totalHandledCount === totalCommitmentsCount;
   const is100PercentSolvent = totalCommitmentsCount > 0 && isAllCommitmentsHandled && totalActuallyPaidCount > 0;
   const progressPercent = totalCommitmentsCount > 0 ? Math.round((totalHandledCount / totalCommitmentsCount) * 100) : 0;
+
+  // Currently selected goal for surplus savings modal
+  const activeSelectedSurplusGoal = useMemo(() => {
+    return savingsGoals.find((g) => g.id === selectedSurplusGoalId) || savingsGoals[0];
+  }, [savingsGoals, selectedSurplusGoalId]);
 
   // Actions for Fixed Expenses
   const handleRequestMarkExpensePaid = (expense: FixedExpense, amount: number) => {
@@ -559,13 +582,14 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
-  // Skip Handlers
+  // Skip Handlers for Expenses
   const handleRequestSkipExpense = (expense: FixedExpense) => {
     setSkipModalData({
       isOpen: true,
       expense,
       amount: expense.amount,
       isDebt: false,
+      isGoal: false,
     });
   };
 
@@ -605,6 +629,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       debtName: creditor,
       amount: cuota,
       isDebt: true,
+      isGoal: false,
     });
   };
 
@@ -644,12 +669,112 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     });
   };
 
-  // Surplus modal open actions
+  // Direct Savings Goal Actions (Aportar, Omitir, Deshacer)
+  const handleDirectContributeGoal = async (goal: SavingsGoal) => {
+    try {
+      await addSavingContribution({
+        goal_id: goal.id,
+        amount: goal.amount_per_period,
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: selectedFortnight,
+        notes: `Aporte quincenal programado (${fortnightLabel})`,
+      });
+      setSavingCelebrationMessage(
+        `🎉 ¡Felicidades! Has cubierto tu cuota de ahorro de $${goal.amount_per_period.toFixed(2)} USD para "${goal.name}". ¡Sigue construyendo tu futuro con disciplina!`
+      );
+    } catch (err) {
+      console.error('Error contributing to savings goal:', err);
+    }
+  };
+
+  const handleRequestSkipGoal = (goal: SavingsGoal) => {
+    setSkipModalData({
+      isOpen: true,
+      goalId: goal.id,
+      goalName: goal.name,
+      amount: goal.amount_per_period,
+      isGoal: true,
+      isDebt: false,
+    });
+  };
+
+  const handleConfirmSkipGoal = async (reasonNote?: string) => {
+    if (!skipModalData.goalId) return;
+    try {
+      await setSavingContributionSkipped({
+        goal_id: skipModalData.goalId,
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: selectedFortnight,
+        notes: reasonNote || 'Aporte omitido en este corte',
+      });
+      setSkipModalData({ isOpen: false });
+    } catch (err) {
+      console.error('Error skipping savings goal:', err);
+    }
+  };
+
+  const handleUndoGoalContribution = async (contribId: string) => {
+    try {
+      await unmarkSavingContribution(contribId);
+    } catch (err) {
+      console.error('Error unmarking saving contribution:', err);
+    }
+  };
+
+  // Surplus modal open actions with smart suggestions (Cuota / Total Libre / Personalizado)
   const handleOpenSavingsSurplus = () => {
     const goal = savingsGoals.find((g) => g.status === 'active') || savingsGoals[0];
-    if (goal) setSelectedSurplusGoalId(goal.id);
-    setSurplusSavingsAmount(Number(Math.max(0, netRemaining).toFixed(2)));
+    if (goal) {
+      setSelectedSurplusGoalId(goal.id);
+      const cuota = Number(goal.amount_per_period || 0);
+      if (cuota > 0 && cuota <= Math.max(0, netRemaining)) {
+        setSurplusSavingsAmount(cuota);
+        setSurplusPresetType('cuota');
+      } else {
+        setSurplusSavingsAmount(Number(Math.max(0, netRemaining).toFixed(2)));
+        setSurplusPresetType('all');
+      }
+    } else {
+      setSurplusSavingsAmount(Number(Math.max(0, netRemaining).toFixed(2)));
+      setSurplusPresetType('all');
+    }
     setIsSavingsSurplusModalOpen(true);
+  };
+
+  const handleSelectSurplusPreset = (type: 'cuota' | 'all' | 'custom') => {
+    setSurplusPresetType(type);
+    if (type === 'cuota' && activeSelectedSurplusGoal?.amount_per_period) {
+      setSurplusSavingsAmount(Number(activeSelectedSurplusGoal.amount_per_period));
+    } else if (type === 'all') {
+      setSurplusSavingsAmount(Number(Math.max(0, netRemaining).toFixed(2)));
+    }
+  };
+
+  const handleConfirmSavingsSurplus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSurplusGoalId || surplusSavingsAmount <= 0) return;
+    setIsProcessingAction(true);
+    try {
+      const goal = savingsGoals.find((g) => g.id === selectedSurplusGoalId);
+      await addSavingContribution({
+        goal_id: selectedSurplusGoalId,
+        amount: surplusSavingsAmount,
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: selectedFortnight,
+        notes: `Aporte voluntario desde Dinero Libre (${fortnightLabel})`,
+      });
+      setIsSavingsSurplusModalOpen(false);
+      setSavingCelebrationMessage(
+        `🎉 ¡Gran decisión! Has aportado $${surplusSavingsAmount.toFixed(2)} USD a tu meta "${goal?.name || 'Ahorro'}". ¡Tu patrimonio sigue creciendo!`
+      );
+    } catch (err) {
+      console.error('Error saving surplus contribution:', err);
+    } finally {
+      setIsProcessingAction(false);
+    }
   };
 
   const handleOpenBalanceSurplus = () => {
@@ -983,6 +1108,24 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       </div>
 
+      {/* 🌟 Savings Celebration Toast Banner */}
+      {savingCelebrationMessage && (
+        <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-500/20 via-surface to-[#00C2C7]/20 border border-emerald-500/50 shadow-lg flex items-center justify-between gap-3 animate-in fade-in zoom-in-95">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <PartyPopper className="w-5 h-5" />
+            </div>
+            <p className="text-xs font-bold text-app leading-relaxed">{savingCelebrationMessage}</p>
+          </div>
+          <button
+            onClick={() => setSavingCelebrationMessage(null)}
+            className="p-1 rounded-lg text-muted hover:text-app"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* 🌟 Financial Coach: Smart Motivation & Solvency Notification Banners */}
       {is100PercentSolvent ? (
         <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-500/15 via-surface to-[#00C2C7]/15 border border-emerald-500/40 shadow-lg animate-in fade-in space-y-3">
@@ -1282,7 +1425,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         )}
       </div>
 
-      {/* Ahorro Quincenal Programado Hero Section */}
+      {/* Ahorro Quincenal Programado Section */}
       <div className="p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1302,7 +1445,28 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
 
         {fortnightSavingsGoals.length === 0 ? (
-          <p className="text-xs text-muted py-2 text-center">No hay metas de ahorro programadas para esta quincena.</p>
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-[#00C2C7]/15 via-surface to-primary-custom/10 border border-[#00C2C7]/30 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center shrink-0">
+                <PiggyBank className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-app">¿Por qué no creas tu primera meta de ahorro?</h4>
+                <p className="text-[11px] text-muted">
+                  Aún no tienes metas de ahorro programadas. Reservar aunque sea una pequeña parte de tu dinero libre te ayuda a construir tu fondo de emergencia y lograr tus metas.
+                </p>
+              </div>
+            </div>
+            {onNavigateToSavings && (
+              <button
+                type="button"
+                onClick={onNavigateToSavings}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#00C2C7] to-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Crear Meta de Ahorro
+              </button>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
             {fortnightSavingsGoals.map((g) => {
@@ -1311,24 +1475,75 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               return (
                 <div
                   key={g.id}
-                  className="p-3 rounded-2xl bg-card border border-app flex items-center justify-between shadow-sm"
+                  className={`p-3 rounded-2xl bg-card border shadow-sm transition-all space-y-2 ${
+                    contrib?.is_skipped
+                      ? 'border-amber-500/30 opacity-80'
+                      : contrib
+                      ? 'border-emerald-500/40 bg-emerald-500/5'
+                      : 'border-app hover:border-[#00C2C7]/50'
+                  }`}
                 >
-                  <div>
-                    <h4 className="text-xs font-bold text-app">{g.name}</h4>
-                    <span className="text-[10px] text-muted">
-                      Acumulado: ${Number(g.current_amount).toFixed(2)} / ${Number(g.target_amount).toFixed(2)}
-                    </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-app">{g.name}</h4>
+                      <span className="text-[10px] text-muted block">
+                        Acumulado: ${Number(g.current_amount).toFixed(2)} / ${Number(g.target_amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-black text-[#00C2C7] block">
+                        ${Number(g.amount_per_period).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-sm font-black text-[#00C2C7] block">
-                      ${Number(g.amount_per_period).toFixed(2)}
-                    </span>
+
+                  {/* Savings Interactive Action Row */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-app/50 text-[11px]">
                     {contrib?.is_skipped ? (
-                      <span className="text-[9px] font-bold text-[#FF914D]">OMITIDO</span>
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[10px] font-bold text-amber-400 flex items-center gap-1">
+                          <CornerDownRight className="w-3 h-3" /> Aporte Omitido
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUndoGoalContribution(contrib.id)}
+                          className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer flex items-center gap-0.5"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" /> Restaurar
+                        </button>
+                      </div>
                     ) : contrib ? (
-                      <span className="text-[9px] font-bold text-emerald-400">APORTADO</span>
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Aportado (${contrib.amount.toFixed(2)})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUndoGoalContribution(contrib.id)}
+                          className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer flex items-center gap-0.5"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" /> Deshacer
+                        </button>
+                      </div>
                     ) : (
-                      <span className="text-[9px] text-muted">Pendiente</span>
+                      <div className="flex items-center justify-end gap-1.5 w-full">
+                        <button
+                          type="button"
+                          onClick={() => handleRequestSkipGoal(g)}
+                          className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                          title="Omitir aporte en este corte"
+                        >
+                          <CornerDownRight className="w-3 h-3" /> Omitir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDirectContributeGoal(g)}
+                          className="px-2.5 py-1 rounded-xl bg-[#00C2C7] text-white text-[10px] font-bold hover:opacity-90 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                          title="Marcar cuota aportada"
+                        >
+                          <Check className="w-3 h-3" /> Aportar
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1591,7 +1806,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       </div>
 
-      {/* Modal 1: Ahorrar Superávit */}
+      {/* Modal 1: Destinar Superávit a Meta de Ahorro (con Presets Inteligentes de Cuota / Todo / Personalizado) */}
       {isSavingsSurplusModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="fixed inset-0" onClick={() => setIsSavingsSurplusModalOpen(false)} />
@@ -1614,12 +1829,20 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleConfirmBalanceSurplus} className="space-y-3.5">
+            <form onSubmit={handleConfirmSavingsSurplus} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1">Seleccionar Meta</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Seleccionar Meta de Ahorro</label>
                 <select
                   value={selectedSurplusGoalId}
-                  onChange={(e) => setSelectedSurplusGoalId(e.target.value)}
+                  onChange={(e) => {
+                    const goalId = e.target.value;
+                    setSelectedSurplusGoalId(goalId);
+                    const goal = savingsGoals.find((g) => g.id === goalId);
+                    if (goal?.amount_per_period && goal.amount_per_period > 0) {
+                      setSurplusSavingsAmount(Number(goal.amount_per_period));
+                      setSurplusPresetType('cuota');
+                    }
+                  }}
                   className="w-full bg-card border border-app rounded-2xl px-3.5 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
                 >
                   {savingsGoals.map((g) => (
@@ -1630,15 +1853,79 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                 </select>
               </div>
 
+              {/* Sugerencias Rápidas de Aporte (Presets) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-muted">Sugerencia de Aporte</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectSurplusPreset('cuota')}
+                    disabled={!activeSelectedSurplusGoal?.amount_per_period}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all text-center cursor-pointer ${
+                      surplusPresetType === 'cuota'
+                        ? 'bg-[#00C2C7]/20 border-[#00C2C7] text-[#00C2C7] shadow-xs'
+                        : 'bg-card border-app text-muted hover:text-app'
+                    } disabled:opacity-40`}
+                  >
+                    🎯 Cuota (${Number(activeSelectedSurplusGoal?.amount_per_period || 0).toFixed(2)})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectSurplusPreset('all')}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all text-center cursor-pointer ${
+                      surplusPresetType === 'all'
+                        ? 'bg-[#00C2C7]/20 border-[#00C2C7] text-[#00C2C7] shadow-xs'
+                        : 'bg-card border-app text-muted hover:text-app'
+                    }`}
+                  >
+                    💰 Todo (${Math.max(0, netRemaining).toFixed(2)})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectSurplusPreset('custom')}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all text-center cursor-pointer ${
+                      surplusPresetType === 'custom'
+                        ? 'bg-[#00C2C7]/20 border-[#00C2C7] text-[#00C2C7] shadow-xs'
+                        : 'bg-card border-app text-muted hover:text-app'
+                    }`}
+                  >
+                    ✏️ Personalizado
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1">Monto a Aportar ($)</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Monto a Aportar ($ USD)</label>
                 <MoneyInput
                   value={surplusSavingsAmount}
-                  onChange={setSurplusSavingsAmount}
+                  onChange={(val) => {
+                    setSurplusSavingsAmount(val);
+                    setSurplusPresetType('custom');
+                  }}
                   placeholder="0.00"
                   className="w-full"
                 />
               </div>
+
+              {/* Live Preview Box */}
+              {activeSelectedSurplusGoal && surplusSavingsAmount > 0 && (
+                <div className="p-3 rounded-2xl bg-[#00C2C7]/10 border border-[#00C2C7]/20 space-y-1 text-xs">
+                  <div className="flex justify-between items-center text-muted">
+                    <span>Meta "{activeSelectedSurplusGoal.name}":</span>
+                    <span className="font-bold text-app">
+                      ${Number(activeSelectedSurplusGoal.current_amount).toFixed(2)} → ${(Number(activeSelectedSurplusGoal.current_amount) + surplusSavingsAmount).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-muted">
+                    <span>Dinero libre restante:</span>
+                    <span className="font-bold text-[#00C2C7]">
+                      ${Math.max(0, netRemaining - surplusSavingsAmount).toFixed(2)} USD
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 pt-2">
                 <button
@@ -1888,7 +2175,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       )}
 
-      {/* Modal 5: Diálogo de Omitir Gasto / Cuota */}
+      {/* Modal 5: Diálogo de Omitir Gasto / Cuota / Ahorro con Motivos */}
       {skipModalData.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="fixed inset-0" onClick={() => setSkipModalData({ isOpen: false })} />
@@ -1896,7 +2183,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-app">
               <h4 className="text-sm font-bold text-app flex items-center gap-2">
                 <CornerDownRight className="w-4 h-4 text-amber-400" />
-                Omitir {skipModalData.isDebt ? 'Cuota' : 'Gasto'}
+                Omitir {skipModalData.isDebt ? 'Cuota' : skipModalData.isGoal ? 'Aporte de Ahorro' : 'Gasto Fijo'}
               </h4>
               <button
                 onClick={() => setSkipModalData({ isOpen: false })}
@@ -1908,10 +2195,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
 
             <div className="space-y-1 text-xs">
               <p className="font-bold text-app text-sm">
-                {skipModalData.isDebt ? skipModalData.debtName : skipModalData.expense?.name}
+                {skipModalData.isDebt ? skipModalData.debtName : skipModalData.isGoal ? skipModalData.goalName : skipModalData.expense?.name}
               </p>
               <p className="text-muted">
-                Monto: <strong>${skipModalData.amount?.toFixed(2)} USD</strong>
+                Monto programado: <strong>${skipModalData.amount?.toFixed(2)} USD</strong>
               </p>
               <p className="text-[11px] text-muted pt-1">
                 ¿Cómo deseas proceder con este compromiso en este corte?
@@ -1921,20 +2208,28 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             <div className="space-y-2 pt-1">
               <button
                 type="button"
-                onClick={skipModalData.isDebt ? handleConfirmSkipDebt : handleConfirmSkipExpense}
-                className="w-full py-2.5 px-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                onClick={() => {
+                  if (skipModalData.isDebt) handleConfirmSkipDebt();
+                  else if (skipModalData.isGoal) handleConfirmSkipGoal('Pospuesto para la próxima quincena');
+                  else handleConfirmSkipExpense();
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 text-left"
               >
-                <Clock className="w-4 h-4" />
-                <span>Dejar para la próxima quincena</span>
+                <Clock className="w-4 h-4 shrink-0" />
+                <span>Pasar a la siguiente quincena</span>
               </button>
 
               <button
                 type="button"
-                onClick={skipModalData.isDebt ? handleConfirmSkipDebt : handleConfirmSkipExpense}
-                className="w-full py-2.5 px-3 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                onClick={() => {
+                  if (skipModalData.isDebt) handleConfirmSkipDebt();
+                  else if (skipModalData.isGoal) handleConfirmSkipGoal('No pude aportar este corte / Resuelto de otra forma');
+                  else handleConfirmSkipExpense();
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 text-left"
               >
-                <ShieldCheck className="w-4 h-4 text-primary-custom" />
-                <span>Resuelto de otra manera / Omitir</span>
+                <ShieldCheck className="w-4 h-4 text-primary-custom shrink-0" />
+                <span>Omitir por otra razón (No puedo pagar / Resuelto)</span>
               </button>
 
               <button
