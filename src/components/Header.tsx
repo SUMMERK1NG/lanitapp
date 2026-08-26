@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   RefreshCw,
   Calculator,
@@ -8,7 +8,7 @@ import {
   Bell,
 } from 'lucide-react';
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
-import { NotificationCenterModal, computeSystemNotifications } from './NotificationCenterModal.tsx';
+import { computeSystemNotifications } from './NotificationCenterModal.tsx';
 import type { RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
 
 interface HeaderProps {
@@ -53,9 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenNotifications,
 }) => {
-  const [isNotifOpen, setIsNotifOpen] = useState<boolean>(false);
-
-  // Compute active notifications
+  // Compute active notifications count
   const notifications = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
   const unreadCount = notifications.length;
 
@@ -171,13 +169,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Centro de Notificaciones (Icono de Campana) */}
           <div className="relative">
             <button
-              onClick={() => {
-                if (onOpenNotifications) {
-                  onOpenNotifications();
-                } else {
-                  setIsNotifOpen(!isNotifOpen);
-                }
-              }}
+              onClick={onOpenNotifications}
               className="relative p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-app shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
               title="Centro de Notificaciones y Alertas"
             >
@@ -188,18 +180,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
-
-            {/* Fallback if onOpenNotifications not passed */}
-            {!onOpenNotifications && isNotifOpen && (
-              <NotificationCenterModal
-                isOpen={isNotifOpen}
-                onClose={() => setIsNotifOpen(false)}
-                debts={debts}
-                fixedExpenses={fixedExpenses}
-                selectedYear={selectedYear}
-                selectedMonth={selectedMonth}
-              />
-            )}
           </div>
 
           {/* Indicador de Estado de Sincronización Realtime (4 Estados Visuales) */}
