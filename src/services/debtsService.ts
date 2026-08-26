@@ -261,6 +261,10 @@ export const addDebtPayment = async (data: {
   debt_id: string;
   user_id?: string;
   amount: number;
+  principal_amount?: number;
+  interest_amount?: number;
+  unpaid_interest_capitalized?: number;
+  payment_type?: 'full' | 'interest_only' | 'principal_only' | 'mixed';
   payment_date?: string;
   fortnight?: FortnightType;
   year?: number;
@@ -310,7 +314,16 @@ export const addDebtPayment = async (data: {
     created_at: new Date().toISOString(),
   };
 
-  const newBalance = Math.max(0, Number(debt.current_balance) - Number(data.amount));
+  // Calcular nuevo saldo considerando abono a capital e intereses impagos capitalizados
+  let newBalance: number;
+  if (data.principal_amount !== undefined) {
+    const principalReduction = Number(data.principal_amount);
+    const capitalizedInterest = Number(data.unpaid_interest_capitalized || 0);
+    newBalance = Math.max(0, Number(debt.current_balance) - principalReduction + capitalizedInterest);
+  } else {
+    newBalance = Math.max(0, Number(debt.current_balance) - Number(data.amount));
+  }
+
   const newStatus = newBalance <= 0.01 ? 'paid' : 'active';
   const newPendingInstallments = debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined;
 
@@ -358,13 +371,12 @@ export const addDebtPayment = async (data: {
         paymentRecord.sync_status = 'synced';
         txRecord.sync_status = 'synced';
         await db.debt_payments.update(paymentRecord.id, { sync_status: 'synced' });
-        await db.debts.update(debt.id, { sync_status: 'synced' });
         await db.transactions.update(txRecord.id, { sync_status: 'synced' });
       } else {
         console.error('[debtsService addDebtPayment Error]:', res1.error || res2.error || res3.error);
       }
     } catch (e) {
-      console.warn('[debtsService addDebtPayment Network Notice]:', e);
+      console.warn('[debtsService addDebtPayment Remote Notice]:', e);
     }
   }
 

@@ -77,7 +77,25 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
     .filter((d) => d.status === 'active' && d.current_balance > 0)
     .filter((d) => !d.fortnight_due || d.fortnight_due === 'both' || d.fortnight_due === currentFortnight)
     .reduce((sum, d) => {
-      const cuota = d.installment_amount || (d.pending_installments ? d.current_balance / d.pending_installments : d.current_balance);
+      let cuota = 0;
+      if (d.debt_mode === 'open') {
+        if (d.has_interest) {
+          const monthlyInterest = Number(d.interest_amount || ((d.current_balance * (d.interest_rate || 0)) / 100));
+          if (d.interest_frequency === 'fortnightly') {
+            cuota = monthlyInterest;
+          } else if (d.interest_fortnight) {
+            cuota = d.interest_fortnight === currentFortnight ? monthlyInterest : 0;
+          } else if (d.fortnight_due === 'both') {
+            cuota = Number((monthlyInterest / 2).toFixed(2));
+          } else {
+            cuota = monthlyInterest;
+          }
+        } else {
+          cuota = d.installment_amount || 0;
+        }
+      } else {
+        cuota = d.installment_amount || (d.pending_installments ? d.current_balance / d.pending_installments : d.current_balance);
+      }
       return sum + Math.min(d.current_balance, cuota);
     }, 0);
 
@@ -395,12 +413,17 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                             className="flex items-center justify-between p-2 rounded-xl bg-surface border border-app text-xs"
                           >
                             <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                               <div>
-                                <span className="font-semibold text-app">{p.payment_date}</span>
-                                <span className="text-[10px] text-muted ml-1.5">
-                                  ({p.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-app">{p.payment_date}</span>
+                                  <span className="text-[10px] text-muted">
+                                    ({p.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})
+                                  </span>
+                                </div>
+                                {p.notes && (
+                                  <span className="text-[10px] text-muted block truncate max-w-xs">{p.notes}</span>
+                                )}
                               </div>
                             </div>
 

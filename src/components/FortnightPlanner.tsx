@@ -438,7 +438,26 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         return d.fortnight_due === selectedFortnight;
       })
       .map((d) => {
-        const cuota = d.installment_amount || (d.pending_installments ? d.current_balance / d.pending_installments : d.current_balance);
+        let cuota = 0;
+        if (d.debt_mode === 'open') {
+          if (d.has_interest) {
+            const monthlyInterest = Number(d.interest_amount || ((d.current_balance * (d.interest_rate || 0)) / 100));
+            if (d.interest_frequency === 'fortnightly') {
+              cuota = monthlyInterest;
+            } else if (d.interest_fortnight) {
+              cuota = d.interest_fortnight === selectedFortnight ? monthlyInterest : 0;
+            } else if (d.fortnight_due === 'both') {
+              cuota = Number((monthlyInterest / 2).toFixed(2));
+            } else {
+              cuota = monthlyInterest;
+            }
+          } else {
+            cuota = d.installment_amount || 0;
+          }
+        } else {
+          cuota = d.installment_amount || (d.pending_installments ? d.current_balance / d.pending_installments : d.current_balance);
+        }
+
         const hasPayment = debtPayments.some(
           (dp) =>
             dp.debt_id === d.id &&
