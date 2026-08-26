@@ -35,7 +35,7 @@ const RATE_OPTIONS: { id: RateTypeOption; label: string; icon: string; color: st
     id: 'bcv_usd',
     label: 'BCV Dólar Oficial',
     icon: '🏛️',
-    color: '#00C2C7',
+    color: '#147DF0',
     url: 'https://ve.dolarapi.com/v1/historicos/dolares/oficial',
   },
   {
@@ -49,7 +49,7 @@ const RATE_OPTIONS: { id: RateTypeOption; label: string; icon: string; color: st
     id: 'bcv_eur',
     label: 'Euro BCV Oficial',
     icon: '🇪🇺',
-    color: '#8B5CF6',
+    color: '#00C2C7',
     url: 'https://ve.dolarapi.com/v1/historicos/euros/oficial',
   },
 ];
@@ -60,6 +60,33 @@ const TIMEFRAMES: { id: TimeframeOption; label: string; days: number }[] = [
   { id: '30d', label: '30 días', days: 30 },
   { id: 'all', label: 'Todo', days: 365 },
 ];
+
+const SPANISH_DAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const SPANISH_MONTHS_SHORT = [
+  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+];
+
+function parseLocalDate(dateStr: string): Date {
+  const parts = dateStr.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  return new Date(year, month, day);
+}
+
+function formatSpanishDate(dateStr: string): { labelShort: string; fullFormatted: string } {
+  const d = parseLocalDate(dateStr);
+  const dayName = SPANISH_DAYS_SHORT[d.getDay()];
+  const dayNum = d.getDate();
+  const monthName = SPANISH_MONTHS_SHORT[d.getMonth()];
+  const year = d.getFullYear();
+
+  return {
+    labelShort: `${dayName} ${dayNum} ${monthName}`,
+    fullFormatted: `${dayName}, ${dayNum} de ${monthName} de ${year}`,
+  };
+}
 
 export const RatesHistoryModule: React.FC = () => {
   const [selectedRateType, setSelectedRateType] = useState<RateTypeOption>('bcv_usd');
@@ -130,7 +157,7 @@ export const RatesHistoryModule: React.FC = () => {
   // Format list for chart
   const chartData = useMemo(() => {
     return filteredList.map((item, idx, arr) => {
-      const d = new Date(item.fecha);
+      const d = parseLocalDate(item.fecha);
       const day = d.getDate();
       const month = d.getMonth() + 1;
       const dateLabel = `${day < 10 ? '0' + day : day}/${month < 10 ? '0' + month : month}`;
@@ -143,7 +170,7 @@ export const RatesHistoryModule: React.FC = () => {
 
       return {
         date: dateLabel,
-        fullDate: item.fecha,
+        fullDate: formatSpanishDate(item.fecha).fullFormatted,
         rate: Number(item.promedio.toFixed(2)),
         changePct,
       };
@@ -162,14 +189,11 @@ export const RatesHistoryModule: React.FC = () => {
         changePct = +(((item.promedio - prev) / prev) * 100).toFixed(2);
       }
 
-      const d = new Date(item.fecha);
-      const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
-      const day = d.getDate();
-      const month = d.toLocaleDateString('en-US', { month: 'short' });
+      const { labelShort } = formatSpanishDate(item.fecha);
 
       return {
         id: item.fecha,
-        dateFormatted: `${weekday} ${day} ${month}`,
+        dateFormatted: labelShort,
         rate: item.promedio,
         changePct,
       };
@@ -200,7 +224,7 @@ export const RatesHistoryModule: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-xl bg-card border border-app hover:border-app-hover text-xs font-bold text-app transition-all cursor-pointer min-w-[200px]"
+            className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-xl bg-card border border-app hover:border-app-hover text-xs font-bold text-app transition-all cursor-pointer min-w-[210px]"
           >
             <div className="flex items-center gap-2">
               <span className="text-base">{activeConfig.icon}</span>
@@ -210,7 +234,7 @@ export const RatesHistoryModule: React.FC = () => {
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute left-0 top-full mt-1.5 z-50 w-60 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 space-y-1 animate-in fade-in-50 zoom-in-95">
+            <div className="absolute left-0 top-full mt-1.5 z-50 w-64 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 space-y-1 animate-in fade-in-50 zoom-in-95">
               {RATE_OPTIONS.map((opt) => {
                 const isSelected = opt.id === selectedRateType;
                 return (
@@ -221,17 +245,17 @@ export const RatesHistoryModule: React.FC = () => {
                       setSelectedRateType(opt.id);
                       setIsDropdownOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all cursor-pointer ${
                       isSelected ? 'bg-card font-bold text-app' : 'hover:bg-card/60 text-muted'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span className="text-base">{opt.icon}</span>
                       <span className="text-xs font-bold" style={{ color: isSelected ? opt.color : undefined }}>
                         {opt.label}
                       </span>
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5" style={{ color: opt.color }} />}
+                    {isSelected && <Check className="w-4 h-4" style={{ color: opt.color }} />}
                   </button>
                 );
               })}
@@ -276,7 +300,10 @@ export const RatesHistoryModule: React.FC = () => {
         <div className="lg:col-span-2 p-5 rounded-3xl bg-surface border border-app shadow-md space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center font-bold"
+                style={{ backgroundColor: `${activeConfig.color}25`, color: activeConfig.color }}
+              >
                 <LineChartIcon className="w-4 h-4" />
               </div>
               <div>
@@ -292,7 +319,7 @@ export const RatesHistoryModule: React.FC = () => {
             {chartData.length > 0 && (
               <div className="text-right">
                 <span className="text-[10px] text-muted block uppercase">Última Cotización</span>
-                <span className="text-base font-black text-app" style={{ color: activeConfig.color }}>
+                <span className="text-base font-black" style={{ color: activeConfig.color }}>
                   Bs. {chartData[chartData.length - 1].rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                 </span>
               </div>
@@ -426,7 +453,7 @@ export const RatesHistoryModule: React.FC = () => {
                         ) : (
                           <Minus className="w-3 h-3" />
                         )}
-                        <span>{isPositive ? `+${log.changePct}%` : `${log.changePct}%`}</span>
+                        <span>{isPositive ? `+${log.changePct}%` : log.changePct === 0 ? '0%' : `${log.changePct}%`}</span>
                       </span>
 
                       {/* Value */}
