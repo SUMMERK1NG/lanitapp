@@ -12,6 +12,8 @@ import {
   X,
   ArrowDownLeft,
   ArrowUpRight,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import type { Account, AccountType, Transaction, Category, ExchangeRatesData } from '../types/index.ts';
 import { saveAccount, deleteAccount, adjustAccountBalance, addTransaction } from '../lib/db.ts';
@@ -23,6 +25,20 @@ interface AccountsManagementModuleProps {
   categories: Category[];
   rates: ExchangeRatesData;
 }
+
+const ACCOUNT_TYPE_OPTIONS: { id: AccountType; label: string; icon: string; desc: string }[] = [
+  { id: 'cash', label: 'Efectivo Cash', icon: '💵', desc: 'Billetes físicos USD / EUR / Divisas' },
+  { id: 'bank', label: 'Banco / Pago Móvil', icon: '🏦', desc: 'Banesco, Mercantil, BDV, Pago Móvil' },
+  { id: 'digital', label: 'Billetera Digital', icon: '📱', desc: 'Binance USDT, Zinli, Wally, Paypal' },
+  { id: 'savings', label: 'Fondo de Ahorro', icon: '🐷', desc: 'Reserva especial o cuenta de metas' },
+  { id: 'credit', label: 'Tarjeta de Crédito', icon: '💳', desc: 'Líneas de crédito bancario' },
+];
+
+const CURRENCY_OPTIONS: { id: 'USD' | 'VES' | 'EUR'; label: string; icon: string; symbol: string }[] = [
+  { id: 'USD', label: 'Dólares ($ USD)', icon: '💵', symbol: '$' },
+  { id: 'VES', label: 'Bolívares (Bs. VES)', icon: '🇻🇪', symbol: 'Bs.' },
+  { id: 'EUR', label: 'Euros (€ EUR)', icon: '💶', symbol: '€' },
+];
 
 export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> = ({
   accounts,
@@ -44,12 +60,17 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Dropdown open states
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState<boolean>(false);
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState<boolean>(false);
+
   // Quick adjustment modal
   const [adjustingAccount, setAdjustingAccount] = useState<Account | null>(null);
   const [adjustMode, setAdjustMode] = useState<'income' | 'expense' | 'set_balance'>('income');
   const [adjustAmount, setAdjustAmount] = useState<number>(0);
   const [adjustDescription, setAdjustDescription] = useState<string>('');
   const [adjustCategoryId, setAdjustCategoryId] = useState<string>('');
+  const [isAdjustCategoryDropdownOpen, setIsAdjustCategoryDropdownOpen] = useState<boolean>(false);
   const [isAdjustSubmitting, setIsAdjustSubmitting] = useState<boolean>(false);
 
   // Deleting confirmation
@@ -117,6 +138,8 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
     setCurrency('USD');
     setInitialBalance(0);
     setNotes('');
+    setIsTypeDropdownOpen(false);
+    setIsCurrencyDropdownOpen(false);
     setIsAccountModalOpen(true);
   };
 
@@ -128,6 +151,8 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
     setCurrency((acc.currency as any) || 'USD');
     setInitialBalance(acc.initial_balance || 0);
     setNotes(acc.notes || '');
+    setIsTypeDropdownOpen(false);
+    setIsCurrencyDropdownOpen(false);
     setIsAccountModalOpen(true);
   };
 
@@ -172,6 +197,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
     setAdjustDescription('');
     const defaultCat = categories.find((c) => c.type === 'income')?.id || categories[0]?.id || '';
     setAdjustCategoryId(defaultCat);
+    setIsAdjustCategoryDropdownOpen(false);
   };
 
   // Execute Quick Adjustment
@@ -245,6 +271,10 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
         return 'Fondo General';
     }
   };
+
+  const selectedTypeObj = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === type) || ACCOUNT_TYPE_OPTIONS[0];
+  const selectedCurrencyObj = CURRENCY_OPTIONS.find((c) => c.id === currency) || CURRENCY_OPTIONS[0];
+  const selectedAdjustCat = categories.find((c) => c.id === adjustCategoryId) || categories[0];
 
   return (
     <div className="space-y-4">
@@ -463,9 +493,9 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
       {/* MODAL: Nueva / Editar Cuenta */}
       {isAccountModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
+          <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
                   <Wallet className="w-4 h-4" />
                 </div>
@@ -495,41 +525,108 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                   placeholder="Ej. Banesco, Efectivo Cartera, Binance USDT, Zinli..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Custom Dropdown: Tipo de Cuenta */}
+                <div className="relative">
                   <label className="block text-xs font-semibold text-muted mb-1">
                     Tipo de Cuenta
                   </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as AccountType)}
-                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTypeDropdownOpen(!isTypeDropdownOpen);
+                      setIsCurrencyDropdownOpen(false);
+                    }}
+                    className="w-full bg-card border border-app hover:border-app-hover rounded-xl px-3 py-2.5 text-xs text-app font-bold flex items-center justify-between transition-all cursor-pointer"
                   >
-                    <option value="cash" className="bg-surface text-app">💵 Efectivo Cash</option>
-                    <option value="bank" className="bg-surface text-app">🏦 Banco / Pago Móvil</option>
-                    <option value="digital" className="bg-surface text-app">📱 Billetera Digital</option>
-                    <option value="savings" className="bg-surface text-app">🐷 Fondo de Ahorro</option>
-                    <option value="credit" className="bg-surface text-app">💳 Tarjeta de Crédito</option>
-                  </select>
+                    <div className="flex items-center gap-2 truncate">
+                      <span>{selectedTypeObj.icon}</span>
+                      <span className="truncate">{selectedTypeObj.label}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ${isTypeDropdownOpen ? 'rotate-180 text-primary-custom' : ''}`} />
+                  </button>
+
+                  {isTypeDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 space-y-1 animate-in fade-in-50 zoom-in-95">
+                      {ACCOUNT_TYPE_OPTIONS.map((opt) => {
+                        const isSelected = opt.id === type;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setType(opt.id);
+                              setIsTypeDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                              isSelected ? 'bg-primary-custom/15 text-primary-custom font-bold' : 'hover:bg-card text-app'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-base">{opt.icon}</span>
+                              <div>
+                                <span className="text-xs font-bold block leading-tight">{opt.label}</span>
+                                <span className="text-[10px] text-muted block">{opt.desc}</span>
+                              </div>
+                            </div>
+                            {isSelected && <Check className="w-4 h-4 text-primary-custom shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                <div>
+                {/* Custom Dropdown: Moneda Principal */}
+                <div className="relative">
                   <label className="block text-xs font-semibold text-muted mb-1">
                     Moneda Principal
                   </label>
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value as any)}
-                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen);
+                      setIsTypeDropdownOpen(false);
+                    }}
+                    className="w-full bg-card border border-app hover:border-app-hover rounded-xl px-3 py-2.5 text-xs text-app font-bold flex items-center justify-between transition-all cursor-pointer"
                   >
-                    <option value="USD" className="bg-surface text-app">$ USD (Dólares)</option>
-                    <option value="VES" className="bg-surface text-app">Bs. VES (Bolívares)</option>
-                    <option value="EUR" className="bg-surface text-app">€ EUR (Euros)</option>
-                  </select>
+                    <div className="flex items-center gap-2 truncate">
+                      <span>{selectedCurrencyObj.icon}</span>
+                      <span className="truncate">{selectedCurrencyObj.label}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ${isCurrencyDropdownOpen ? 'rotate-180 text-primary-custom' : ''}`} />
+                  </button>
+
+                  {isCurrencyDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 space-y-1 animate-in fade-in-50 zoom-in-95">
+                      {CURRENCY_OPTIONS.map((cur) => {
+                        const isSelected = cur.id === currency;
+                        return (
+                          <button
+                            key={cur.id}
+                            type="button"
+                            onClick={() => {
+                              setCurrency(cur.id);
+                              setIsCurrencyDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                              isSelected ? 'bg-primary-custom/15 text-primary-custom font-bold' : 'hover:bg-card text-app'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{cur.icon}</span>
+                              <span className="text-xs font-bold">{cur.label}</span>
+                            </div>
+                            {isSelected && <Check className="w-4 h-4 text-primary-custom shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -542,6 +639,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                   onChange={setInitialBalance}
                   currencySymbol={currency === 'VES' ? 'Bs.' : currency === 'EUR' ? '€' : '$'}
                   placeholder="0,00"
+                  className="!py-2.5 !text-sm"
                 />
               </div>
 
@@ -554,7 +652,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                   placeholder="Ej. Datos de cuenta, uso asignado..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2.5 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
@@ -667,23 +765,45 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                     />
                   </div>
 
-                  <div>
+                  {/* Custom Dropdown: Categoría */}
+                  <div className="relative">
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Categoría
                     </label>
-                    <select
-                      value={adjustCategoryId}
-                      onChange={(e) => setAdjustCategoryId(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                    <button
+                      type="button"
+                      onClick={() => setIsAdjustCategoryDropdownOpen(!isAdjustCategoryDropdownOpen)}
+                      className="w-full bg-card border border-app hover:border-app-hover rounded-xl px-3 py-2.5 text-xs text-app font-bold flex items-center justify-between transition-all cursor-pointer"
                     >
-                      {categories
-                        .filter((c) => (adjustMode === 'income' ? c.type === 'income' : c.type === 'expense'))
-                        .map((c) => (
-                          <option key={c.id} value={c.id} className="bg-surface text-app">
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
+                      <span className="truncate">{selectedAdjustCat?.name || 'Seleccionar categoría'}</span>
+                      <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ${isAdjustCategoryDropdownOpen ? 'rotate-180 text-primary-custom' : ''}`} />
+                    </button>
+
+                    {isAdjustCategoryDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-surface border border-app rounded-2xl shadow-2xl p-1.5 max-h-48 overflow-y-auto space-y-1 animate-in fade-in-50 zoom-in-95">
+                        {categories
+                          .filter((c) => (adjustMode === 'income' ? c.type === 'income' : c.type === 'expense'))
+                          .map((c) => {
+                            const isSelected = c.id === adjustCategoryId;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setAdjustCategoryId(c.id);
+                                  setIsAdjustCategoryDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
+                                  isSelected ? 'bg-primary-custom/15 text-primary-custom font-bold' : 'hover:bg-card text-app'
+                                }`}
+                              >
+                                <span className="text-xs font-medium truncate">{c.name}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-primary-custom shrink-0" />}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

@@ -52,11 +52,11 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
       },
       {
         key: 'ves_par',
-        label: 'Bolívares Paralelo',
-        badge: 'Paralelo / Cash',
+        label: 'Bolívares Promedio',
+        badge: 'Promedio / Cash',
         badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
         amountFormatted: `Bs. ${formatCurrencyVE(vesPar)}`,
-        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)}`,
+        subtext: `Tasa Promedio: Bs. ${formatCurrencyVE(parallelUsd)}`,
       },
       {
         key: 'eur_bcv',
@@ -83,11 +83,11 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
       },
       {
         key: 'usd_par',
-        label: 'Dólares Paralelo',
-        badge: 'Paralelo / Cash',
+        label: 'Dólares Promedio',
+        badge: 'Promedio / Cash',
         badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
         amountFormatted: `$ ${formatCurrencyVE(usdPar)}`,
-        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)}`,
+        subtext: `Tasa Promedio: Bs. ${formatCurrencyVE(parallelUsd)}`,
       },
       {
         key: 'eur_bcv',
@@ -115,11 +115,11 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
       },
       {
         key: 'ves_par',
-        label: 'Bolívares Paralelo',
-        badge: 'Paralelo / Cash',
+        label: 'Bolívares Promedio',
+        badge: 'Promedio / Cash',
         badgeColor: 'bg-[#FF914D]/20 text-[#FF914D] border-[#FF914D]/40',
         amountFormatted: `Bs. ${formatCurrencyVE(vesPar)}`,
-        subtext: `Tasa Paralelo: Bs. ${formatCurrencyVE(parallelUsd)} / USD`,
+        subtext: `Tasa Promedio: Bs. ${formatCurrencyVE(parallelUsd)} / USD`,
       },
       {
         key: 'usd_bcv',
@@ -152,7 +152,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-app">Conversor Integral de Divisas</h3>
-              <p className="text-[11px] text-muted">Comparativa simultánea BCV & Paralelo</p>
+              <p className="text-[11px] text-muted">Comparativa simultánea BCV & Promedio</p>
             </div>
           </div>
           <button
@@ -170,7 +170,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
             <span className="text-xs font-black text-[#147df0]">Bs. {bcvUsd.toFixed(2)}</span>
           </div>
           <div className="p-2 rounded-xl bg-card border border-app text-center">
-            <span className="text-[10px] text-muted font-bold block leading-tight">Paralelo</span>
+            <span className="text-[10px] text-muted font-bold block leading-tight">Promedio</span>
             <span className="text-xs font-black text-[#FF914D]">Bs. {parallelUsd.toFixed(2)}</span>
           </div>
           <div className="p-2 rounded-xl bg-card border border-app text-center">

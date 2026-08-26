@@ -677,7 +677,7 @@ export function App() {
                   </div>
 
                   <div className="p-4 rounded-2xl bg-card border border-app">
-                    <span className="text-xs text-muted font-semibold block">Dólar Paralelo / Cash</span>
+                    <span className="text-xs text-muted font-semibold block">Dólar Promedio / Cash</span>
                     <p className="text-2xl font-black text-[#FF914D] mt-1">
                       Bs. {rates.parallelDollar.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                     </p>
@@ -696,7 +696,7 @@ export function App() {
                 <div className="p-4 rounded-2xl bg-card border border-app flex items-center justify-between text-xs">
                   <div>
                     <span className="font-bold text-app block">Brecha Cambiaria (Diferencial)</span>
-                    <span className="text-[11px] text-muted">Diferencia porcentual entre tasa oficial BCV y mercado paralelo</span>
+                    <span className="text-[11px] text-muted">Diferencia porcentual entre tasa oficial BCV y mercado promedio</span>
                   </div>
                   <span className="text-xl font-black text-[#FF914D]">+{rates.spreadPercentage}%</span>
                 </div>

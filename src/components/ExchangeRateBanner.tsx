@@ -41,7 +41,7 @@ export const ExchangeRateBanner: React.FC<ExchangeRateBannerProps> = ({
               <TrendingUp className="w-3 h-3" />
             </div>
             <div>
-              <span className="text-[10px] text-[#9ba3af] font-medium block leading-none">Paralelo</span>
+              <span className="text-[10px] text-[#9ba3af] font-medium block leading-none">Promedio</span>
               <span className="text-xs font-bold text-white tracking-tight">
                 Bs. {rates.parallelDollar.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>

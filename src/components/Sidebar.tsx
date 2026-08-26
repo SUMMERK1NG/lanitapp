@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted">Paralelo:</span>
+            <span className="text-muted">Promedio:</span>
             <span className="font-bold text-[#FF914D]">Bs. {rates.parallelDollar.toFixed(2)}</span>
           </div>
         </div>

@@ -533,7 +533,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
               {differentialSavingsUSD > 0 && (
                 <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 pt-1 border-t border-app">
                   <TrendingDown className="w-3.5 h-3.5" />
-                  Ahorro por brecha cambiaria vs paralelo: +${differentialSavingsUSD} USD
+                  Ahorro por brecha cambiaria vs promedio: +${differentialSavingsUSD} USD
                 </div>
               )}
             </div>

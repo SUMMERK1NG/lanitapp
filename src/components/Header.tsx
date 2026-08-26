@@ -106,13 +106,13 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Paralelo */}
+          {/* Promedio */}
           <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-xl bg-card border border-app shrink-0">
             <div className="w-4 h-4 rounded-md bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold text-[9px]">
               <TrendingUp className="w-2.5 h-2.5" />
             </div>
             <div>
-              <span className="text-[9px] text-muted block leading-none">Paralelo</span>
+              <span className="text-[9px] text-muted block leading-none">Promedio</span>
               <span className="text-xs font-bold text-[#FF914D] tracking-tight">
                 Bs. {rates.parallelDollar.toFixed(2)}
               </span>

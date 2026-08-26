@@ -87,7 +87,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     {
       id: 'converter',
       title: 'Conversor de Divisas',
-      description: 'Calculadora de divisas BCV y Paralelo',
+      description: 'Calculadora de divisas BCV y Promedio',
       icon: Calculator,
       color: '#8B5CF6',
       action: () => (onOpenConverter ? onOpenConverter() : onChangeView('rates')),
