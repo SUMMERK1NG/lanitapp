@@ -453,12 +453,12 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
           {/* 1. Nombre de la Deuda */}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
-              Nombre de la Deuda / Acreedor
+              Nombre de la Deuda
             </label>
             <input
               type="text"
               required
-              placeholder="Ej. Teléfono Cashea, Moto CrediTotal, Préstamo..."
+              placeholder="Ej. Teléfono, Moto, Préstamo..."
               value={creditor}
               onChange={(e) => setCreditor(e.target.value)}
               className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"

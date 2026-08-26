@@ -9,10 +9,7 @@ import {
   Edit2,
   Trash2,
   Sliders,
-  DollarSign,
-  TrendingUp,
   X,
-  Sparkles,
   ArrowDownLeft,
   ArrowUpRight,
 } from 'lucide-react';
@@ -33,6 +30,8 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
   categories,
   rates,
 }) => {
+  const [filterType, setFilterType] = useState<'all' | 'cash' | 'bank' | 'digital'>('all');
+
   // Modal states
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -101,6 +100,14 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
       totalEUR: uEUR,
     };
   }, [accounts, transactions, bcvUsd, bcvEur]);
+
+  // Filtered accounts list
+  const filteredAccounts = useMemo(() => {
+    if (filterType === 'cash') return accounts.filter((a) => a.type === 'cash' || a.currency === 'USD' || a.currency === 'EUR');
+    if (filterType === 'bank') return accounts.filter((a) => a.type === 'bank' || a.currency === 'VES');
+    if (filterType === 'digital') return accounts.filter((a) => a.type === 'digital' || a.type === 'savings' || a.type === 'credit');
+    return accounts;
+  }, [accounts, filterType]);
 
   // Open modal for new account
   const handleOpenNewAccount = () => {
@@ -177,7 +184,6 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
     setIsAdjustSubmitting(true);
     try {
       if (adjustMode === 'set_balance') {
-        // Direct balance adjustment: calculate what initial_balance must be
         const accTxs = transactions.filter((t) => t.account_id === adjustingAccount.id);
         const income = accTxs
           .filter((t) => t.type === 'income')
@@ -189,7 +195,6 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
         const newInitial = num - (income - expense);
         await adjustAccountBalance(adjustingAccount.id, newInitial);
       } else {
-        // Add transaction (income or expense)
         await addTransaction({
           account_id: adjustingAccount.id,
           amount: num,
@@ -242,78 +247,107 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header with Title and Add Account CTA */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4">
+      {/* 1. Header with Consistent App Layout */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-app tracking-tight flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
               <Wallet className="w-4 h-4" />
             </div>
-            <span>Capital & Cuentas</span>
-          </h2>
-          <p className="text-xs text-muted mt-1">
+            <h3 className="text-base font-bold text-app">Capital & Cuentas</h3>
+          </div>
+          <p className="text-xs text-muted mt-0.5">
             Control en tiempo real de efectivo, bancos, pago móvil y fondos en divisas
           </p>
         </div>
 
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenNewAccount}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nueva Cuenta</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Unified 4 KPI Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Card 1: Total Capital */}
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Capital Total Disponible</span>
+          <p className="text-xl sm:text-2xl font-black text-primary-custom tracking-tight">
+            ${totalCapitalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block truncate">
+            ≈ Bs. {(totalCapitalUSD * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        {/* Card 2: Cash / USD */}
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Efectivo & Divisas ($)</span>
+          <p className="text-xl sm:text-2xl font-black text-[#00C2C7] tracking-tight">
+            ${totalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block truncate">
+            {totalEUR > 0 ? `+ €${totalEUR.toFixed(2)} EUR en cuentas` : 'Billeteras y efectivo'}
+          </span>
+        </div>
+
+        {/* Card 3: Bank / VES */}
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Bancos & Pago Móvil (Bs.)</span>
+          <p className="text-xl sm:text-2xl font-black text-[#FF914D] tracking-tight truncate">
+            Bs. {totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-muted block truncate">
+            ≈ ${(totalVES / bcvUsd).toFixed(2)} USD
+          </span>
+        </div>
+
+        {/* Card 4: Total Accounts */}
+        <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
+          <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">Cuentas Activas</span>
+          <p className="text-xl sm:text-2xl font-black text-app tracking-tight">
+            {accounts.length}
+          </p>
+          <span className="text-[11px] text-muted block">Fondos sincronizados</span>
+        </div>
+      </div>
+
+      {/* 3. Segmented Filter Pills */}
+      <div className="flex items-center gap-1.5 p-1 bg-card rounded-2xl border border-app w-fit">
         <button
-          onClick={handleOpenNewAccount}
-          className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-primary-custom to-blue-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary-custom/25 hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0"
+          onClick={() => setFilterType('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            filterType === 'all' ? 'bg-primary-custom text-white shadow-sm' : 'text-muted hover:text-app'
+          }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>Nueva Cuenta / Fondo</span>
+          Todas ({accounts.length})
+        </button>
+        <button
+          onClick={() => setFilterType('cash')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            filterType === 'cash' ? 'bg-primary-custom text-white shadow-sm' : 'text-muted hover:text-app'
+          }`}
+        >
+          Efectivo & Divisas ({accounts.filter((a) => a.currency !== 'VES').length})
+        </button>
+        <button
+          onClick={() => setFilterType('bank')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            filterType === 'bank' ? 'bg-primary-custom text-white shadow-sm' : 'text-muted hover:text-app'
+          }`}
+        >
+          Bancos & Bs ({accounts.filter((a) => a.currency === 'VES').length})
         </button>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        {/* Total Capital Converted */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#147df0] via-[#106ad0] to-[#203657] text-white p-5 shadow-xl shadow-[#147df0]/15 border border-[#147df0]/30">
-          <div className="relative z-10">
-            <span className="text-[11px] font-bold text-blue-100 uppercase tracking-wider block mb-1">
-              Capital Total Disponible
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              ${totalCapitalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-            <p className="text-xs md:text-sm font-medium text-slate-300 mt-1">
-              ≈ Bs. {(totalCapitalUSD * (bcvUsd || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: Bs. {(bcvUsd || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-            </p>
-          </div>
-        </div>
-
-        {/* Total USD / Cash & Digital */}
-        <div className="p-4 rounded-3xl bg-surface border border-app shadow-md space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted font-bold">
-            <span>Efectivo & Divisas ($)</span>
-            <DollarSign className="w-4 h-4 text-[#00c2c7]" />
-          </div>
-          <p className="text-xl sm:text-2xl font-black text-[#00c2c7]">
-            ${totalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] text-muted">
-            {totalEUR > 0 ? `+ €${totalEUR.toFixed(2)} EUR en cuentas` : 'En billeteras y efectivo físico'}
-          </span>
-        </div>
-
-        {/* Total VES / Bank */}
-        <div className="p-4 rounded-3xl bg-surface border border-app shadow-md space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted font-bold">
-            <span>Bancos & Pago Móvil (Bs.)</span>
-            <TrendingUp className="w-4 h-4 text-[#FF914D]" />
-          </div>
-          <p className="text-xl sm:text-2xl font-black text-[#FF914D]">
-            Bs. {totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] text-muted">
-            ≈ ${(totalVES / bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD @ Bs. {bcvUsd.toFixed(2)}
-          </span>
-        </div>
-      </div>
-
-      {/* Account Cards Grid or Empty State */}
-      {accounts.length === 0 ? (
+      {/* 4. Account Cards Grid or Empty State */}
+      {filteredAccounts.length === 0 ? (
         <div className="p-8 sm:p-12 rounded-3xl bg-surface border border-app shadow-md text-center space-y-4 max-w-lg mx-auto">
           <div className="w-16 h-16 mx-auto rounded-3xl bg-primary-custom/15 text-primary-custom flex items-center justify-center shadow-xl shadow-primary-custom/10 border border-primary-custom/20">
             <Wallet className="w-8 h-8" />
@@ -339,7 +373,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {accounts.map((acc) => {
+          {filteredAccounts.map((acc) => {
             const currentBal = getAccountBalance(acc);
             const isNegative = currentBal < 0;
             const accTxsCount = transactions.filter((t) => t.account_id === acc.id).length;
@@ -428,7 +462,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
 
       {/* MODAL: Nueva / Editar Cuenta */}
       {isAccountModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <div className="flex items-center gap-2">
@@ -450,7 +484,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
               </button>
             </div>
 
-            <form onSubmit={handleSaveAccount} className="space-y-3.5">
+            <form onSubmit={handleSaveAccount} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Nombre de la Cuenta
@@ -458,94 +492,66 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Efectivo Billetes, Banesco Pago Móvil, Zelle..."
+                  placeholder="Ej. Banesco, Efectivo Cartera, Binance USDT, Zinli..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
                 />
               </div>
 
-              {/* Account Type Selector (Pill Grid) */}
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Tipo de Cuenta / Fondo
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {[
-                    { id: 'cash' as const, label: '💵 Efectivo', type: 'cash' },
-                    { id: 'bank' as const, label: '🏦 Banco / Pago M.', type: 'bank' },
-                    { id: 'digital' as const, label: '📱 Digital (Zelle)', type: 'digital' },
-                    { id: 'savings' as const, label: '🐷 Ahorro', type: 'savings' },
-                    { id: 'credit' as const, label: '💳 Tarjeta', type: 'credit' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setType(opt.id)}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
-                        type === opt.id
-                          ? 'bg-primary-custom text-white shadow-sm'
-                          : 'bg-card border border-app text-muted hover:text-app'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Tipo de Cuenta
+                  </label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as AccountType)}
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  >
+                    <option value="cash" className="bg-surface text-app">💵 Efectivo Cash</option>
+                    <option value="bank" className="bg-surface text-app">🏦 Banco / Pago Móvil</option>
+                    <option value="digital" className="bg-surface text-app">📱 Billetera Digital</option>
+                    <option value="savings" className="bg-surface text-app">🐷 Fondo de Ahorro</option>
+                    <option value="credit" className="bg-surface text-app">💳 Tarjeta de Crédito</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Moneda Principal
+                  </label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value as any)}
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  >
+                    <option value="USD" className="bg-surface text-app">$ USD (Dólares)</option>
+                    <option value="VES" className="bg-surface text-app">Bs. VES (Bolívares)</option>
+                    <option value="EUR" className="bg-surface text-app">€ EUR (Euros)</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Currency Selector (Pills) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Moneda Principal
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-card rounded-xl border border-app">
-                  {[
-                    { id: 'USD' as const, label: '🇺🇸 USD ($)' },
-                    { id: 'VES' as const, label: '🇻🇪 VES (Bs)' },
-                    { id: 'EUR' as const, label: '🇪🇺 EUR (€)' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setCurrency(opt.id)}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
-                        currency === opt.id
-                          ? 'bg-primary-custom text-white shadow-sm'
-                          : 'text-muted hover:text-app'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Initial Balance */}
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Saldo Inicial ({currency})
+                  Saldo Inicial
                 </label>
                 <MoneyInput
                   value={initialBalance}
                   onChange={setInitialBalance}
-                  currencySymbol={currency === 'VES' ? 'Bs' : currency === 'EUR' ? '€' : '$'}
+                  currencySymbol={currency === 'VES' ? 'Bs.' : currency === 'EUR' ? '€' : '$'}
                   placeholder="0,00"
-                  required
-                  className="!py-2 !text-sm"
                 />
-                <span className="text-[10px] text-muted mt-1 block">
-                  El balance final se ajustará automáticamente sumando ingresos y restando egresos de esta cuenta.
-                </span>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  Notas / Observaciones
+                  Notas (Opcional)
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Billetes en sobre, cuenta custodia..."
+                  placeholder="Ej. Datos de cuenta, uso asignado..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -562,10 +568,10 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold hover:opacity-95 transition-all cursor-pointer shadow-md disabled:opacity-50"
+                  disabled={isSubmitting || !name.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-extrabold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Guardando...' : editingAccount ? 'Actualizar Cuenta' : 'Crear Cuenta'}
+                  {isSubmitting ? 'Guardando...' : editingAccount ? 'Actualizar Cuenta' : 'Guardar Cuenta'}
                 </button>
               </div>
             </form>
@@ -573,9 +579,9 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
         </div>
       )}
 
-      {/* MODAL: Ajuste Rápido de Cuenta */}
+      {/* MODAL: Ajustar / Fondear Balance */}
       {adjustingAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <div className="flex items-center gap-2">
@@ -584,11 +590,9 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-app">
-                    Ajustar Fondos: {adjustingAccount.name}
+                    Ajustar / Fondear Cuenta
                   </h3>
-                  <p className="text-[11px] text-muted">
-                    Saldo actual: <strong>{adjustingAccount.currency === 'VES' ? 'Bs. ' : '$'}{getAccountBalance(adjustingAccount).toFixed(2)}</strong>
-                  </p>
+                  <p className="text-[11px] text-muted">{adjustingAccount.name} ({adjustingAccount.currency})</p>
                 </div>
               </div>
               <button
@@ -600,87 +604,63 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
             </div>
 
             <form onSubmit={handleExecuteAdjust} className="space-y-4">
-              {/* Operation Mode Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Tipo de Operación
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-card rounded-xl border border-app">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdjustMode('income');
-                      const firstInc = categories.find(c => c.type === 'income')?.id || '';
-                      setAdjustCategoryId(firstInc);
-                    }}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                      adjustMode === 'income'
-                        ? 'bg-[#00C2C7] text-slate-950 shadow-sm'
-                        : 'text-muted hover:text-app'
-                    }`}
-                  >
-                    <ArrowDownLeft className="w-3.5 h-3.5" />
-                    <span>Ingreso (+)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdjustMode('expense');
-                      const firstExp = categories.find(c => c.type === 'expense')?.id || '';
-                      setAdjustCategoryId(firstExp);
-                    }}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                      adjustMode === 'expense'
-                        ? 'bg-[#FF914D] text-slate-950 shadow-sm'
-                        : 'text-muted hover:text-app'
-                    }`}
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                    <span>Gasto (-)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setAdjustMode('set_balance')}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                      adjustMode === 'set_balance'
-                        ? 'bg-primary-custom text-white shadow-sm'
-                        : 'text-muted hover:text-app'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Fijar Saldo</span>
-                  </button>
-                </div>
+              {/* Adjustment Mode Selector */}
+              <div className="grid grid-cols-3 gap-1 p-1 bg-card rounded-2xl border border-app text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setAdjustMode('income')}
+                  className={`py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    adjustMode === 'income' ? 'bg-emerald-500 text-white shadow-sm' : 'text-muted hover:text-app'
+                  }`}
+                >
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                  <span>Ingreso</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustMode('expense')}
+                  className={`py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    adjustMode === 'expense' ? 'bg-[#FF914D] text-white shadow-sm' : 'text-muted hover:text-app'
+                  }`}
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  <span>Retiro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustMode('set_balance')}
+                  className={`py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    adjustMode === 'set_balance' ? 'bg-primary-custom text-white shadow-sm' : 'text-muted hover:text-app'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Fijar Saldo</span>
+                </button>
               </div>
 
-              {/* Amount */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
-                  {adjustMode === 'set_balance' ? 'Nuevo Saldo Total' : 'Monto de la Operación'} ({adjustingAccount.currency})
+                  {adjustMode === 'set_balance' ? 'Nuevo Saldo Exacto' : 'Monto del Ajuste'}
                 </label>
                 <MoneyInput
                   value={adjustAmount}
                   onChange={setAdjustAmount}
-                  currencySymbol={adjustingAccount.currency === 'VES' ? 'Bs' : '$'}
+                  currencySymbol={adjustingAccount.currency === 'VES' ? 'Bs.' : adjustingAccount.currency === 'EUR' ? '€' : '$'}
                   placeholder="0,00"
                   autoFocus
                   required
-                  className="!py-2.5 !text-base"
                 />
               </div>
 
-              {/* Description & Category if transaction */}
               {adjustMode !== 'set_balance' && (
                 <>
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">
-                      Concepto / Descripción
+                      Descripción del Movimiento
                     </label>
                     <input
                       type="text"
-                      placeholder="Ej. Recarga de saldo, cambio de divisas, retiro..."
+                      placeholder="Ej. Fondeo en efectivo, Pago móvil recibido, Retiro cajero..."
                       value={adjustDescription}
                       onChange={(e) => setAdjustDescription(e.target.value)}
                       className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
@@ -691,25 +671,19 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Categoría
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-32 overflow-y-auto pr-1 no-scrollbar">
+                    <select
+                      value={adjustCategoryId}
+                      onChange={(e) => setAdjustCategoryId(e.target.value)}
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                    >
                       {categories
                         .filter((c) => (adjustMode === 'income' ? c.type === 'income' : c.type === 'expense'))
                         .map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => setAdjustCategoryId(c.id)}
-                            className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                              adjustCategoryId === c.id
-                                ? 'border-primary-custom bg-card ring-2 ring-primary-custom text-app'
-                                : 'border-app bg-card/60 text-muted hover:text-app'
-                            }`}
-                          >
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#147df0' }} />
-                            <span className="truncate">{c.name}</span>
-                          </button>
+                          <option key={c.id} value={c.id} className="bg-surface text-app">
+                            {c.name}
+                          </option>
                         ))}
-                    </div>
+                    </select>
                   </div>
                 </>
               )}
@@ -724,10 +698,10 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 </button>
                 <button
                   type="submit"
-                  disabled={isAdjustSubmitting}
-                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold hover:opacity-95 transition-all cursor-pointer shadow-md disabled:opacity-50"
+                  disabled={isAdjustSubmitting || adjustAmount <= 0}
+                  className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-extrabold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isAdjustSubmitting ? 'Aplicando...' : 'Aplicar Ajuste'}
+                  {isAdjustSubmitting ? 'Aplicando...' : 'Confirmar Ajuste'}
                 </button>
               </div>
             </form>
@@ -735,31 +709,31 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Confirmation Modal for Deleting */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-app">¿Eliminar esta cuenta?</h3>
-              <p className="text-xs text-muted">
-                Los movimientos históricos seguirán registrados pero la cuenta ya no estará disponible para nuevos registros.
-              </p>
-            </div>
+            <h4 className="text-sm font-bold text-app">¿Eliminar esta cuenta?</h4>
+            <p className="text-xs text-muted">
+              Esta acción eliminará el registro de la cuenta. Las transacciones asociadas conservarán su histórico.
+            </p>
             <div className="flex items-center gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setDeletingId(null)}
                 className="flex-1 py-2 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-bold transition-all cursor-pointer"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={() => handleDeleteAccount(deletingId)}
                 className="flex-1 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-all cursor-pointer shadow-md"
               >
-                Eliminar
+                Sí, Eliminar
               </button>
             </div>
           </div>

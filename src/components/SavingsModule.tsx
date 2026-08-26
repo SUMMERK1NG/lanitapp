@@ -172,6 +172,31 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     };
   }, [startDate, targetDate, frequency, targetAmount]);
 
+  // Opciones de quincenas para inicio y fecha límite
+  const startPeriodOptions = useMemo(() => {
+    const opts: { key: string; dateStr: string; label: string }[] = [];
+    const baseDate = new Date();
+    const baseYear = baseDate.getFullYear();
+    const baseMonth = baseDate.getMonth();
+
+    for (let i = 0; i < 24; i++) {
+      const m = (baseMonth + i) % 12;
+      const y = baseYear + Math.floor((baseMonth + i) / 12);
+
+      opts.push({
+        key: `${y}_${m}_q1`,
+        dateStr: `${y}-${String(m + 1).padStart(2, '0')}-01`,
+        label: `Quincena 15 de ${MONTH_NAMES[m]} ${y}`,
+      });
+      opts.push({
+        key: `${y}_${m}_q2`,
+        dateStr: `${y}-${String(m + 1).padStart(2, '0')}-16`,
+        label: `Quincena 30 de ${MONTH_NAMES[m]} ${y}`,
+      });
+    }
+    return opts;
+  }, []);
+
   // Financial Stats
   const totalTargetAll = savingsGoals.reduce((sum, g) => sum + g.target_amount, 0);
   const totalAccumulated = savingsGoals.reduce((sum, g) => sum + g.current_amount, 0);
@@ -562,7 +587,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Fondo de Emergencia, Vacaciones, Reparación Moto..."
+                  placeholder="Ej. Fondo de emergencia, Viaje..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-sm text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
@@ -599,44 +624,46 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 </div>
               </div>
 
-              {/* Fechas: Inicio (Obligatorio, solo futuras) y Límite (Opcional, posterior a inicio) */}
+              {/* Fechas con Selectores Quincenales estilizados */}
               <div className="space-y-1.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">
-                      Fecha de Inicio <span className="text-[#00C2C7] font-bold">*</span>
+                      Fecha / Quincena de Inicio <span className="text-[#00C2C7] font-bold">*</span>
                     </label>
-                    <input
-                      type="date"
-                      required
-                      min={todayStr}
+                    <select
                       value={startDate}
                       onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
-                    />
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    >
+                      {startPeriodOptions.map((opt) => (
+                        <option key={opt.key} value={opt.dateStr} className="bg-surface text-app">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-muted mb-1">
                       Fecha Límite Estimada <span className="text-[10px] text-muted">(Opcional)</span>
                     </label>
-                    <input
-                      type="date"
-                      min={startDate && startDate >= todayStr ? startDate : todayStr}
+                    <select
                       value={targetDate}
                       onChange={(e) => setTargetDate(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
-                    />
+                      className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-[#00C2C7]"
+                    >
+                      <option value="" className="bg-surface text-muted">Sin fecha límite (Indefinido)</option>
+                      {startPeriodOptions
+                        .filter((opt) => !startDate || opt.dateStr > startDate)
+                        .map((opt) => (
+                          <option key={opt.key} value={opt.dateStr} className="bg-surface text-app">
+                            {opt.label}
+                          </option>
+                        ))}
+                    </select>
                   </div>
                 </div>
-
-                {/* Aviso para metas editadas cuya fecha original ya pasó */}
-                {editingGoal && editingGoal.start_date && editingGoal.start_date < todayStr && (
-                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-[11px] text-amber-400">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>La fecha de inicio ({editingGoal.start_date}) ya pasó. La meta se considera activa desde hoy.</span>
-                  </div>
-                )}
               </div>
 
               {/* Cálculo Inteligente de Cuotas */}
