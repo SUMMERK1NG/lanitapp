@@ -19,6 +19,8 @@ import {
   Lightbulb,
   Clock,
   ShieldCheck,
+  Coins,
+  ArrowLeftRight,
 } from 'lucide-react';
 import type {
   FortnightType,
@@ -130,6 +132,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const [isCoverDeficitModalOpen, setIsCoverDeficitModalOpen] = useState<boolean>(false);
   const [coverDeficitAccountId, setCoverDeficitAccountId] = useState<string>('');
   const [coverDeficitAmount, setCoverDeficitAmount] = useState<number>(0);
+
+  // Single-Salary / Advance from Other Fortnight Modal
+  const [isAdvanceSalaryModalOpen, setIsAdvanceSalaryModalOpen] = useState<boolean>(false);
+  const [advanceSalaryAmount, setAdvanceSalaryAmount] = useState<number>(0);
 
   // Skip Modal Confirmation State
   const [skipModalData, setSkipModalData] = useState<{
@@ -639,6 +645,50 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
+  // Smart Advance Salary from Other Fortnight (e.g. from Q30 to Q15)
+  const handleOpenAdvanceSalaryModal = () => {
+    setAdvanceSalaryAmount(Number(Math.abs(netRemaining).toFixed(2)));
+    setIsAdvanceSalaryModalOpen(true);
+  };
+
+  const handleConfirmAdvanceSalary = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (advanceSalaryAmount <= 0) return;
+    setIsProcessingAction(true);
+    try {
+      const sourceLabel = otherFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30';
+      const targetLabel = selectedFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30';
+
+      // 1. Ingreso asignado en la quincena actual con déficit (ej. Q15)
+      await saveVariableIncome({
+        amount: advanceSalaryAmount,
+        description: `Asignación de Sueldo (Tomado de ${sourceLabel})`,
+        category_id: 'cat_salary',
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: selectedFortnight,
+        notes: `Fondos tomados del cobro de ${sourceLabel} para cubrir gastos de ${targetLabel}`,
+      });
+
+      // 2. Reserva/deducción registrada en la otra quincena (ej. Q30)
+      await saveVariableIncome({
+        amount: -advanceSalaryAmount,
+        description: `Reserva asignada a ${targetLabel}`,
+        category_id: 'cat_salary',
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: otherFortnight,
+        notes: `Fondos adelantados para cubrir compromisos de ${targetLabel}`,
+      });
+
+      setIsAdvanceSalaryModalOpen(false);
+    } catch (err) {
+      console.error('Error advancing salary from other fortnight:', err);
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
   // Batch Postpone all active pending expenses to next fortnight
   const handleBatchPostponeToNextFortnight = async () => {
     if (!window.confirm(`¿Deseas posponer todos los gastos pendientes de esta ${selectedFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'} para el siguiente corte?`)) {
@@ -850,7 +900,11 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               <p className="text-[11px] text-muted mt-0.5 leading-relaxed">
                 {selectedFortnight === 'q1' && otherFortnightIncomeTotal > 0 ? (
                   <>
-                    Cobras en <strong>{otherFortnightLabel} (${otherFortnightIncomeTotal.toFixed(2)} USD)</strong>. Puedes cubrir los compromisos de esta quincena tomando de tu balance en cuenta o posponiendo los pagos para el día 30.
+                    Cobras en <strong>{otherFortnightLabel} (${otherFortnightIncomeTotal.toFixed(2)} USD)</strong>. Puedes tomar dinero de tu cobro del 30 para cubrir esta quincena o posponer los gastos para el día 30.
+                  </>
+                ) : otherFortnightIncomeTotal > 0 ? (
+                  <>
+                    Tienes ingresos en <strong>{otherFortnightLabel} (${otherFortnightIncomeTotal.toFixed(2)} USD)</strong>. Puedes tomar dinero de ese corte para equilibrar esta quincena o posponer compromisos.
                   </>
                 ) : (
                   <>
@@ -861,25 +915,48 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-            <button
-              type="button"
-              onClick={handleOpenCoverDeficitModal}
-              className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span>Cubrir con Cuenta</span>
-            </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+            {otherFortnightIncomeTotal > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleOpenAdvanceSalaryModal}
+                  className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>Tomar dinero de la {otherFortnight === 'q1' ? 'Q15' : 'Q30'}</span>
+                </button>
 
-            {selectedFortnight === 'q1' && activeFortnightFixedExpenses.some(f => !f.isPaid && !f.isSkipped && !f.isAssumed) && (
-              <button
-                type="button"
-                onClick={handleBatchPostponeToNextFortnight}
-                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <CornerDownRight className="w-3.5 h-3.5 text-amber-400" />
-                <span>Posponer a Q30</span>
-              </button>
+                {activeFortnightFixedExpenses.some(f => !f.isPaid && !f.isSkipped && !f.isAssumed) && (
+                  <button
+                    type="button"
+                    onClick={handleBatchPostponeToNextFortnight}
+                    className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <CornerDownRight className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Posponer a {otherFortnight === 'q1' ? 'Q15' : 'Q30'}</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleOpenCoverDeficitModal}
+                  className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>Cubrir con Cuenta</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDeficitLoanModalOpen(true)}
+                  className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-[#ef4444]/20 hover:bg-[#ef4444]/30 text-[#ef4444] border border-[#ef4444]/40 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Pedir Préstamo</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1410,17 +1487,24 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             <form onSubmit={handleConfirmCoverDeficit} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Cuenta de Origen</label>
-                <select
-                  value={coverDeficitAccountId}
-                  onChange={(e) => setCoverDeficitAccountId(e.target.value)}
-                  className="w-full bg-card border border-app rounded-2xl px-3.5 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id} className="bg-card text-app">
-                      {a.name} ({a.currency} • Saldo: ${Number(a.initial_balance).toFixed(2)})
-                    </option>
-                  ))}
-                </select>
+                {accounts.length === 0 ? (
+                  <div className="p-3 rounded-2xl bg-card border border-amber-500/30 text-center space-y-1">
+                    <p className="text-xs font-bold text-amber-400">No hay cuentas registradas</p>
+                    <p className="text-[10px] text-muted">Registra una cuenta bancaria o fondo en Capital & Cuentas para usar esta opción.</p>
+                  </div>
+                ) : (
+                  <select
+                    value={coverDeficitAccountId}
+                    onChange={(e) => setCoverDeficitAccountId(e.target.value)}
+                    className="w-full bg-card border border-app rounded-2xl px-3.5 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id} className="bg-card text-app">
+                        {a.name} ({a.currency} • Saldo: ${Number(a.initial_balance).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -1443,7 +1527,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isProcessingAction || coverDeficitAmount <= 0 || !coverDeficitAccountId}
+                  disabled={isProcessingAction || coverDeficitAmount <= 0 || !coverDeficitAccountId || accounts.length === 0}
                   className="flex-1 py-2.5 rounded-2xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isProcessingAction ? 'Asignando...' : 'Cubrir Déficit'}
@@ -1454,7 +1538,87 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       )}
 
-      {/* Modal 4: Diálogo de Omitir Gasto / Cuota */}
+      {/* Modal 4: Tomar Dinero de la Otra Quincena (Sueldo del 30 o Sueldo del 15) */}
+      {isAdvanceSalaryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setIsAdvanceSalaryModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-app">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+                  <Coins className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-app">Tomar dinero de la {otherFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'}</h3>
+                  <p className="text-[10px] text-muted">Asigna fondos de tu cobro para cubrir los compromisos actuales</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAdvanceSalaryModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAdvanceSalary} className="space-y-3.5">
+              <div className="p-3 rounded-2xl bg-card border border-app space-y-1.5 text-xs">
+                <div className="flex justify-between items-center text-muted">
+                  <span>Cobro disponible en {otherFortnightLabel}:</span>
+                  <span className="font-bold text-app">${otherFortnightIncomeTotal.toFixed(2)} USD</span>
+                </div>
+                <div className="flex justify-between items-center text-muted">
+                  <span>Déficit en esta quincena:</span>
+                  <span className="font-bold text-[#ef4444]">-${Math.abs(netRemaining).toFixed(2)} USD</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">Monto a Tomar ($ USD)</label>
+                <MoneyInput
+                  value={advanceSalaryAmount}
+                  onChange={setAdvanceSalaryAmount}
+                  placeholder="0.00"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Live allocation projection */}
+              {advanceSalaryAmount > 0 && (
+                <div className="p-3 rounded-2xl bg-primary-custom/10 border border-primary-custom/20 space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-primary-custom font-semibold">
+                    <span className="flex items-center gap-1"><ArrowRight className="w-3.5 h-3.5" /> Esta quincena recibirá:</span>
+                    <span className="font-bold">+${advanceSalaryAmount.toFixed(2)} USD</span>
+                  </div>
+                  <div className="flex items-center justify-between text-muted text-[11px]">
+                    <span className="flex items-center gap-1"><ArrowLeftRight className="w-3 h-3" /> Quedará en {otherFortnightLabel}:</span>
+                    <span className="font-bold text-app">${Math.max(0, otherFortnightIncomeTotal - advanceSalaryAmount).toFixed(2)} USD</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAdvanceSalaryModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessingAction || advanceSalaryAmount <= 0}
+                  className="flex-1 py-2.5 rounded-2xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isProcessingAction ? 'Asignando...' : 'Confirmar Asignación'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 5: Diálogo de Omitir Gasto / Cuota */}
       {skipModalData.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="fixed inset-0" onClick={() => setSkipModalData({ isOpen: false })} />
@@ -1515,7 +1679,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       )}
 
-      {/* Modal 5: Advertencia al intentar pagar con Saldo Negativo / Insuficiente */}
+      {/* Modal 6: Advertencia al intentar pagar con Saldo Negativo / Insuficiente */}
       {deficitWarningData.isOpen && deficitWarningData.expense && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="fixed inset-0" onClick={() => setDeficitWarningData({ isOpen: false, amount: 0 })} />
@@ -1536,22 +1700,24 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               </p>
               <p className="text-muted text-[11px]">
                 {selectedFortnight === 'q1' && otherFortnightIncomeTotal > 0
-                  ? `💡 Recuerda que cobras el día 30 ($${otherFortnightIncomeTotal.toFixed(2)}). Puedes posponerlo para esa fecha o pagarlo usando fondos de tu cuenta.`
+                  ? `💡 Recuerda que cobras en ${otherFortnightLabel} ($${otherFortnightIncomeTotal.toFixed(2)}). Puedes posponerlo para esa fecha o pagarlo usando fondos de tu cuenta.`
                   : `¿Deseas pagar usando saldo de una cuenta, posponerlo para el próximo corte o registrarlo de todas formas?`}
               </p>
             </div>
 
             <div className="space-y-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  handleExecuteMarkPaid(deficitWarningData.expense!, deficitWarningData.amount, accounts[0]?.id || '');
-                }}
-                className="w-full py-2.5 px-3 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Check className="w-4 h-4" />
-                <span>Pagar con fondos de mi cuenta ({accounts[0]?.name || 'Principal'})</span>
-              </button>
+              {accounts.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExecuteMarkPaid(deficitWarningData.expense!, deficitWarningData.amount, accounts[0]?.id || '');
+                  }}
+                  className="w-full py-2.5 px-3 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Pagar con fondos de mi cuenta ({accounts[0]?.name || 'Principal'})</span>
+                </button>
+              ) : null}
 
               <button
                 type="button"
@@ -1594,7 +1760,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       )}
 
-      {/* Modal 6: Add Debt Modal for Deficit Loan Resolution */}
+      {/* Modal 7: Add Debt Modal for Deficit Loan Resolution */}
       <AddDebtModal
         isOpen={isDeficitLoanModalOpen}
         onClose={() => setIsDeficitLoanModalOpen(false)}
@@ -1610,7 +1776,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         onSaved={handleDeficitLoanSaved}
       />
 
-      {/* Modal 7: Direct Add Payment Modal for Debts in Fortnight */}
+      {/* Modal 8: Direct Add Payment Modal for Debts in Fortnight */}
       {rates && (
         <AddPaymentModal
           isOpen={paymentModalData.isOpen}
