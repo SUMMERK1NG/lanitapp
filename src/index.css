@@ -17,7 +17,7 @@
     --danger: #ef4444;
   }
 
-  /* Modo Azul Marino Profundo (Navy) */
+  /* Modo 1: Azul Marino Profundo (Navy) */
   .theme-navy {
     --app-bg: #0b132b;
     --app-surface: #203657;
@@ -28,7 +28,7 @@
     --app-text-muted: #9ba3af;
   }
 
-  /* Modo Oscuro Negro Puro (OLED / Pitch Dark) */
+  /* Modo 2: Oscuro Medianoche Puro (OLED / Pitch Dark) */
   .theme-dark {
     --app-bg: #080c14;
     --app-surface: #111726;
@@ -39,7 +39,40 @@
     --app-text-muted: #94a3b8;
   }
 
-  /* Modo Fondo Blanco / Light */
+  /* Modo 3: Bosque Esmeralda (Cyber Forest) */
+  .theme-emerald {
+    --app-bg: #051813;
+    --app-surface: #0e2a22;
+    --app-surface-hover: #143d31;
+    --app-card: #09211a;
+    --app-border: #174d3e;
+    --app-text: #f0fdf4;
+    --app-text-muted: #86efac;
+  }
+
+  /* Modo 4: Nebulosa Violeta (Cyber Violet) */
+  .theme-purple {
+    --app-bg: #12091f;
+    --app-surface: #24143d;
+    --app-surface-hover: #311c52;
+    --app-card: #1b0d2e;
+    --app-border: #3b2263;
+    --app-text: #faf5ff;
+    --app-text-muted: #d8b4fe;
+  }
+
+  /* Modo 5: Café Moca Cálido (Warm Dark Espresso) */
+  .theme-moca {
+    --app-bg: #17120e;
+    --app-surface: #2c211b;
+    --app-surface-hover: #3b2d25;
+    --app-card: #201712;
+    --app-border: #44342a;
+    --app-text: #fffbeb;
+    --app-text-muted: #fde68a;
+  }
+
+  /* Modo 6: Fondo Blanco / Light */
   .theme-light {
     --app-bg: #f8fafc;
     --app-surface: #ffffff;

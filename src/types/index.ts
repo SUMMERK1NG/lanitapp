@@ -12,15 +12,19 @@ export type DebtModeType = 'installments' | 'open'; // installments = Por Cuotas
 
 export type SavingFrequency = 'fortnightly' | 'monthly'; // Quincenal (15 y 30) o Mensual
 
-export type ThemeMode = 'navy' | 'dark' | 'light';
+export type ThemeMode = 'navy' | 'dark' | 'emerald' | 'purple' | 'moca' | 'light';
 
 export type AccentColor =
-  | '#147DF0' // Azul
-  | '#00C2C7' // Turquesa
-  | '#FF914D' // Naranja
-  | '#EC4899' // Rosa
-  | '#8B5CF6' // Morado
-  | '#10B981'; // Verde Esmeralda
+  | '#147DF0' // Azul Eléctrico
+  | '#00C2C7' // Turquesa Neón
+  | '#FF914D' // Naranja Vibrante
+  | '#EC4899' // Rosa Magenta
+  | '#8B5CF6' // Morado Eléctrico
+  | '#10B981' // Verde Esmeralda
+  | '#F59E0B' // Oro Ámbar
+  | '#EF4444' // Rojo Coral
+  | '#06B6D4' // Cian Hielo
+  | '#14B8A6'; // Verde Menta
 
 export type UserRole = 'admin' | 'user';
 

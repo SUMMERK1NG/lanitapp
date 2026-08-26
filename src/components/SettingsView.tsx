@@ -4,8 +4,6 @@ import {
   Database,
   CheckCircle2,
   Palette,
-  Sun,
-  Moon,
   Check,
   Layers,
   Users,
@@ -23,7 +21,7 @@ import type {
   AccentColor,
   ExchangeRatesData,
 } from '../types/index.ts';
-import { ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
+import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
 import { CategoriesModule } from './CategoriesModule.tsx';
 import { UserManagementCard } from './UserManagementCard.tsx';
 import { AdminBackup } from './AdminBackup.tsx';
@@ -152,60 +150,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-4">
             <div>
               <h3 className="text-sm font-bold text-app">Modos de Interfaz (Temas)</h3>
-              <p className="text-xs text-muted">Selecciona el ambiente visual predeterminado</p>
+              <p className="text-xs text-muted">Selecciona el ambiente visual predeterminado con alto contraste</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Modo Azul Marino */}
-              <button
-                onClick={() => onChangeThemeMode('navy')}
-                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                  currentThemeMode === 'navy'
-                    ? 'border-primary-custom bg-[#203657] text-white ring-2 ring-primary-custom shadow-lg'
-                    : 'border-app bg-[#203657]/70 text-slate-300 hover:bg-[#203657]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xl">🌊</span>
-                  {currentThemeMode === 'navy' && <CheckCircle2 className="w-4 h-4 text-[#147DF0]" />}
-                </div>
-                <div className="font-bold text-sm">Azul Marino Profundo</div>
-                <div className="text-[11px] text-slate-300 mt-0.5">Fondo Navy #0B132B</div>
-              </button>
-
-              {/* Modo Oscuro Negro */}
-              <button
-                onClick={() => onChangeThemeMode('dark')}
-                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                  currentThemeMode === 'dark'
-                    ? 'border-primary-custom bg-[#111726] text-white ring-2 ring-primary-custom shadow-lg'
-                    : 'border-app bg-[#0e1320] text-slate-300 hover:bg-[#111726]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <Moon className="w-5 h-5 text-[#00C2C7]" />
-                  {currentThemeMode === 'dark' && <CheckCircle2 className="w-4 h-4 text-[#147DF0]" />}
-                </div>
-                <div className="font-bold text-sm">Oscuro Negro</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">Fondo Negro #090D16</div>
-              </button>
-
-              {/* Modo Fondo Blanco */}
-              <button
-                onClick={() => onChangeThemeMode('light')}
-                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                  currentThemeMode === 'light'
-                    ? 'border-primary-custom bg-white text-slate-900 ring-2 ring-primary-custom shadow-lg'
-                    : 'border-app bg-white/90 text-slate-700 hover:bg-white'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <Sun className="w-5 h-5 text-amber-500" />
-                  {currentThemeMode === 'light' && <CheckCircle2 className="w-4 h-4 text-[#147DF0]" />}
-                </div>
-                <div className="font-bold text-sm">Fondo Blanco</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Alto contraste #FFFFFF</div>
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {THEME_MODE_OPTIONS.map((theme) => {
+                const isSelected = currentThemeMode === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    onClick={() => onChangeThemeMode(theme.id)}
+                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                      isSelected
+                        ? 'border-primary-custom ring-2 ring-primary-custom shadow-lg bg-card'
+                        : 'border-app bg-card/60 hover:bg-card text-muted'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{theme.icon}</span>
+                        <div
+                          className="w-4 h-4 rounded-full border border-white/20 shadow-inner"
+                          style={{ backgroundColor: theme.previewBg }}
+                        />
+                      </div>
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-primary-custom" />}
+                    </div>
+                    <div className="font-bold text-sm text-app">{theme.name}</div>
+                    <div className="text-[11px] text-muted mt-0.5">{theme.desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -216,7 +191,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <p className="text-xs text-muted">Personaliza los botones de acción, destaques y gráficos</p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-2.5">
               {ACCENT_COLOR_OPTIONS.map((option) => {
                 const isSelected = currentAccentColor === option.color;
                 return (
@@ -225,7 +200,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onClick={() => onChangeAccentColor(option.color)}
                     className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-app bg-card ring-2 ring-primary-custom shadow-md'
+                        ? 'border-primary-custom bg-card ring-2 ring-primary-custom shadow-md'
                         : 'border-app bg-card/60 hover:bg-card'
                     }`}
                   >
@@ -235,7 +210,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     >
                       {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
                     </div>
-                    <span className="text-[11px] font-bold text-app text-center">
+                    <span className="text-[10px] font-bold text-app text-center truncate w-full">
                       {option.name}
                     </span>
                   </button>

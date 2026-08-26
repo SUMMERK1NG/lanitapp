@@ -3,8 +3,6 @@ import {
   User,
   Check,
   X,
-  Sun,
-  Moon,
   Image as ImageIcon,
   Palette,
   LogOut,
@@ -14,7 +12,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import type { UserProfile, ThemeMode, AccentColor } from '../types/index.ts';
-import { ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
+import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
 import { saveUserProfile } from '../lib/db.ts';
 import { supabase } from '../lib/supabase.ts';
 
@@ -301,66 +299,42 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <div className="flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-primary-custom" />
               <label className="text-xs font-bold text-muted uppercase tracking-wider">
-                Tema de Fondo
+                Tema de Fondo ({THEME_MODE_OPTIONS.length})
               </label>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {/* Modo Azul Marino */}
-              <button
-                type="button"
-                onClick={() => onChangeThemeMode('navy')}
-                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer ${
-                  currentThemeMode === 'navy'
-                    ? 'border-primary-custom bg-[#203657] text-white ring-2 ring-primary-custom'
-                    : 'border-app bg-[#203657]/60 text-slate-300 hover:bg-[#203657]'
-                }`}
-              >
-                <div className="w-4 h-4 rounded-full bg-[#0B132B] border border-white/20 mx-auto mb-1 flex items-center justify-center text-[8px]">
-                  🌊
-                </div>
-                <span className="text-xs font-bold block">Azul Marino</span>
-              </button>
-
-              {/* Modo Oscuro Negro */}
-              <button
-                type="button"
-                onClick={() => onChangeThemeMode('dark')}
-                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer ${
-                  currentThemeMode === 'dark'
-                    ? 'border-primary-custom bg-[#111726] text-white ring-2 ring-primary-custom'
-                    : 'border-app bg-[#0e1320] text-slate-300 hover:bg-[#111726]'
-                }`}
-              >
-                <div className="w-4 h-4 rounded-full bg-[#000000] border border-white/20 mx-auto mb-1 flex items-center justify-center text-[8px]">
-                  <Moon className="w-2.5 h-2.5 text-white" />
-                </div>
-                <span className="text-xs font-bold block">Oscuro Negro</span>
-              </button>
-
-              {/* Modo Fondo Blanco */}
-              <button
-                type="button"
-                onClick={() => onChangeThemeMode('light')}
-                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer ${
-                  currentThemeMode === 'light'
-                    ? 'border-primary-custom bg-white text-slate-900 ring-2 ring-primary-custom shadow-md'
-                    : 'border-app bg-white/90 text-slate-700 hover:bg-white'
-                }`}
-              >
-                <div className="w-4 h-4 rounded-full bg-slate-100 border border-slate-300 mx-auto mb-1 flex items-center justify-center text-[8px]">
-                  <Sun className="w-2.5 h-2.5 text-amber-500" />
-                </div>
-                <span className="text-xs font-bold block">Fondo Blanco</span>
-              </button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {THEME_MODE_OPTIONS.map((theme) => {
+                const isSelected = currentThemeMode === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => onChangeThemeMode(theme.id)}
+                    className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-primary-custom bg-card text-app ring-2 ring-primary-custom'
+                        : 'border-app bg-card/60 text-muted hover:bg-card'
+                    }`}
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full border border-white/20 mx-auto mb-1 flex items-center justify-center text-[9px] shadow-inner"
+                      style={{ backgroundColor: theme.previewBg }}
+                    >
+                      {theme.icon}
+                    </div>
+                    <span className="text-[11px] font-bold block text-app truncate">{theme.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Accent Color Palette Selector */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-muted uppercase tracking-wider">
-              Color de Acento
+              Color de Acento ({ACCENT_COLOR_OPTIONS.length})
             </label>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
               {ACCENT_COLOR_OPTIONS.map((opt) => {
                 const isSelected = currentAccentColor === opt.color;
                 return (
@@ -370,7 +344,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     onClick={() => onChangeAccentColor(opt.color)}
                     className={`py-2 px-1 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-app bg-card ring-2 ring-primary-custom shadow-md'
+                        ? 'border-primary-custom bg-card ring-2 ring-primary-custom shadow-md'
                         : 'border-app bg-card/60 hover:bg-card'
                     }`}
                   >
@@ -380,7 +354,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     >
                       {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
-                    <span className="text-[10px] font-bold text-app whitespace-nowrap text-center">
+                    <span className="text-[9px] font-bold text-app whitespace-nowrap text-center truncate w-full">
                       {opt.name}
                     </span>
                   </button>
