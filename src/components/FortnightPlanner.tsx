@@ -16,6 +16,9 @@ import {
   CornerDownRight,
   Wallet,
   X,
+  Lightbulb,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import type {
   FortnightType,
@@ -42,7 +45,6 @@ import {
   unmarkFortnightExpenseSkipped,
   setFortnightDebtSkipped,
   unmarkFortnightDebtSkipped,
-  addSavingContribution,
   addTransaction,
   saveVariableIncome,
 } from '../lib/db.ts';
@@ -98,7 +100,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   categories = [],
   rates,
   currency = '$',
-  onOpenQuickPayment,
+  onOpenQuickPayment: _onOpenQuickPayment,
   onNavigateToIncomes,
   onNavigateToSavings,
   onNavigateToDebts,
@@ -123,6 +125,28 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const [selectedSurplusAccountId, setSelectedSurplusAccountId] = useState<string>('');
   const [surplusBalanceAmount, setSurplusBalanceAmount] = useState<number>(0);
   const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
+
+  // Smart Deficit / Cover Modals State
+  const [isCoverDeficitModalOpen, setIsCoverDeficitModalOpen] = useState<boolean>(false);
+  const [coverDeficitAccountId, setCoverDeficitAccountId] = useState<string>('');
+  const [coverDeficitAmount, setCoverDeficitAmount] = useState<number>(0);
+
+  // Skip Modal Confirmation State
+  const [skipModalData, setSkipModalData] = useState<{
+    isOpen: boolean;
+    expense?: FixedExpense;
+    debtId?: string;
+    debtName?: string;
+    amount?: number;
+    isDebt?: boolean;
+  }>({ isOpen: false });
+
+  // Deficit Payment Warning Modal State (when clicking 'Pagado' with insufficient funds)
+  const [deficitWarningData, setDeficitWarningData] = useState<{
+    isOpen: boolean;
+    expense?: FixedExpense;
+    amount: number;
+  }>({ isOpen: false, amount: 0 });
 
   // Reactive DB queries for Fortnight Item States
   const allFortnightStates = useLiveQuery(() => db.fortnight_item_states.toArray(), []) || [];
@@ -178,11 +202,12 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const override = overrideMap.get(fi.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fi.amount;
         const finalAmount = fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount;
+        const cleanNotes = (fi.notes || '').replace(/\[split\]/gi, '').trim();
         return {
           id: fi.id,
           name: fi.name,
           finalAmount,
-          notes: fi.notes || (fi.default_fortnight === 'split' ? '50% sueldo quincenal' : 'Ingreso fijo'),
+          notes: cleanNotes || (fi.default_fortnight === 'split' ? '50% distribución de sueldo' : 'Ingreso fijo'),
           isFixed: true,
         };
       });
@@ -212,6 +237,37 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   }, [activeFortnightFixedIncomes, activeFortnightVariables]);
 
   const totalAvailable = allFortnightIncomes.reduce((sum, inc) => sum + inc.finalAmount, 0);
+
+  // Other fortnight context for single-salary guidance (e.g. user gets paid only on Q30)
+  const otherFortnight = selectedFortnight === 'q1' ? 'q2' : 'q1';
+  const otherFortnightLabel = selectedFortnight === 'q1' ? 'Quincena 30' : 'Quincena 15';
+
+  const otherFortnightIncomeTotal = useMemo(() => {
+    const overrideMap = new Map(
+      monthlyIncomeOverrides
+        .filter((o) => o.year === selectedYear && o.month === selectedMonth)
+        .map((o) => [o.fixed_income_id, o])
+    );
+    const fixedSum = fixedIncomes
+      .filter((fi) => {
+        const override = overrideMap.get(fi.id);
+        const isActive = override?.is_active !== undefined ? override.is_active : fi.is_active;
+        if (!isActive) return false;
+        if (fi.default_fortnight === 'both' || fi.default_fortnight === 'split') return true;
+        return fi.default_fortnight === otherFortnight;
+      })
+      .reduce((sum, fi) => {
+        const override = overrideMap.get(fi.id);
+        const amount = override?.custom_amount !== undefined ? override.custom_amount : fi.amount;
+        return sum + (fi.default_fortnight === 'split' ? Number((amount / 2).toFixed(2)) : amount);
+      }, 0);
+
+    const varSum = variableIncomes
+      .filter((vi) => vi.year === selectedYear && vi.month === selectedMonth && vi.fortnight === otherFortnight)
+      .reduce((sum, vi) => sum + vi.amount, 0);
+
+    return fixedSum + varSum;
+  }, [fixedIncomes, monthlyIncomeOverrides, variableIncomes, selectedYear, selectedMonth, otherFortnight]);
 
   // 3. Active fixed expenses for this fortnight (including postponed from previous cut)
   const activeFortnightFixedExpenses = useMemo(() => {
@@ -387,7 +443,22 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const netRemaining = totalAvailable - (totalCommitted + plannedSavingsTotal);
 
   // Actions for Fixed Expenses
-  const handleMarkExpensePaid = async (expense: FixedExpense, amount: number) => {
+  const handleRequestMarkExpensePaid = (expense: FixedExpense, amount: number) => {
+    // If in deficit / negative Dinero Libre or 0 available income, show the friendly option modal
+    if (netRemaining < 0 || totalAvailable <= 0) {
+      setDeficitWarningData({
+        isOpen: true,
+        expense,
+        amount,
+      });
+      return;
+    }
+
+    // Otherwise mark paid directly
+    handleExecuteMarkPaid(expense, amount, accounts[0]?.id || '');
+  };
+
+  const handleExecuteMarkPaid = async (expense: FixedExpense, amount: number, accountId?: string) => {
     try {
       await setFortnightExpensePaid({
         expense,
@@ -395,8 +466,9 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         month: selectedMonth,
         fortnight: selectedFortnight,
         amount,
-        accountId: accounts[0]?.id || '',
+        accountId: accountId || accounts[0]?.id || '',
       });
+      setDeficitWarningData({ isOpen: false, amount: 0 });
     } catch (err) {
       console.error('Error marking expense as paid:', err);
     }
@@ -415,14 +487,26 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
-  const handleSkipExpense = async (expenseId: string) => {
+  // Skip Handlers
+  const handleRequestSkipExpense = (expense: FixedExpense) => {
+    setSkipModalData({
+      isOpen: true,
+      expense,
+      amount: expense.amount,
+      isDebt: false,
+    });
+  };
+
+  const handleConfirmSkipExpense = async () => {
+    if (!skipModalData.expense) return;
     try {
       await setFortnightExpenseSkipped({
-        expenseId,
+        expenseId: skipModalData.expense.id,
         year: selectedYear,
         month: selectedMonth,
         fortnight: selectedFortnight,
       });
+      setSkipModalData({ isOpen: false });
     } catch (err) {
       console.error('Error skipping expense:', err);
     }
@@ -442,16 +526,28 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   };
 
   // Actions for Debts
-  const handleSkipDebt = async (debtId: string) => {
+  const handleRequestSkipDebt = (debtId: string, creditor: string, cuota: number) => {
+    setSkipModalData({
+      isOpen: true,
+      debtId,
+      debtName: creditor,
+      amount: cuota,
+      isDebt: true,
+    });
+  };
+
+  const handleConfirmSkipDebt = async () => {
+    if (!skipModalData.debtId) return;
     try {
       await setFortnightDebtSkipped({
-        debtId,
+        debtId: skipModalData.debtId,
         year: selectedYear,
         month: selectedMonth,
         fortnight: selectedFortnight,
       });
+      setSkipModalData({ isOpen: false });
     } catch (err) {
-      console.error('Error skipping debt:', err);
+      console.error('Error skipping debt installment:', err);
     }
   };
 
@@ -464,58 +560,28 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         fortnight: selectedFortnight,
       });
     } catch (err) {
-      console.error('Error unskipping debt:', err);
+      console.error('Error unskipping debt installment:', err);
     }
   };
 
   const handleOpenDebtPayment = (debtId: string, cuotaAmount: number) => {
-    if (onOpenQuickPayment) {
-      onOpenQuickPayment(debtId);
-    } else {
-      setPaymentModalData({
-        isOpen: true,
-        debtId,
-        amount: cuotaAmount,
-      });
-    }
+    setPaymentModalData({
+      isOpen: true,
+      debtId,
+      amount: cuotaAmount,
+    });
   };
 
-  // Surplus Resolution Handlers
+  // Surplus modal open actions
   const handleOpenSavingsSurplus = () => {
-    const targetGoal = savingsGoals.find((g) => g.status === 'active') || savingsGoals[0];
-    if (targetGoal) {
-      setSelectedSurplusGoalId(targetGoal.id);
-    }
+    const goal = savingsGoals.find((g) => g.status === 'active') || savingsGoals[0];
+    if (goal) setSelectedSurplusGoalId(goal.id);
     setSurplusSavingsAmount(Number(Math.max(0, netRemaining).toFixed(2)));
     setIsSavingsSurplusModalOpen(true);
   };
 
-  const handleConfirmSavingsSurplus = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSurplusGoalId || surplusSavingsAmount <= 0) return;
-    setIsProcessingAction(true);
-    try {
-      await addSavingContribution({
-        goal_id: selectedSurplusGoalId,
-        amount: surplusSavingsAmount,
-        year: selectedYear,
-        month: selectedMonth,
-        fortnight: selectedFortnight,
-        notes: `Aporte de Superávit (${fortnightLabel})`,
-      });
-      setIsSavingsSurplusModalOpen(false);
-    } catch (err) {
-      console.error('Error adding surplus saving contribution:', err);
-    } finally {
-      setIsProcessingAction(false);
-    }
-  };
-
   const handleOpenBalanceSurplus = () => {
-    const targetAcc = accounts[0];
-    if (targetAcc) {
-      setSelectedSurplusAccountId(targetAcc.id);
-    }
+    if (accounts.length > 0) setSelectedSurplusAccountId(accounts[0].id);
     setSurplusBalanceAmount(Number(Math.max(0, netRemaining).toFixed(2)));
     setIsBalanceSurplusModalOpen(true);
   };
@@ -542,10 +608,61 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
-  // Deficit Resolution Handler
+  // Smart Cover Deficit from Account Balance
+  const handleOpenCoverDeficitModal = () => {
+    if (accounts.length > 0) setCoverDeficitAccountId(accounts[0].id);
+    setCoverDeficitAmount(Number(Math.abs(netRemaining).toFixed(2)));
+    setIsCoverDeficitModalOpen(true);
+  };
+
+  const handleConfirmCoverDeficit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coverDeficitAccountId || coverDeficitAmount <= 0) return;
+    setIsProcessingAction(true);
+    try {
+      const acc = accounts.find((a) => a.id === coverDeficitAccountId);
+      await saveVariableIncome({
+        amount: coverDeficitAmount,
+        description: `Fondos de cuenta: ${acc?.name || 'Balance'} (${selectedFortnight === 'q1' ? 'Q15' : 'Q30'})`,
+        category_id: 'cat_salary',
+        account_id: coverDeficitAccountId,
+        year: selectedYear,
+        month: selectedMonth,
+        fortnight: selectedFortnight,
+        notes: `Transferido desde cuenta para cubrir déficit de ${fortnightLabel}`,
+      });
+      setIsCoverDeficitModalOpen(false);
+    } catch (err) {
+      console.error('Error covering deficit from account:', err);
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  // Batch Postpone all active pending expenses to next fortnight
+  const handleBatchPostponeToNextFortnight = async () => {
+    if (!window.confirm(`¿Deseas posponer todos los gastos pendientes de esta ${selectedFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'} para el siguiente corte?`)) {
+      return;
+    }
+    try {
+      for (const fe of activeFortnightFixedExpenses) {
+        if (!fe.isPaid && !fe.isSkipped && !fe.isAssumed) {
+          await setFortnightExpenseSkipped({
+            expenseId: fe.id,
+            year: selectedYear,
+            month: selectedMonth,
+            fortnight: selectedFortnight,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error batch postponing expenses:', err);
+    }
+  };
+
+  // Deficit Resolution Handler (Loan)
   const handleDeficitLoanSaved = async (newDebt: Debt) => {
     try {
-      // Registrar ingreso extraordinario equivalente al préstamo recibido para equilibrar la quincena a cero
       await saveVariableIncome({
         amount: newDebt.total_amount,
         description: `Préstamo recibido: ${newDebt.creditor}`,
@@ -693,19 +810,80 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                 </button>
               </div>
             ) : netRemaining < 0 ? (
-              <button
-                type="button"
-                onClick={() => setIsDeficitLoanModalOpen(true)}
-                className="w-full px-2 py-1 rounded-lg bg-[#ef4444]/20 hover:bg-[#ef4444]/30 text-[#ef4444] border border-[#ef4444]/40 text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-xs"
-              >
-                <CreditCard className="w-3 h-3" /> Pedir Préstamo
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleOpenCoverDeficitModal}
+                  className="px-2 py-1 rounded-lg bg-primary-custom/20 hover:bg-primary-custom/30 text-primary-custom border border-primary-custom/40 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                >
+                  <Wallet className="w-3 h-3" /> De Balance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDeficitLoanModalOpen(true)}
+                  className="px-2 py-1 rounded-lg bg-[#ef4444]/20 hover:bg-[#ef4444]/30 text-[#ef4444] border border-[#ef4444]/40 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                >
+                  <CreditCard className="w-3 h-3" /> Préstamo
+                </button>
+              </div>
             ) : (
               <span className="text-[10px] text-muted block">Presupuesto balanceado a 0</span>
             )}
           </div>
         </div>
       </div>
+
+      {/* Smart Suggestions & Assistance Banner (Cobro Único / Déficit) */}
+      {netRemaining < 0 && (
+        <div className="p-4 rounded-3xl bg-surface border border-amber-500/30 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <Lightbulb className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-app flex items-center gap-1.5">
+                <span>Sugerencia Inteligente de Planificación</span>
+                <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
+                  Déficit: ${Math.abs(netRemaining).toFixed(2)}
+                </span>
+              </h4>
+              <p className="text-[11px] text-muted mt-0.5 leading-relaxed">
+                {selectedFortnight === 'q1' && otherFortnightIncomeTotal > 0 ? (
+                  <>
+                    Cobras en <strong>{otherFortnightLabel} (${otherFortnightIncomeTotal.toFixed(2)} USD)</strong>. Puedes cubrir los compromisos de esta quincena tomando de tu balance en cuenta o posponiendo los pagos para el día 30.
+                  </>
+                ) : (
+                  <>
+                    Los compromisos de este corte exceden tus ingresos. Puedes tomar fondos de tus cuentas/balance, posponer gastos para el próximo corte o registrar un préstamo.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenCoverDeficitModal}
+              className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              <span>Cubrir con Cuenta</span>
+            </button>
+
+            {selectedFortnight === 'q1' && activeFortnightFixedExpenses.some(f => !f.isPaid && !f.isSkipped && !f.isAssumed) && (
+              <button
+                type="button"
+                onClick={handleBatchPostponeToNextFortnight}
+                className="flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <CornerDownRight className="w-3.5 h-3.5 text-amber-400" />
+                <span>Posponer a Q30</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Income Breakdown for this Fortnight */}
       <div className="p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md space-y-3">
@@ -929,17 +1107,17 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                           <div className="flex items-center justify-end gap-1.5 w-full">
                             <button
                               type="button"
-                              onClick={() => handleSkipExpense(fe.id)}
+                              onClick={() => handleRequestSkipExpense(fe)}
                               className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                              title="Omitir en este corte y posponer para el próximo"
+                              title="Omitir en este corte"
                             >
                               <CornerDownRight className="w-3 h-3" /> Omitir
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleMarkExpensePaid(fe, fe.finalAmount)}
+                              onClick={() => handleRequestMarkExpensePaid(fe, fe.finalAmount)}
                               className="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                              title="Marcar como pagado y registrar movimiento"
+                              title="Marcar como pagado"
                             >
                               <Check className="w-3 h-3" /> Pagado
                             </button>
@@ -1041,7 +1219,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                         <div className="flex items-center justify-end gap-1.5 w-full">
                           <button
                             type="button"
-                            onClick={() => handleSkipDebt(d.id)}
+                            onClick={() => handleRequestSkipDebt(d.id, d.creditor, d.calculatedCuota)}
                             className="px-2.5 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
                             title="Omitir pago de cuota en esta quincena"
                           >
@@ -1089,7 +1267,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleConfirmSavingsSurplus} className="space-y-3.5">
+            <form onSubmit={handleConfirmBalanceSurplus} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Seleccionar Meta</label>
                 <select
@@ -1206,7 +1384,217 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         </div>
       )}
 
-      {/* Modal 3: Add Debt Modal for Deficit Loan Resolution */}
+      {/* Modal 3: Cubrir Déficit con Fondos de Cuenta / Balance */}
+      {isCoverDeficitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setIsCoverDeficitModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-app">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+                  <Wallet className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-app">Cubrir Déficit desde Cuenta</h3>
+                  <p className="text-[10px] text-muted">Abona dinero disponible en cuenta para equilibrar el corte</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCoverDeficitModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCoverDeficit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">Cuenta de Origen</label>
+                <select
+                  value={coverDeficitAccountId}
+                  onChange={(e) => setCoverDeficitAccountId(e.target.value)}
+                  className="w-full bg-card border border-app rounded-2xl px-3.5 py-2.5 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} className="bg-card text-app">
+                      {a.name} ({a.currency} • Saldo: ${Number(a.initial_balance).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">Monto a Asignar ($)</label>
+                <MoneyInput
+                  value={coverDeficitAmount}
+                  onChange={setCoverDeficitAmount}
+                  placeholder="0.00"
+                  className="w-full"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCoverDeficitModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessingAction || coverDeficitAmount <= 0 || !coverDeficitAccountId}
+                  className="flex-1 py-2.5 rounded-2xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isProcessingAction ? 'Asignando...' : 'Cubrir Déficit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Diálogo de Omitir Gasto / Cuota */}
+      {skipModalData.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setSkipModalData({ isOpen: false })} />
+          <div className="relative z-10 w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-2 border-b border-app">
+              <h4 className="text-sm font-bold text-app flex items-center gap-2">
+                <CornerDownRight className="w-4 h-4 text-amber-400" />
+                Omitir {skipModalData.isDebt ? 'Cuota' : 'Gasto'}
+              </h4>
+              <button
+                onClick={() => setSkipModalData({ isOpen: false })}
+                className="p-1 rounded-lg text-muted hover:text-app"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <p className="font-bold text-app text-sm">
+                {skipModalData.isDebt ? skipModalData.debtName : skipModalData.expense?.name}
+              </p>
+              <p className="text-muted">
+                Monto: <strong>${skipModalData.amount?.toFixed(2)} USD</strong>
+              </p>
+              <p className="text-[11px] text-muted pt-1">
+                ¿Cómo deseas proceder con este compromiso en este corte?
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={skipModalData.isDebt ? handleConfirmSkipDebt : handleConfirmSkipExpense}
+                className="w-full py-2.5 px-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Dejar para la próxima quincena</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={skipModalData.isDebt ? handleConfirmSkipDebt : handleConfirmSkipExpense}
+                className="w-full py-2.5 px-3 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4 text-primary-custom" />
+                <span>Resuelto de otra manera / Omitir</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSkipModalData({ isOpen: false })}
+                className="w-full py-2 text-center text-xs text-muted hover:text-app cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 5: Advertencia al intentar pagar con Saldo Negativo / Insuficiente */}
+      {deficitWarningData.isOpen && deficitWarningData.expense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setDeficitWarningData({ isOpen: false, amount: 0 })} />
+          <div className="relative z-10 w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 pb-2 border-b border-app">
+              <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 font-bold">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-app">Saldo Insuficiente en este Corte</h4>
+                <p className="text-[10px] text-muted">Dinero libre disponible: ${netRemaining.toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-app">
+                El gasto <strong>"{deficitWarningData.expense.name}" (${deficitWarningData.amount.toFixed(2)})</strong> excede los ingresos de esta quincena.
+              </p>
+              <p className="text-muted text-[11px]">
+                {selectedFortnight === 'q1' && otherFortnightIncomeTotal > 0
+                  ? `💡 Recuerda que cobras el día 30 ($${otherFortnightIncomeTotal.toFixed(2)}). Puedes posponerlo para esa fecha o pagarlo usando fondos de tu cuenta.`
+                  : `¿Deseas pagar usando saldo de una cuenta, posponerlo para el próximo corte o registrarlo de todas formas?`}
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  handleExecuteMarkPaid(deficitWarningData.expense!, deficitWarningData.amount, accounts[0]?.id || '');
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>Pagar con fondos de mi cuenta ({accounts[0]?.name || 'Principal'})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (deficitWarningData.expense) {
+                    await setFortnightExpenseSkipped({
+                      expenseId: deficitWarningData.expense.id,
+                      year: selectedYear,
+                      month: selectedMonth,
+                      fortnight: selectedFortnight,
+                    });
+                  }
+                  setDeficitWarningData({ isOpen: false, amount: 0 });
+                }}
+                className="w-full py-2.5 px-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CornerDownRight className="w-4 h-4" />
+                <span>Posponer para la próxima quincena</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleExecuteMarkPaid(deficitWarningData.expense!, deficitWarningData.amount);
+                }}
+                className="w-full py-2 text-center text-xs text-slate-400 hover:text-white cursor-pointer"
+              >
+                Marcar pagado de todas formas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeficitWarningData({ isOpen: false, amount: 0 })}
+                className="w-full py-1 text-center text-xs text-muted hover:text-app cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 6: Add Debt Modal for Deficit Loan Resolution */}
       <AddDebtModal
         isOpen={isDeficitLoanModalOpen}
         onClose={() => setIsDeficitLoanModalOpen(false)}
@@ -1222,7 +1610,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         onSaved={handleDeficitLoanSaved}
       />
 
-      {/* Modal 4: Direct Add Payment Modal for Debts in Fortnight */}
+      {/* Modal 7: Direct Add Payment Modal for Debts in Fortnight */}
       {rates && (
         <AddPaymentModal
           isOpen={paymentModalData.isOpen}
