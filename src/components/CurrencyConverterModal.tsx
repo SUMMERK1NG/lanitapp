@@ -8,19 +8,17 @@ import {
   RefreshCw,
   History,
   Calculator as CalcIcon,
-  LineChart,
   ArrowRightLeft,
   Delete,
 } from 'lucide-react';
 import type { ExchangeRatesData } from '../types/index.ts';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
-import { RatesHistoryModule } from './RatesHistoryModule.tsx';
 
 interface CurrencyConverterModalProps {
   isOpen: boolean;
   onClose: () => void;
   rates: ExchangeRatesData;
-  initialTab?: 'converter' | 'calculator' | 'history';
+  initialTab?: 'converter' | 'calculator';
 }
 
 type CurrencyType = 'USD_BCV' | 'USD_PAR' | 'EUR_BCV' | 'VES';
@@ -41,7 +39,7 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
   rates,
   initialTab = 'converter',
 }) => {
-  const [activeTab, setActiveTab] = useState<'converter' | 'calculator' | 'history'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'converter' | 'calculator'>(initialTab);
 
   // --- TAB 1: CONVERSOR STATE ---
   const [fromCurrency, setFromCurrency] = useState<CurrencyType>('USD_BCV');
@@ -231,42 +229,30 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
           </button>
         </div>
 
-        {/* 3 Tabs Navigator */}
-        <div className="grid grid-cols-3 gap-1 p-1 bg-card rounded-2xl border border-app my-3">
+        {/* 2 Tabs Navigator */}
+        <div className="grid grid-cols-2 gap-1.5 p-1 bg-card rounded-2xl border border-app my-3">
           <button
             onClick={() => setActiveTab('converter')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'converter'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
-            <ArrowRightLeft className="w-3.5 h-3.5" />
+            <ArrowRightLeft className="w-4 h-4" />
             <span>Conversor</span>
           </button>
 
           <button
             onClick={() => setActiveTab('calculator')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'calculator'
                 ? 'bg-primary-custom text-white shadow-md'
                 : 'text-muted hover:text-app'
             }`}
           >
-            <CalcIcon className="w-3.5 h-3.5" />
+            <CalcIcon className="w-4 h-4" />
             <span>Calculadora</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'history'
-                ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
-            }`}
-          >
-            <LineChart className="w-3.5 h-3.5" />
-            <span>Histórico</span>
           </button>
         </div>
 
@@ -676,15 +662,6 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
                   )}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ======================================================== */}
-          {/* TAB 3: HISTÓRICO & EVOLUCIÓN (GRÁFICAS EN VIVO) */}
-          {/* ======================================================== */}
-          {activeTab === 'history' && (
-            <div className="animate-in fade-in duration-150">
-              <RatesHistoryModule />
             </div>
           )}
         </div>

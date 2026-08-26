@@ -43,6 +43,9 @@ export interface UserProfile {
   theme_mode: ThemeMode;
   accent_color: AccentColor;
   created_at?: string;
+  last_sign_in_at?: string;
+  last_login_at?: string;
+  updated_at?: string;
   sync_status: SyncStatus;
 }
 

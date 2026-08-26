@@ -321,7 +321,7 @@ export function App() {
 
   const viewTitles: Record<ActiveViewType, string> = {
     dashboard: 'Dashboard General',
-    fortnight: 'Plan Quincenal (15 / 30)',
+    fortnight: 'Plan Quincenal',
     incomes: 'Gestión de Ingresos',
     fixed_expenses: 'Gastos Fijos',
     debts: 'Control de Deudas',

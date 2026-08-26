@@ -3,7 +3,6 @@ import {
   User,
   Check,
   X,
-  Image as ImageIcon,
   Palette,
   LogOut,
   CreditCard,
@@ -31,7 +30,12 @@ interface UserProfileModalProps {
   onSignOut?: () => void;
 }
 
-const AVATAR_PRESETS = ['👑', '👨‍💻', '👩‍💻', '🧑‍🚀', '🦁', '💼', '💡', '💰', '⭐', '🔥', '🚀', '🎯'];
+const AVATAR_PRESETS = [
+  '👑', '👨‍💻', '👩‍💻', '🧑‍🚀', '🦁', '💼',
+  '💡', '💰', '⭐', '🔥', '🚀', '🎯',
+  '💎', '🏆', '🦊', '⚡', '🐼', '🦄',
+  '💸', '🛡️', '🎩', '🥇', '📊', '🦅'
+];
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   isOpen,
@@ -135,46 +139,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const handleSelectAvatarPreset = handleSelectAvatar;
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        if (reader.result) {
-          const dataUrl = reader.result.toString();
-          setAvatar(dataUrl);
-          localStorage.setItem('user_avatar', dataUrl);
-          if (onUpdateProfile) {
-            await onUpdateProfile({ avatar: dataUrl, avatar_url: dataUrl }).catch((err: any) =>
-              console.warn('Profile image instant update error:', err)
-            );
-          }
-          if (supabase && profile?.id) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({ avatar: dataUrl, avatar_url: dataUrl })
-                .eq('id', profile.id);
-            } catch (err) {
-              console.warn('Supabase image save err:', err);
-            }
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSignOutClick = () => {
     if (window.confirm('¿Seguro que deseas cerrar la sesión actual?')) {
       onClose();
       if (onSignOut) onSignOut();
     }
   };
-
-  const isImageAvatar = Boolean(
-    avatar && (avatar.startsWith('data:') || avatar.startsWith('http') || avatar.startsWith('/'))
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
@@ -251,29 +221,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
           </div>
 
-          {/* Avatar Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-muted mb-1.5">
-              Avatar o Foto de Perfil
-            </label>
-            <div className="flex items-center gap-3 mb-2.5">
-              <div className="w-12 h-12 rounded-2xl bg-card border-2 border-primary-custom flex items-center justify-center text-2xl overflow-hidden shrink-0 shadow-md">
-                {isImageAvatar ? (
-                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="select-none text-2xl leading-none">{avatar}</span>
-                )}
-              </div>
-
-              <label className="flex-1 py-2 px-3 rounded-xl bg-card hover:bg-surface-hover text-app text-xs font-semibold border border-app flex items-center justify-center gap-1.5 transition-all cursor-pointer">
-                <ImageIcon className="w-3.5 h-3.5 text-primary-custom" />
-                <span>Subir Foto Local</span>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+          {/* Avatar Selector - Emoji Presets Only */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-muted">
+                Avatar Oficial ({AVATAR_PRESETS.length} disponibles)
               </label>
+              <div className="w-9 h-9 rounded-xl bg-card border-2 border-primary-custom flex items-center justify-center text-xl shadow-md">
+                <span className="select-none leading-none">{avatar}</span>
+              </div>
             </div>
 
             {/* Presets Grid */}
-            <div className="grid grid-cols-6 gap-1.5">
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 p-2 bg-card rounded-2xl border border-app max-h-36 overflow-y-auto">
               {AVATAR_PRESETS.map((emoji) => {
                 const isSelected = avatar === emoji;
                 return (
@@ -281,10 +241,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     key={emoji}
                     type="button"
                     onClick={() => handleSelectAvatarPreset(emoji)}
-                    className={`h-9 rounded-xl flex items-center justify-center text-lg transition-all cursor-pointer ${
+                    className={`h-10 rounded-xl flex items-center justify-center text-xl transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-primary-custom/25 border-2 border-primary-custom scale-105 shadow-sm ring-1 ring-primary-custom'
-                        : 'bg-card hover:bg-surface-hover border border-app'
+                        : 'hover:bg-surface-hover border border-transparent'
                     }`}
                   >
                     <span className="select-none leading-none">{emoji}</span>

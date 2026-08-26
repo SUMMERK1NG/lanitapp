@@ -56,6 +56,8 @@ export function useAuth() {
                 accent_color: profileData.accent_color || '#147DF0',
                 sync_status: 'synced',
                 created_at: profileData.created_at,
+                last_sign_in_at: profileData.last_sign_in_at || profileData.last_login_at || authUser.last_sign_in_at || new Date().toISOString(),
+                last_login_at: profileData.last_login_at || profileData.last_sign_in_at || authUser.last_sign_in_at || new Date().toISOString(),
               };
 
               await saveUserProfile(userProfile);
@@ -277,6 +279,7 @@ export function useAuth() {
 
       if (authData.user) {
         const role: UserRole = profile.role === 'admin' ? 'admin' : 'user';
+        const nowIso = new Date().toISOString();
         const userProfile: UserProfile = {
           id: authData.user.id,
           email: authData.user.email,
@@ -290,8 +293,22 @@ export function useAuth() {
           currency: profile.currency || 'USD',
           theme_mode: profile.theme_mode || 'navy',
           accent_color: profile.accent_color || '#147DF0',
+          last_sign_in_at: nowIso,
+          last_login_at: nowIso,
           sync_status: 'synced',
         };
+
+        // Update profiles in Supabase
+        if (supabase) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ last_sign_in_at: nowIso, last_login_at: nowIso, updated_at: nowIso })
+              .eq('id', authData.user.id);
+          } catch (e) {
+            console.warn('Could not update last_sign_in_at:', e);
+          }
+        }
 
         await saveUserProfile(userProfile);
         localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));

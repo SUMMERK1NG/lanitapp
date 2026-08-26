@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Lock,
   Send,
+  Clock,
 } from 'lucide-react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
@@ -352,6 +353,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
               <th className="px-4 py-3">Nombre</th>
               <th className="px-4 py-3">Correo</th>
               <th className="px-4 py-3">Rol</th>
+              <th className="px-4 py-3">Último Acceso</th>
               <th className="px-4 py-3">Registro</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
@@ -359,7 +361,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           <tbody className="divide-y divide-app">
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
+                <td colSpan={7} className="px-4 py-8 text-center text-muted">
                   <div className="flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-primary-custom" />
                     <span>Cargando usuarios registrados...</span>
@@ -368,7 +370,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
+                <td colSpan={7} className="px-4 py-8 text-center text-muted">
                   No hay usuarios registrados aún en el sistema.
                 </td>
               </tr>
@@ -382,6 +384,15 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                       year: 'numeric',
                     })
                   : 'N/A';
+
+                const lastAccessFormatted = p.last_sign_in_at || p.last_login_at
+                  ? new Date(p.last_sign_in_at || p.last_login_at!).toLocaleString('es-VE', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : dateFormatted;
 
                 return (
                   <tr
@@ -441,6 +452,14 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                           USUARIO
                         </button>
                       )}
+                    </td>
+
+                    {/* Último Acceso */}
+                    <td className="px-4 py-3 text-muted whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-[#10B981]" />
+                        <span className="text-app font-medium">{lastAccessFormatted}</span>
+                      </div>
                     </td>
 
                     {/* Registro */}
