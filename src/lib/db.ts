@@ -21,6 +21,16 @@ import type {
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
 import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
+import {
+  setCategoryMap,
+  toSupabaseDebtPaymentPayload,
+  toSupabaseFortnightStatePayload,
+  toSupabaseSavingContributionPayload,
+  toSupabaseMonthlyOverridePayload,
+  toSupabaseMonthlyIncomeOverridePayload,
+  toSupabaseVariableIncomePayload,
+  toSupabaseTransactionPayload,
+} from './supabasePayloads.ts';
 
 export function getActiveUserId(): string {
   try {
@@ -196,7 +206,7 @@ export function toSupabaseAccountPayload(acc: any, fallbackUserId?: string) {
     name: (acc.name || '').trim(),
     type: acc.type || 'cash',
     currency: acc.currency || 'USD',
-    balance: balanceNum,
+    initial_balance: balanceNum,
     updated_at: new Date().toISOString(),
   };
 }
@@ -247,24 +257,11 @@ export async function upsertAccountToSupabase(payload: Record<string, any>): Pro
   const currentUserId = payload.user_id || getActiveUserId();
   const cleanPayload = toSupabaseAccountPayload(payload, currentUserId);
 
-  // Intento 1: con columna 'balance' estándar
+  // Intento directo con initial_balance
   const { error } = await supabase.from('accounts').upsert(cleanPayload);
   if (!error) {
     await refreshAccountsFromSupabase(currentUserId);
     return true;
-  }
-
-  // Intento 2: si la columna 'balance' no existe en el esquema remoto, reintentar con 'initial_balance'
-  if (error.message?.includes('balance')) {
-    const { balance, ...onlyInitPayload } = cleanPayload;
-    const fallbackPayload = { ...onlyInitPayload, initial_balance: balance };
-    const { error: err2 } = await supabase.from('accounts').upsert(fallbackPayload);
-    if (!err2) {
-      await refreshAccountsFromSupabase(currentUserId);
-      return true;
-    }
-    console.error('[Supabase Accounts Error (initial_balance)]:', err2.message, err2.details, err2.hint);
-    return false;
   }
 
   console.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
@@ -493,6 +490,10 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
     }));
 
     const remoteCategories = resCategories.data;
+    // Populate category UUID map for payload conversion
+    if (remoteCategories && remoteCategories.length > 0) {
+      setCategoryMap(remoteCategories as Array<{ id: string; name: string; type: string }>);
+    }
     const remoteIncomeOverrides = resIncomeOverrides.data;
     const remoteVarIncomes = resVarIncomes.data;
     const remoteExpenses = resExpenses.data;
@@ -606,7 +607,8 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     const pendingTxs = await db.transactions.where('sync_status').equals('pending').toArray();
     for (const item of pendingTxs.filter((t) => !t.user_id || t.user_id === targetUid)) {
       const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('transactions').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const txPayload = toSupabaseTransactionPayload({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const { error } = await supabase.from('transactions').upsert(txPayload);
       if (!error) {
         await db.transactions.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -715,7 +717,8 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     const pendingPayments = await db.debt_payments.where('sync_status').equals('pending').toArray();
     for (const item of pendingPayments.filter((p) => !p.user_id || p.user_id === targetUid)) {
       const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('debt_payments').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const payPayload = toSupabaseDebtPaymentPayload({ ...rest, user_id: targetUid });
+      const { error } = await supabase.from('debt_payments').upsert(payPayload);
       if (!error) {
         await db.debt_payments.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -741,7 +744,8 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     const pendingContribs = await db.saving_contributions.where('sync_status').equals('pending').toArray();
     for (const item of pendingContribs.filter((c) => !c.user_id || c.user_id === targetUid)) {
       const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('saving_contributions').upsert({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const contribPayload = toSupabaseSavingContributionPayload({ ...rest, user_id: targetUid, amount: Number(item.amount) });
+      const { error } = await supabase.from('saving_contributions').upsert(contribPayload);
       if (!error) {
         await db.saving_contributions.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -754,7 +758,8 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     const pendingStates = await db.fortnight_item_states.where('sync_status').equals('pending').toArray();
     for (const item of pendingStates.filter((s) => !s.user_id || s.user_id === targetUid)) {
       const { sync_status, ...rest } = item;
-      const { error } = await supabase.from('fortnight_item_states').upsert({ ...rest, user_id: targetUid });
+      const statePayload = toSupabaseFortnightStatePayload({ ...rest, user_id: targetUid });
+      const { error } = await supabase.from('fortnight_item_states').upsert(statePayload);
       if (!error) {
         await db.fortnight_item_states.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -1144,8 +1149,10 @@ export async function addSavingContribution(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status: s1, ...scPayload } = record;
-      const { sync_status: s2, ...txExpPayload } = txExpenseRecord;
+      const { sync_status: s1, ...scRaw } = record;
+      const scPayload = toSupabaseSavingContributionPayload(scRaw);
+      const { sync_status: s2, ...txExpRaw } = txExpenseRecord;
+      const txExpPayload = toSupabaseTransactionPayload(txExpRaw);
       const promises = [
         Promise.resolve(supabase.from('saving_contributions').upsert(scPayload)),
         Promise.resolve(supabase.from('savings_goals').update({ current_amount: newCurrent, status: newStatus, updated_at: new Date().toISOString() }).eq('id', goal.id)),
@@ -1153,8 +1160,10 @@ export async function addSavingContribution(data: {
       ];
 
       if (varIncomeRecord && txIncomeRecord) {
-        const { sync_status: s3, ...varPayload } = varIncomeRecord;
-        const { sync_status: s4, ...txIncPayload } = txIncomeRecord;
+        const { sync_status: s3, ...varRaw } = varIncomeRecord;
+        const varPayload = toSupabaseVariableIncomePayload(varRaw as any, userId);
+        const { sync_status: s4, ...txIncRaw } = txIncomeRecord;
+        const txIncPayload = toSupabaseTransactionPayload(txIncRaw);
         promises.push(Promise.resolve(supabase.from('variable_incomes').upsert(varPayload)));
         promises.push(Promise.resolve(supabase.from('transactions').upsert(txIncPayload)));
       }
@@ -1218,7 +1227,8 @@ export async function skipSavingContributionPeriod(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, ...rawPayload } = record;
+      const payload = toSupabaseSavingContributionPayload(rawPayload);
       const { error } = await supabase.from('saving_contributions').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
@@ -1336,7 +1346,8 @@ export async function toggleMonthlyFixedIncomeOverride(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, ...rawPayload } = record;
+      const payload = toSupabaseMonthlyIncomeOverridePayload(rawPayload);
       const { error } = await supabase.from('monthly_fixed_income_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
@@ -1430,7 +1441,8 @@ export async function saveVariableIncome(
     await db.transactions.put(tx);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        const { sync_status, ...txPayload } = tx;
+        const { sync_status, ...txRaw } = tx;
+        const txPayload = toSupabaseTransactionPayload(txRaw);
         await supabase.from('transactions').upsert(txPayload);
       } catch (e) {
         console.warn('Direct transaction upsert notice:', e);
@@ -1543,7 +1555,8 @@ export async function saveVariableExpense(
     await db.transactions.put(tx);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        const { sync_status, ...txPayload } = tx;
+        const { sync_status, ...txRaw } = tx;
+        const txPayload = toSupabaseTransactionPayload(txRaw);
         await supabase.from('transactions').upsert(txPayload);
       } catch (e) {
         console.warn('Direct transaction upsert notice:', e);
@@ -1570,7 +1583,7 @@ export async function deleteVariableExpense(id: string): Promise<void> {
  * Categorías
  */
 export async function saveCategory(category: Partial<Category> & { name: string; type: Category['type']; icon: string; color: string }): Promise<Category> {
-  const id = category.id || 'cat_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9));
+  const id = category.id && category.id.startsWith('cat_') ? ensureValidUuid(category.id) : (category.id || ensureValidUuid());
   const record: Category = {
     id,
     name: category.name,
@@ -1771,7 +1784,8 @@ export async function toggleMonthlyFixedOverride(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, ...rawPayload } = record;
+      const payload = toSupabaseMonthlyOverridePayload(rawPayload);
       const { error } = await supabase.from('monthly_fixed_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
@@ -1997,8 +2011,10 @@ export async function addDebtPayment(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status: s1, ...payPayload } = paymentRecord;
-      const { sync_status: s2, ...txPayload } = txRecord;
+      const { sync_status: s1, ...payRaw } = paymentRecord;
+      const payPayload = toSupabaseDebtPaymentPayload(payRaw);
+      const { sync_status: s2, ...txRaw } = txRecord;
+      const txPayload = toSupabaseTransactionPayload(txRaw);
       const [res1, res2, res3] = await Promise.all([
         supabase.from('debt_payments').upsert(payPayload),
         supabase.from('debts').update({
@@ -2052,7 +2068,8 @@ export async function addTransaction(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = newTransaction;
+      const { sync_status, ...rawPayload } = newTransaction;
+      const payload = toSupabaseTransactionPayload(rawPayload);
       const { error } = await supabase.from('transactions').upsert(payload);
       if (!error) {
         newTransaction.sync_status = 'synced';
@@ -2191,8 +2208,10 @@ export async function setFortnightExpensePaid(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status: s1, ...txPayload } = txRecord;
-      const { sync_status: s2, ...statePayload } = stateRecord;
+      const { sync_status: s1, ...txRaw } = txRecord;
+      const txPayload = toSupabaseTransactionPayload(txRaw);
+      const { sync_status: s2, ...stateRaw } = stateRecord;
+      const statePayload = toSupabaseFortnightStatePayload(stateRaw);
       const [res1, res2] = await Promise.all([
         supabase.from('transactions').upsert(txPayload),
         supabase.from('fortnight_item_states').upsert(statePayload),
@@ -2266,7 +2285,8 @@ export async function setFortnightExpenseSkipped(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...statePayload } = stateRecord;
+      const { sync_status, ...stateRaw } = stateRecord;
+      const statePayload = toSupabaseFortnightStatePayload(stateRaw);
       await Promise.all([
         supabase.from('transactions').delete().eq('id', txId),
         supabase.from('fortnight_item_states').upsert(statePayload),
@@ -2326,7 +2346,8 @@ export async function setFortnightDebtSkipped(params: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = stateRecord;
+      const { sync_status, ...rawPayload } = stateRecord;
+      const payload = toSupabaseFortnightStatePayload(rawPayload);
       const { error } = await supabase.from('fortnight_item_states').upsert(payload);
       if (!error) {
         stateRecord.sync_status = 'synced';
@@ -2394,7 +2415,8 @@ export async function setSavingContributionSkipped(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, ...payload } = record;
+      const { sync_status, ...rawPayload } = record;
+      const payload = toSupabaseSavingContributionPayload(rawPayload);
       await supabase.from('saving_contributions').upsert(payload);
     } catch (e) {
       console.warn('Supabase skip saving contribution notice:', e);

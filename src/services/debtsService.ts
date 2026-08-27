@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db, getActiveUserId } from '../lib/db.ts';
 import type { Debt, DebtPayment, FortnightType, Transaction } from '../types/index.ts';
 import { ensureValidUuid } from '../utils/uuid.ts';
+import { toSupabaseDebtPaymentPayload, toSupabaseTransactionPayload } from '../lib/supabasePayloads.ts';
 
 /**
  * Sanitiza y mapea el objeto Debt para coincidir exactamente con el esquema de PostgreSQL en Supabase
@@ -365,8 +366,10 @@ export const addDebtPayment = async (data: {
   // Confirmación asíncrona con Supabase
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status: s1, ...payPayload } = paymentRecord;
-      const { sync_status: s2, ...txPayload } = txRecord;
+      const { sync_status: s1, ...payRaw } = paymentRecord;
+      const payPayload = toSupabaseDebtPaymentPayload(payRaw);
+      const { sync_status: s2, ...txRaw } = txRecord;
+      const txPayload = toSupabaseTransactionPayload(txRaw);
       const [res1, res2, res3] = await Promise.all([
         supabase.from('debt_payments').upsert(payPayload),
         supabase.from('debts').update({

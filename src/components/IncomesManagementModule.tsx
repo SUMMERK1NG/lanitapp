@@ -185,19 +185,21 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       else if (mode === 'parallel_ves') mode = 'ves_parallel';
 
       const rawCurrency = fi.currency || (mode === 'ves_fixed' ? 'VES' : mode === 'eur_cash' || mode === 'ves_euro' ? 'EUR' : 'USD');
-      const origAmt = fi.original_amount !== undefined ? fi.original_amount : fi.amount;
+      const origAmt = fi.original_amount !== undefined && fi.original_amount !== null ? fi.original_amount : (fi.amount || 0);
 
       let usdEquivalent = 0;
       if (mode === 'ves_fixed') {
-        usdEquivalent = Number((origAmt / bcvUsd).toFixed(2));
+        usdEquivalent = Number(((origAmt || 0) / bcvUsd).toFixed(2)) || 0;
       } else if (rawCurrency === 'EUR' || mode === 'eur_cash' || mode === 'ves_euro') {
-        usdEquivalent = Number(((origAmt * bcvEur) / bcvUsd).toFixed(2));
+        usdEquivalent = Number((((origAmt || 0) * bcvEur) / bcvUsd).toFixed(2)) || 0;
       } else {
         // usd_cash, ves_bcv, ves_parallel, other are all entered in USD index!
-        usdEquivalent = Number(origAmt.toFixed(2));
+        usdEquivalent = Number((origAmt || 0).toFixed(2)) || 0;
       }
 
-      const finalAmountUSD = override?.custom_amount !== undefined ? override.custom_amount : usdEquivalent;
+      const finalAmountUSD = override?.custom_amount !== undefined && override?.custom_amount !== null
+        ? (override.custom_amount || 0)
+        : usdEquivalent;
 
       const isSplit = fi.default_fortnight === 'split' || (fi.default_fortnight as any) === 50 || (fi.notes && fi.notes.includes('[split]'));
       const resolvedFortnight = isSplit ? 'split' : fi.default_fortnight;
@@ -206,11 +208,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         ...fi,
         payment_mode: mode,
         currency: rawCurrency,
-        original_amount: origAmt,
-        amount_usd: finalAmountUSD,
+        original_amount: origAmt || 0,
+        amount_usd: finalAmountUSD || 0,
         default_fortnight: resolvedFortnight,
         isActive,
-        finalAmount: finalAmountUSD,
+        finalAmount: finalAmountUSD || 0,
       };
     });
   }, [fixedIncomes, overrideMap, bcvUsd, bcvEur, parallelUsd]);
@@ -218,44 +220,50 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const totalMonthlyFixed = processedFixedIncomes
     .filter((i) => i.isActive)
     .reduce((sum, i) => {
-      if (i.default_fortnight === 'both') return sum + (i.finalAmount * 2);
-      return sum + i.finalAmount;
+      const amt = Number(i.finalAmount || 0);
+      if (i.default_fortnight === 'both') return sum + (amt * 2);
+      return sum + amt;
     }, 0);
 
   // 2. Filter Variable Incomes for current month
   const currentMonthVariables = useMemo(() => {
-    return variableIncomes.filter(
-      (vi) => vi.year === selectedYear && vi.month === selectedMonth
-    );
+    return variableIncomes
+      .filter((vi) => vi.year === selectedYear && vi.month === selectedMonth)
+      .map((vi) => ({
+        ...vi,
+        amount: Number(vi.amount || 0),
+      }));
   }, [variableIncomes, selectedYear, selectedMonth]);
 
-  const totalMonthlyVariable = currentMonthVariables.reduce((sum, vi) => sum + vi.amount, 0);
+  const totalMonthlyVariable = currentMonthVariables.reduce((sum, vi) => sum + Number(vi.amount || 0), 0);
 
   // Total Combined
-  const totalCombinedIncome = totalMonthlyFixed + totalMonthlyVariable;
+  const totalCombinedIncome = (totalMonthlyFixed || 0) + (totalMonthlyVariable || 0);
 
   // Quincenas totals
   const q1Fixed = processedFixedIncomes
     .filter((i) => i.isActive && (i.default_fortnight === 'q1' || i.default_fortnight === 'both' || i.default_fortnight === 'split'))
     .reduce((sum, i) => {
-      if (i.default_fortnight === 'split') return sum + (i.finalAmount / 2);
-      return sum + i.finalAmount;
+      const amt = Number(i.finalAmount || 0);
+      if (i.default_fortnight === 'split') return sum + (amt / 2);
+      return sum + amt;
     }, 0);
   const q1Variable = currentMonthVariables
     .filter((i) => i.fortnight === 'q1')
-    .reduce((sum, i) => sum + i.amount, 0);
-  const totalQ1 = q1Fixed + q1Variable;
+    .reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  const totalQ1 = (q1Fixed || 0) + (q1Variable || 0);
 
   const q2Fixed = processedFixedIncomes
     .filter((i) => i.isActive && (i.default_fortnight === 'q2' || i.default_fortnight === 'both' || i.default_fortnight === 'split'))
     .reduce((sum, i) => {
-      if (i.default_fortnight === 'split') return sum + (i.finalAmount / 2);
-      return sum + i.finalAmount;
+      const amt = Number(i.finalAmount || 0);
+      if (i.default_fortnight === 'split') return sum + (amt / 2);
+      return sum + amt;
     }, 0);
   const q2Variable = currentMonthVariables
     .filter((i) => i.fortnight === 'q2')
-    .reduce((sum, i) => sum + i.amount, 0);
-  const totalQ2 = q2Fixed + q2Variable;
+    .reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  const totalQ2 = (q2Fixed || 0) + (q2Variable || 0);
 
   // Handlers for Fixed Incomes
   const handleOpenAddFixed = () => {
@@ -578,7 +586,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
           <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Total Mes</span>
           <p className="text-lg sm:text-xl font-black text-primary-custom mt-1">
-            {currency}{totalCombinedIncome.toFixed(2)}
+            {currency}{(totalCombinedIncome || 0).toFixed(2)}
           </p>
           <span className="text-[10px] text-muted block mt-0.5">
             En {MONTH_NAMES[selectedMonth]} {selectedYear}
@@ -588,7 +596,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
           <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Ingresos Fijos</span>
           <p className="text-lg sm:text-xl font-black text-[#00C2C7] mt-1">
-            {currency}{totalMonthlyFixed.toFixed(2)}
+            {currency}{(totalMonthlyFixed || 0).toFixed(2)}
           </p>
           <span className="text-[10px] text-muted block mt-0.5">
             Sueldo, tickets, etc.
@@ -598,7 +606,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         <div className="p-4 rounded-3xl bg-surface border border-app shadow-sm">
           <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Ingresos Variables</span>
           <p className="text-lg sm:text-xl font-black text-[#FF914D] mt-1">
-            {currency}{totalMonthlyVariable.toFixed(2)}
+            {currency}{(totalMonthlyVariable || 0).toFixed(2)}
           </p>
           <span className="text-[10px] text-muted block mt-0.5">
             Bonos, freelance, extras
@@ -610,11 +618,11 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
           <div className="mt-1 space-y-0.5 text-xs font-bold text-app">
             <div className="flex justify-between text-muted">
               <span>Q15:</span>
-              <span className="text-app">{currency}{totalQ1.toFixed(2)}</span>
+              <span className="text-app">{currency}{(totalQ1 || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-muted">
               <span>Q30:</span>
-              <span className="text-app">{currency}{totalQ2.toFixed(2)}</span>
+              <span className="text-app">{currency}{(totalQ2 || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -679,8 +687,8 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                             <span className="px-2 py-0.5 rounded bg-card text-[10px] font-semibold text-app">
                               {fi.default_fortnight === 'q1' && `Quincena 15`}
                               {fi.default_fortnight === 'q2' && `Quincena 30`}
-                              {fi.default_fortnight === 'split' && `Dividido 50/50 (${currency}${(fi.finalAmount / 2).toFixed(2)} c/u)`}
-                              {fi.default_fortnight === 'both' && `Ambas Quincenas (${currency}${fi.finalAmount.toFixed(2)} c/u)`}
+                              {fi.default_fortnight === 'split' && `Dividido 50/50 (${currency}${((fi.finalAmount || 0) / 2).toFixed(2)} c/u)`}
+                              {fi.default_fortnight === 'both' && `Ambas Quincenas (${currency}${(fi.finalAmount || 0).toFixed(2)} c/u)`}
                             </span>
                             {fi.payment_mode && (
                               <span className="text-[10px] text-muted font-medium">
@@ -704,7 +712,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                               +Bs. {(fi.original_amount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {currency}{fi.finalAmount.toFixed(2)} USD
+                              ≈ {currency}{(fi.finalAmount || 0).toFixed(2)} USD
                             </span>
                           </>
                         ) : isEur ? (
@@ -713,21 +721,21 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                               +€{(fi.original_amount || 0).toFixed(2)}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {currency}{fi.finalAmount.toFixed(2)} USD
+                              ≈ {currency}{(fi.finalAmount || 0).toFixed(2)} USD
                             </span>
                           </>
                         ) : (
                           <>
                             <span className="text-base font-black text-[#00C2C7]">
-                              +{currency}{fi.finalAmount.toFixed(2)}
+                              +{currency}{(fi.finalAmount || 0).toFixed(2)}
                             </span>
                             {fi.payment_mode === 'ves_parallel' && rates?.parallelDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ Bs. {(fi.finalAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ Bs. {((fi.finalAmount || 0) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : rates?.bcvDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ Bs. {(fi.finalAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ Bs. {((fi.finalAmount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : null}
                           </>
@@ -808,13 +816,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 const category = categories.find((c) => c.id === vi.category_id);
                 const isVesFixed = vi.payment_mode === 'ves_fixed';
                 const isEur = vi.currency === 'EUR' || vi.payment_mode === 'eur_cash' || vi.payment_mode === 'ves_euro';
-                const origAmt = vi.original_amount !== undefined ? vi.original_amount : vi.amount;
+                const origAmt = vi.original_amount !== undefined && vi.original_amount !== null ? vi.original_amount : (vi.amount || 0);
 
                 const isAllocation =
                   vi.description.includes('Asignación de Sueldo') ||
                   vi.description.includes('Reserva asignada') ||
                   vi.description.includes('Tomado de Sueldo');
-                const isNegative = vi.amount < 0;
+                const isNegative = (vi.amount || 0) < 0;
 
                 return (
                   <div
@@ -871,33 +879,33 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                         {isVesFixed ? (
                           <>
                             <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : 'text-[#FF914D]'}`}>
-                              {isNegative ? '-' : '+'}Bs. {Math.abs(origAmt).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {isNegative ? '-' : '+'}Bs. {Math.abs(origAmt || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount).toFixed(2)} USD
+                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount || 0).toFixed(2)} USD
                             </span>
                           </>
                         ) : isEur ? (
                           <>
                             <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : 'text-[#FF914D]'}`}>
-                              {isNegative ? '-' : '+'}€{Math.abs(origAmt).toFixed(2)}
+                              {isNegative ? '-' : '+'}€{Math.abs(origAmt || 0).toFixed(2)}
                             </span>
                             <span className="text-[10px] text-muted block">
-                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount).toFixed(2)} USD
+                              ≈ {isNegative ? '-' : ''}{currency}{Math.abs(vi.amount || 0).toFixed(2)} USD
                             </span>
                           </>
                         ) : (
                           <>
                             <span className={`text-base font-black ${isNegative ? 'text-[#ef4444]' : isAllocation ? 'text-[#00C2C7]' : 'text-[#FF914D]'}`}>
-                              {isNegative ? '-' : '+'}{currency}{Math.abs(vi.amount).toFixed(2)}
+                              {isNegative ? '-' : '+'}{currency}{Math.abs(vi.amount || 0).toFixed(2)}
                             </span>
                             {vi.payment_mode === 'ves_parallel' && rates?.parallelDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount || 0) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : rates?.bcvDollar ? (
                               <span className="text-[10px] text-muted block">
-                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ≈ {isNegative ? '-' : ''}Bs. {(Math.abs(vi.amount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             ) : null}
                           </>
@@ -1128,17 +1136,17 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
                   {(fixedPaymentMode === 'usd_cash' || fixedPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
-                    <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((fixedAmount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'eur_cash' ? (
-                    <span>≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                    <span>≈ ${(((fixedAmount || 0) * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'ves_euro' ? (
-                    <span>≈ Bs. {(fixedAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${((fixedAmount * bcvEur) / bcvUsd).toFixed(2)} USD</span>
+                    <span>≈ Bs. {((fixedAmount || 0) * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${(((fixedAmount || 0) * bcvEur) / bcvUsd).toFixed(2)} USD</span>
                   ) : fixedPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
-                    <span>≈ Bs. {(fixedAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((fixedAmount || 0) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'ves_fixed' ? (
-                    <span>≈ ${(fixedAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ ${((fixedAmount || 0) / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
                   ) : fixedPaymentMode === 'other' && rates?.bcvDollar ? (
-                    <span>≈ Bs. {(fixedAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((fixedAmount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : null}
                 </div>
               </div>
@@ -1401,17 +1409,17 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 {/* Sub-indicador de conversión en vivo */}
                 <div className="mt-1 text-[11px] text-muted flex items-center justify-between px-1">
                   {(varPaymentMode === 'usd_cash' || varPaymentMode === 'ves_bcv') && rates?.bcvDollar ? (
-                    <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((varAmount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'eur_cash' ? (
-                    <span>≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
+                    <span>≈ ${(((varAmount || 0) * bcvEur) / bcvUsd).toFixed(2)} USD (Tasa EUR: {bcvEur.toFixed(2)})</span>
                   ) : varPaymentMode === 'ves_euro' ? (
-                    <span>≈ Bs. {(varAmount * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${((varAmount * bcvEur) / bcvUsd).toFixed(2)} USD</span>
+                    <span>≈ Bs. {((varAmount || 0) * bcvEur).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa EUR BCV: {bcvEur.toFixed(2)}) • ≈ ${(((varAmount || 0) * bcvEur) / bcvUsd).toFixed(2)} USD</span>
                   ) : varPaymentMode === 'ves_parallel' && rates?.parallelDollar ? (
-                    <span>≈ Bs. {(varAmount * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((varAmount || 0) * parallelUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa Promedio: {parallelUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'ves_fixed' ? (
-                    <span>≈ ${(varAmount / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ ${((varAmount || 0) / bcvUsd).toFixed(2)} USD (Referencia BCV: {bcvUsd.toFixed(2)})</span>
                   ) : varPaymentMode === 'other' && rates?.bcvDollar ? (
-                    <span>≈ Bs. {(varAmount * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
+                    <span>≈ Bs. {((varAmount || 0) * bcvUsd).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Tasa BCV: {bcvUsd.toFixed(2)})</span>
                   ) : null}
                 </div>
               </div>
