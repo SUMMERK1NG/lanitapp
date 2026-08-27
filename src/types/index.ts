@@ -55,6 +55,7 @@ export interface Category {
   type: TransactionType;
   icon: string;
   color: string;
+  code?: string;
   sync_status?: SyncStatus;
 }
 

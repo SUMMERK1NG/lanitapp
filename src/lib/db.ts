@@ -48,6 +48,30 @@ export function getActiveUserId(): string {
 
 export const DEFAULT_USER_PROFILES: UserProfile[] = [];
 
+// Mapeo de códigos legibles a UUIDs de Supabase
+export const CATEGORY_CODE_TO_UUID: Record<string, string> = {
+  'cat_salary': '7b49253e-71c2-4964-913a-6251c13368f3',
+  'cat_transport': '82d3d710-c994-49ed-946e-218f8843286f',
+  'cat_services': 'ac794f8c-dafa-447b-9760-f51e59feaff1',
+  'cat_health': 'c2da59c8-57f3-4df5-9db5-1d6cf0530d1c',
+  'cat_extras': 'c62ff42c-437d-4589-bb39-1ec558197a7b',
+  'cat_food': 'e512d7b8-f1b6-47d5-b5d3-a1eb6342bd94',
+};
+
+export const CATEGORY_UUID_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_CODE_TO_UUID).map(([code, uuid]) => [uuid, code])
+);
+
+// Función helper para resolver código a UUID
+export const resolveCategoryCodeToUuid = (code: string): string => {
+  return CATEGORY_CODE_TO_UUID[code] || code; // Si ya es UUID, retornar tal cual
+};
+
+// Función helper para resolver UUID a código
+export const resolveCategoryUuidToCode = (uuid: string): string => {
+  return CATEGORY_UUID_TO_CODE[uuid] || uuid; // Si no está en el mapa, retornar tal cual
+};
+
 export const DEFAULT_CATEGORIES: Category[] = [
   // Gastos
   { id: 'cat_housing', name: 'Vivienda & Alquiler', type: 'expense', icon: 'Home', color: '#147DF0', sync_status: 'synced' },
@@ -507,7 +531,12 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
 
     // 3. Volcar datos remotos marcados como 'synced' de manera segura (no destructiva)
     if (remoteCategories && remoteCategories.length > 0) {
-      await db.categories.bulkPut(remoteCategories.map((c) => ({ ...c, sync_status: 'synced' })));
+      await db.categories.bulkPut(remoteCategories.map((c) => ({
+        ...c,
+        id: c.id,
+        code: CATEGORY_UUID_TO_CODE[c.id] || (c as any).code,
+        sync_status: 'synced' as SyncStatus,
+      })));
     }
     if (remoteAccounts.length > 0) {
       await db.accounts.bulkPut(remoteAccounts);
@@ -620,10 +649,11 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Fijos
     const pendingIncomes = await db.fixed_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingIncomes.filter((i) => !i.user_id || i.user_id === targetUid)) {
-      const { sync_status, category_id, is_active, ...rest } = item as any;
+      const { sync_status, is_active, payment_mode, original_amount, ...rest } = item as any;
       const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert({
         ...rest,
+        category_id: resolveCategoryCodeToUuid(item.category_id || 'cat_salary'),
         default_fortnight: fortnightNum,
         user_id: targetUid,
         amount: Number(item.amount),
@@ -666,6 +696,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
       const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_expenses').upsert({
         ...rest,
+        category_id: resolveCategoryCodeToUuid(item.category_id || 'cat_services'),
         default_fortnight: fortnightNum,
         user_id: targetUid,
         amount: Number(item.amount),
@@ -1297,7 +1328,7 @@ export async function saveFixedIncome(
     currency: income.currency || 'USD',
     payment_mode: income.payment_mode || 'usd_cash',
     default_fortnight: income.default_fortnight,
-    category_id: income.category_id || 'cat_salary',
+    category_id: resolveCategoryCodeToUuid(income.category_id || 'cat_salary'),
     is_active: income.is_active !== undefined ? income.is_active : true,
     notes: notesWithTag,
     sync_status: 'pending',
@@ -1412,7 +1443,7 @@ export async function saveVariableIncome(
     year: income.year,
     month: income.month,
     fortnight: income.fortnight,
-    category_id: income.category_id || 'cat_extras',
+    category_id: resolveCategoryCodeToUuid(income.category_id || 'cat_extras'),
     account_id: income.account_id || '',
     transaction_id: income.account_id ? txId : undefined,
     currency: income.currency || 'USD',
@@ -1537,7 +1568,7 @@ export async function saveVariableExpense(
     year: expense.year,
     month: expense.month,
     fortnight: expense.fortnight,
-    category_id: expense.category_id || 'cat_other_exp',
+    category_id: resolveCategoryCodeToUuid(expense.category_id || 'cat_other_exp'),
     account_id: expense.account_id || undefined,
     currency: expense.currency || 'USD',
     notes: expense.notes || '',
@@ -1605,8 +1636,9 @@ export async function deleteVariableExpense(id: string): Promise<void> {
  * Categorías
  */
 export async function saveCategory(category: Partial<Category> & { name: string; type: Category['type']; icon: string; color: string }): Promise<Category> {
-  const id = category.id && category.id.startsWith('cat_') ? ensureValidUuid(category.id) : (category.id || ensureValidUuid());
+  const id = category.id || ensureValidUuid();
   const record: Category = {
+    ...category,
     id,
     name: category.name,
     type: category.type,
@@ -1834,7 +1866,7 @@ export async function saveFixedExpense(
     currency: expense.currency || 'USD',
     payment_mode: expense.payment_mode || 'ves_bcv',
     default_fortnight: expense.default_fortnight,
-    category_id: expense.category_id || 'cat_services',
+    category_id: resolveCategoryCodeToUuid(expense.category_id || 'cat_services'),
     is_active: expense.is_active !== undefined ? expense.is_active : true,
     assumed_by_third_party: expense.assumed_by_third_party || false,
     notes: expense.notes || '',
