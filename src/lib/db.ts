@@ -2025,7 +2025,7 @@ export async function addDebtPayment(data: {
     type: 'expense',
     description: `Abono: ${debt.creditor} (${fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: 'cat_debt',
-    account_id: (data as any).account_id || '',
+    account_id: (data as any).account_id || null,
     transaction_date: paymentDate,
     sync_status: 'pending',
     created_at: new Date().toISOString(),

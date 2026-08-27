@@ -266,8 +266,10 @@ export function toSupabaseTransactionPayload(
   record: Omit<Transaction, 'sync_status'> & Record<string, any>
 ): Record<string, any> {
   const resolved = resolveCategoryId(record.category_id);
+  const accountId = record.account_id && String(record.account_id).trim() !== '' ? record.account_id : null;
   return {
     ...record,
+    account_id: accountId,
     category_id: resolved || record.category_id,
   };
 }
