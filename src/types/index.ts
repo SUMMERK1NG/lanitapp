@@ -194,9 +194,12 @@ export interface Debt {
   user_id?: string;
   creditor: string;
   creditor_name?: string;
+  name?: string;
   platform?: DebtPlatformType;
   debt_mode: DebtModeType; // 'installments' (Cashea, etc.) vs 'open' (Monto Fijo / Abierto)
   total_amount: number;
+  original_amount?: number;
+  remaining_amount?: number;
   initial_payment?: number;
   current_balance: number;
   total_installments?: number;

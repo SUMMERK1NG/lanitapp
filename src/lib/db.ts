@@ -681,19 +681,26 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Deudas
     const pendingDebts = await db.debts.where('sync_status').equals('pending').toArray();
     for (const item of pendingDebts.filter((d) => !d.user_id || d.user_id === targetUid)) {
-      const debtPayload = {
+      const creditorValue = item.creditor || item.creditor_name || (item as any).name || 'Deuda';
+      const totalAmount = Number(item.total_amount || 0);
+      const current_balance = Number(item.current_balance !== undefined ? item.current_balance : totalAmount);
+
+      const debtPayload: Record<string, any> = {
         id: ensureValidUuid(item.id),
         user_id: targetUid,
-        creditor_name: item.creditor || item.creditor_name || (item as any).name || 'Deuda',
+        creditor_name: creditorValue,
+        creditor: creditorValue,
+        name: creditorValue,
         platform: item.platform || 'particular',
         debt_mode: item.debt_mode || 'installments',
-        total_amount: Number(item.total_amount || 0),
-        original_amount: Number(item.total_amount || 0),
-        remaining_amount: Number(item.current_balance !== undefined ? item.current_balance : item.total_amount || 0),
-        current_balance: Number(item.current_balance !== undefined ? item.current_balance : item.total_amount || 0),
-        status: (item.current_balance !== undefined && item.current_balance <= 0) ? 'paid' : (item.status || 'active'),
+        total_amount: totalAmount,
+        original_amount: item.original_amount !== undefined ? Number(item.original_amount) : totalAmount,
+        remaining_amount: current_balance,
+        current_balance,
+        status: current_balance <= 0 ? 'paid' : (item.status || 'active'),
         currency_type: item.currency || item.currency_type || 'USD',
         payment_type: item.payment_type || 'bcv_usd',
+        payment_mode: item.payment_mode || item.payment_type || 'bcv_usd',
         fortnight_due: item.fortnight_due || 'q1',
         start_year: item.start_year || new Date().getFullYear(),
         start_month: item.start_month !== undefined ? item.start_month : new Date().getMonth(),
@@ -704,6 +711,21 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         notes: item.notes || '',
         updated_at: new Date().toISOString(),
       };
+      if (item.initial_payment !== undefined && item.initial_payment !== null) {
+        debtPayload.initial_payment = Number(item.initial_payment);
+      }
+      if (item.total_installments !== undefined && item.total_installments !== null) {
+        debtPayload.total_installments = Number(item.total_installments);
+      }
+      if (item.pending_installments !== undefined && item.pending_installments !== null) {
+        debtPayload.pending_installments = Number(item.pending_installments);
+      }
+      if (item.installment_amount !== undefined && item.installment_amount !== null) {
+        debtPayload.installment_amount = Number(item.installment_amount);
+      }
+      if (item.priority) {
+        debtPayload.priority = item.priority;
+      }
       const { error } = await supabase.from('debts').upsert(debtPayload);
       if (!error) {
         await db.debts.update(item.id, { sync_status: 'synced' });

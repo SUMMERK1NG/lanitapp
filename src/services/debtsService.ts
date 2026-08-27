@@ -12,27 +12,30 @@ import { toSupabaseDebtPaymentPayload, toSupabaseTransactionPayload } from '../l
 export const sanitizeDebtPayload = (debt: Partial<Debt> & Record<string, any>, userId: string): Record<string, any> => {
   const current_balance = debt.current_balance !== undefined ? Number(debt.current_balance) : Number(debt.total_amount || 0);
   const status = current_balance <= 0 ? 'paid' : (debt.status === 'paid' ? 'paid' : 'active');
-
   const now = new Date();
   const start_year = debt.start_year !== undefined ? Number(debt.start_year) : now.getFullYear();
   const start_month = debt.start_month !== undefined ? Number(debt.start_month) : now.getMonth();
   const start_fortnight = debt.start_fortnight || (now.getDate() <= 15 ? 'q1' : 'q2');
 
-  const total_amount = Number(debt.total_amount || (debt as any).original_amount || 0);
+  const creditorValue = debt.creditor || debt.creditor_name || debt.name || 'Deuda';
+  const totalAmount = Number(debt.total_amount || 0);
 
   const payload: Record<string, any> = {
     id: ensureValidUuid(debt.id),
     user_id: userId,
-    creditor_name: debt.creditor || debt.creditor_name || debt.name || 'Deuda',
+    creditor_name: creditorValue,
+    creditor: creditorValue,
+    name: creditorValue,
     platform: debt.platform || 'particular',
     debt_mode: debt.debt_mode || 'installments',
-    total_amount,
-    original_amount: total_amount,
+    total_amount: totalAmount,
+    original_amount: debt.original_amount !== undefined ? Number(debt.original_amount) : totalAmount,
     remaining_amount: current_balance,
     current_balance,
     status,
     currency_type: debt.currency_type || debt.currency || 'USD',
     payment_type: debt.payment_type || 'bcv_usd',
+    payment_mode: debt.payment_mode || debt.payment_type || 'bcv_usd',
     start_year,
     start_month,
     start_fortnight,
@@ -40,11 +43,15 @@ export const sanitizeDebtPayload = (debt: Partial<Debt> & Record<string, any>, u
     has_interest: Boolean(debt.has_interest),
     interest_rate: debt.interest_rate !== undefined ? Number(debt.interest_rate) : 0,
     interest_amount: debt.interest_amount !== undefined ? Number(debt.interest_amount) : 0,
+    interest_frequency: debt.interest_frequency,
+    interest_fortnight: debt.interest_fortnight,
+    due_date: debt.due_date,
     notes: debt.notes || '',
     created_at: debt.created_at || now.toISOString(),
     updated_at: now.toISOString(),
   };
 
+  // Campos opcionales
   if (debt.initial_payment !== undefined && debt.initial_payment !== null) {
     payload.initial_payment = Number(debt.initial_payment);
   }
@@ -57,26 +64,8 @@ export const sanitizeDebtPayload = (debt: Partial<Debt> & Record<string, any>, u
   if (debt.installment_amount !== undefined && debt.installment_amount !== null) {
     payload.installment_amount = Number(debt.installment_amount);
   }
-  if (debt.interest_frequency) {
-    payload.interest_frequency = debt.interest_frequency;
-  }
-  if (debt.interest_fortnight) {
-    payload.interest_fortnight = debt.interest_fortnight;
-  }
-  if (debt.due_date) {
-    payload.due_date = debt.due_date;
-  }
   if (debt.priority) {
     payload.priority = debt.priority;
-  }
-  if (debt.has_late_fee !== undefined) {
-    payload.has_late_fee = Boolean(debt.has_late_fee);
-  }
-  if (debt.late_fee_amount !== undefined) {
-    payload.late_fee_amount = Number(debt.late_fee_amount);
-  }
-  if (debt.payment_mode) {
-    payload.payment_mode = debt.payment_mode;
   }
 
   return payload;
@@ -93,10 +82,13 @@ export const normalizeDebtRow = (row: any): Debt => {
     id: ensureValidUuid(row.id),
     user_id: row.user_id,
     creditor: row.creditor_name || row.creditor || row.name || 'Deuda',
-    creditor_name: row.creditor_name || row.creditor || row.name || 'Deuda',
+    creditor_name: row.creditor_name || row.creditor || 'Deuda',
+    name: row.name || row.creditor || row.creditor_name || 'Deuda',
     platform: row.platform || 'particular',
     debt_mode: row.debt_mode || 'installments',
     total_amount: Number(row.total_amount ?? row.original_amount ?? 0),
+    original_amount: Number(row.original_amount ?? row.total_amount ?? 0),
+    remaining_amount: Number(row.remaining_amount ?? row.current_balance ?? 0),
     initial_payment: row.initial_payment !== undefined ? Number(row.initial_payment) : undefined,
     current_balance,
     total_installments: row.total_installments !== undefined ? Number(row.total_installments) : undefined,
@@ -109,14 +101,12 @@ export const normalizeDebtRow = (row: any): Debt => {
     currency: (row.currency || row.currency_type || 'USD') as 'USD' | 'EUR' | 'VES',
     currency_type: row.currency_type || row.currency || 'USD',
     payment_type: row.payment_type || 'bcv_usd',
-    payment_mode: row.payment_mode || (row.payment_type === 'bcv_usd' ? 'ves_bcv' : row.payment_type === 'cash_usd' ? 'usd_cash' : row.payment_type === 'bcv_euro' ? 'ves_euro' : 'usd_cash'),
+    payment_mode: row.payment_mode || row.payment_type || 'bcv_usd',
     has_interest: Boolean(row.has_interest),
     interest_rate: row.interest_rate !== undefined ? Number(row.interest_rate) : undefined,
     interest_amount: row.interest_amount !== undefined ? Number(row.interest_amount) : undefined,
     interest_frequency: row.interest_frequency,
     interest_fortnight: row.interest_fortnight,
-    has_late_fee: Boolean(row.has_late_fee),
-    late_fee_amount: row.late_fee_amount !== undefined ? Number(row.late_fee_amount) : undefined,
     due_date: row.due_date,
     status,
     priority: row.priority || 'medium',
