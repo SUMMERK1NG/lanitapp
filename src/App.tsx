@@ -56,6 +56,25 @@ import { TrendingUp, RefreshCw } from 'lucide-react';
 
 export function App() {
   const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('lanitapp_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('lanitapp_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   // Authentication hook
   const {
@@ -323,6 +342,8 @@ export function App() {
           movementsCount={transactions.length}
           rates={rates}
           isAdmin={isAdmin}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
           onSync={syncNow}
           onOpenConverter={() => setIsConverterOpen(true)}
           onSignOut={signOut}
@@ -349,6 +370,8 @@ export function App() {
           fixedExpenses={fixedExpenses}
           selectedYear={selectedYear}
           selectedMonth={selectedMonth}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
           onSync={syncNow}
           onOpenConverter={() => setIsConverterOpen(true)}
           onOpenProfile={() => setIsProfileModalOpen(true)}

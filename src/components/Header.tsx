@@ -6,6 +6,8 @@ import {
   TrendingUp,
   Euro,
   Bell,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
 import { computeSystemNotifications } from './NotificationCenterModal.tsx';
@@ -28,6 +30,8 @@ interface HeaderProps {
   fixedExpenses?: FixedExpense[];
   selectedYear?: number;
   selectedMonth?: number;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   onSync: () => void;
   onOpenConverter: () => void;
   onOpenProfile: () => void;
@@ -48,6 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
   fixedExpenses = [],
   selectedYear,
   selectedMonth,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
   onSync,
   onOpenConverter,
   onOpenProfile,
@@ -71,8 +77,23 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-app px-2.5 sm:px-6 py-2 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Side: Active View Title (Mobile shows miniature icon only, Desktop shows view title) */}
+        {/* Left Side: Active View Title (Mobile shows miniature icon only, Desktop shows view title + sidebar toggle) */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="hidden lg:flex p-1.5 rounded-xl text-muted hover:text-app hover:bg-surface-hover transition-colors cursor-pointer"
+              title={isSidebarCollapsed ? 'Mostrar barra lateral' : 'Ocultar barra lateral'}
+              aria-label="Alternar barra lateral"
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen className="w-5 h-5 text-primary-custom" />
+              ) : (
+                <PanelLeftClose className="w-5 h-5" />
+              )}
+            </button>
+          )}
+
           <div className="w-8 h-8 flex items-center justify-center shrink-0">
             <img
               src="/icon.png"
