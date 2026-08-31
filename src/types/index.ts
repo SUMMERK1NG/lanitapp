@@ -99,6 +99,7 @@ export interface FixedIncome {
   payment_mode?: FixedExpensePaymentMode;
   default_fortnight: 'q1' | 'q2' | 'both' | 'split'; // q1 = Quincena 15, q2 = Quincena 30, split = 50% en cada quincena, both = monto completo en ambas
   category_id: string;
+  due_day?: number; // Día del mes (1-31) asignado para el cobro
   is_active: boolean;
   notes?: string;
   sync_status: SyncStatus;

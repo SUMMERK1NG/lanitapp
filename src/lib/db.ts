@@ -1336,6 +1336,7 @@ export async function saveFixedIncome(
     payment_mode: income.payment_mode || 'usd_cash',
     default_fortnight: income.default_fortnight,
     category_id: resolveCategoryCodeToUuid(income.category_id || 'cat_salary'),
+    due_day: income.due_day,
     is_active: income.is_active !== undefined ? income.is_active : true,
     notes: notesWithTag,
     sync_status: 'pending',

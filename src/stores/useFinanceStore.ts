@@ -903,6 +903,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       payment_mode: income.payment_mode || 'usd_cash',
       default_fortnight: income.default_fortnight,
       category_id: income.category_id || 'cat_salary',
+      due_day: income.due_day,
       is_active: income.is_active !== undefined ? income.is_active : true,
       notes: income.notes || '',
       sync_status: 'pending',

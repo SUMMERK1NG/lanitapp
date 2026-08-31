@@ -134,6 +134,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   const [fixedAmount, setFixedAmount] = useState<number>(0);
   const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('usd_cash');
   const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both' | 'split'>('split');
+  const [fixedDueDay, setFixedDueDay] = useState<string>('');
   const [fixedCategoryId, setFixedCategoryId] = useState<string>('cat_salary');
   const [fixedNotes, setFixedNotes] = useState<string>('');
   const [isFixedCategoryDropdownOpen, setIsFixedCategoryDropdownOpen] = useState<boolean>(false);
@@ -272,6 +273,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setFixedAmount(0);
     setFixedPaymentMode('usd_cash');
     setFixedFortnight('split');
+    setFixedDueDay('');
     setFixedCategoryId(incomeCategories[0]?.id || 'cat_salary');
     setFixedNotes('');
     setIsFixedCategoryDropdownOpen(false);
@@ -286,6 +288,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     const exactOriginal = fi.original_amount !== undefined ? fi.original_amount : fi.finalAmount;
     setFixedAmount(exactOriginal || 0);
     setFixedFortnight(fi.default_fortnight || 'split');
+    setFixedDueDay(fi.due_day ? fi.due_day.toString() : '');
     setFixedCategoryId(fi.category_id);
     setFixedNotes((fi.notes || '').replace(/\s*\[split\]/g, '').trim());
     setIsFixedCategoryDropdownOpen(false);
@@ -340,6 +343,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       currency: finalCurrency,
       payment_mode: fixedPaymentMode,
       default_fortnight: fixedFortnight,
+      due_day: fixedDueDay ? parseInt(fixedDueDay, 10) : undefined,
       category_id: fixedCategoryId,
       notes: fixedNotes,
     });
@@ -1151,47 +1155,77 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </div>
               </div>
 
-              {/* 5. Distribución de Sueldo (Obligatorio) */}
-              <div>
-                <label className="block text-xs font-semibold text-muted mb-1">
-                  Distribución de Sueldo <span className="text-red-400">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
-                  {[
-                    { id: 'split' as const, label: 'Dividir 50% / 50%', desc: '50% en Q15 y 50% en Q30' },
-                    { id: 'q1' as const, label: 'Quincena 15', desc: '100% en Quincena 15' },
-                    { id: 'q2' as const, label: 'Quincena 30', desc: '100% en Quincena 30' },
-                    { id: 'both' as const, label: 'Ambas (Monto C/U)', desc: 'Monto completo en c/u' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setFixedFortnight(opt.id)}
-                      className={`py-1.5 px-2 rounded-lg text-left transition-all cursor-pointer ${
-                        fixedFortnight === opt.id
-                          ? 'bg-primary-custom text-white shadow-sm'
-                          : 'text-muted hover:text-app hover:bg-surface-hover'
-                      }`}
-                    >
-                      <p className="text-[11px] font-bold truncate leading-tight">{opt.label}</p>
-                      <p className={`text-[8.5px] truncate mt-0.5 ${fixedFortnight === opt.id ? 'text-white/80' : 'text-muted'}`}>
-                        {opt.desc}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-                {fixedFortnight === 'split' && fixedAmount > 0 && (
-                  <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
-                    {fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro' ? (
-                      <>💡 Cobrarás €{(fixedAmount / 2).toFixed(2)} el día 15 y €{(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: €{fixedAmount.toFixed(2)}).</>
-                    ) : fixedPaymentMode === 'ves_fixed' ? (
-                      <>💡 Cobrarás Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 15 y Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 30 (Total mensual: Bs. {fixedAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}).</>
-                    ) : (
-                      <>💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).</>
-                    )}
+              {/* 5. Día de Cobro y Distribución de Sueldo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Día del Mes de Cobro (1-31)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={fixedDueDay}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFixedDueDay(val);
+                      const num = parseInt(val, 10);
+                      if (!isNaN(num) && num >= 1 && num <= 31) {
+                        if (fixedFortnight !== 'split' && fixedFortnight !== 'both') {
+                          setFixedFortnight(num <= 15 ? 'q1' : 'q2');
+                        }
+                      }
+                    }}
+                    placeholder="Ej. 10, 15, 25..."
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs font-bold text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  />
+                  <p className="text-[9px] text-muted mt-0.5">
+                    {fixedDueDay ? `Fecha programada: Día ${fixedDueDay}` : 'Opcional (por defecto Quincena 15/30)'}
                   </p>
-                )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Distribución de Sueldo <span className="text-red-400">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-card rounded-xl border border-app">
+                    {[
+                      { id: 'split' as const, label: 'Dividir 50% / 50%', desc: '50% en Q15 y 50% en Q30' },
+                      { id: 'q1' as const, label: 'Quincena 15', desc: '100% en Q15' },
+                      { id: 'q2' as const, label: 'Quincena 30', desc: '100% en Q30' },
+                      { id: 'both' as const, label: 'Ambas (Monto C/U)', desc: 'Monto completo en c/u' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFixedFortnight(opt.id)}
+                        className={`py-1.5 px-2 rounded-lg text-left transition-all cursor-pointer ${
+                          fixedFortnight === opt.id
+                            ? 'bg-primary-custom text-white shadow-sm'
+                            : 'text-muted hover:text-app hover:bg-surface-hover'
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold truncate leading-tight">{opt.label}</p>
+                        <p className={`text-[8.5px] truncate mt-0.5 ${fixedFortnight === opt.id ? 'text-white/80' : 'text-muted'}`}>
+                          {opt.desc}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {fixedFortnight === 'split' && fixedAmount > 0 && (
+                <p className="text-[11px] text-primary-custom font-semibold mt-1 px-1">
+                  {fixedPaymentMode === 'eur_cash' || fixedPaymentMode === 'ves_euro' ? (
+                    <>💡 Cobrarás €{(fixedAmount / 2).toFixed(2)} el día 15 y €{(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: €{fixedAmount.toFixed(2)}).</>
+                  ) : fixedPaymentMode === 'ves_fixed' ? (
+                    <>💡 Cobrarás Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 15 y Bs. {(fixedAmount / 2).toLocaleString('es-VE', { minimumFractionDigits: 2 })} el día 30 (Total mensual: Bs. {fixedAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}).</>
+                  ) : (
+                    <>💡 Cobrarás ${(fixedAmount / 2).toFixed(2)} el día 15 y ${(fixedAmount / 2).toFixed(2)} el día 30 (Total mensual: ${fixedAmount.toFixed(2)}).</>
+                  )}
+                </p>
+              )}
 
               {/* 6. Notas (Opcional) */}
               <div>

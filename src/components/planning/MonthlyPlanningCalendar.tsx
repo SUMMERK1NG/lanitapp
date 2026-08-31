@@ -237,16 +237,23 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
     fixedIncomes.forEach((inc) => {
       if (!inc.is_active) return;
       const targetDays: number[] = [];
-      if (inc.default_fortnight === 'q1') {
-        targetDays.push(15);
-      } else if (inc.default_fortnight === 'q2') {
-        targetDays.push(Math.min(30, daysInMonth));
-      } else if (inc.default_fortnight === 'split') {
-        targetDays.push(15);
-        targetDays.push(Math.min(30, daysInMonth));
+      if (inc.due_day && inc.due_day >= 1 && inc.due_day <= daysInMonth) {
+        if (inc.default_fortnight === 'split' || inc.default_fortnight === 'both') {
+          targetDays.push(inc.due_day);
+          const secondDay = inc.due_day <= 15 ? Math.min(inc.due_day + 15, daysInMonth) : Math.max(1, inc.due_day - 15);
+          targetDays.push(secondDay);
+        } else {
+          targetDays.push(inc.due_day);
+        }
       } else {
-        targetDays.push(15);
-        targetDays.push(Math.min(30, daysInMonth));
+        if (inc.default_fortnight === 'q1') {
+          targetDays.push(15);
+        } else if (inc.default_fortnight === 'q2') {
+          targetDays.push(Math.min(30, daysInMonth));
+        } else {
+          targetDays.push(15);
+          targetDays.push(Math.min(30, daysInMonth));
+        }
       }
 
       targetDays.forEach((d) => {
