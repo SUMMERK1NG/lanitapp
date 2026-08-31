@@ -48,6 +48,8 @@ import { SavingsModule } from './components/SavingsModule.tsx';
 import { AccountsManagementModule } from './components/AccountsManagementModule.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
+import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
+import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
@@ -128,6 +130,8 @@ export function App() {
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState<boolean>(false);
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
+  const [isAddFixedExpenseModalOpen, setIsAddFixedExpenseModalOpen] = useState<boolean>(false);
+  const [isAddVariableExpenseModalOpen, setIsAddVariableExpenseModalOpen] = useState<boolean>(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState<boolean>(false);
   const [transactionModalType, setTransactionModalType] = useState<TransactionType>('expense');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
@@ -664,8 +668,31 @@ export function App() {
       <QuickActionModal
         isOpen={isQuickActionOpen}
         onClose={() => setIsQuickActionOpen(false)}
+        onSelectFixedExpense={() => setIsAddFixedExpenseModalOpen(true)}
+        onSelectVariableExpense={() => setIsAddVariableExpenseModalOpen(true)}
         onSelectTransaction={(type) => handleOpenTransactionForType(type)}
         onSelectDebtPayment={() => handleOpenPaymentModal()}
+      />
+
+      {/* Add Fixed Expense Modal (Available globally & in mobile +) */}
+      <AddFixedExpenseModal
+        isOpen={isAddFixedExpenseModalOpen}
+        onClose={() => setIsAddFixedExpenseModalOpen(false)}
+        categories={categories}
+        rates={rates}
+        onSaved={() => showToast('Gasto fijo guardado con éxito')}
+      />
+
+      {/* Add Variable Expense Modal (Available globally & in mobile +) */}
+      <AddVariableExpenseModal
+        isOpen={isAddVariableExpenseModalOpen}
+        onClose={() => setIsAddVariableExpenseModalOpen(false)}
+        categories={categories}
+        accounts={accounts}
+        rates={rates}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        onSaved={() => showToast('Gasto variable guardado con éxito')}
       />
 
       {/* Transaction Modal (Gasto / Ingreso) */}
