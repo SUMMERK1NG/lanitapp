@@ -237,23 +237,19 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
     fixedIncomes.forEach((inc) => {
       if (!inc.is_active) return;
       const targetDays: number[] = [];
-      if (inc.due_day && inc.due_day >= 1 && inc.due_day <= daysInMonth) {
-        if (inc.default_fortnight === 'split' || inc.default_fortnight === 'both') {
-          targetDays.push(inc.due_day);
-          const secondDay = inc.due_day <= 15 ? Math.min(inc.due_day + 15, daysInMonth) : Math.max(1, inc.due_day - 15);
-          targetDays.push(secondDay);
-        } else {
-          targetDays.push(inc.due_day);
-        }
+      if (inc.default_fortnight === 'split' || inc.default_fortnight === 'both') {
+        const d1 = inc.due_day && inc.due_day >= 1 && inc.due_day <= daysInMonth ? inc.due_day : 15;
+        const d2 = inc.due_day_2 && inc.due_day_2 >= 1 && inc.due_day_2 <= daysInMonth
+          ? inc.due_day_2
+          : (inc.due_day ? (inc.due_day <= 15 ? Math.min(inc.due_day + 15, daysInMonth) : Math.max(1, inc.due_day - 15)) : Math.min(30, daysInMonth));
+        targetDays.push(d1);
+        targetDays.push(d2);
+      } else if (inc.default_fortnight === 'q1') {
+        targetDays.push(inc.due_day && inc.due_day >= 1 && inc.due_day <= daysInMonth ? inc.due_day : 15);
+      } else if (inc.default_fortnight === 'q2') {
+        targetDays.push(inc.due_day && inc.due_day >= 1 && inc.due_day <= daysInMonth ? inc.due_day : Math.min(30, daysInMonth));
       } else {
-        if (inc.default_fortnight === 'q1') {
-          targetDays.push(15);
-        } else if (inc.default_fortnight === 'q2') {
-          targetDays.push(Math.min(30, daysInMonth));
-        } else {
-          targetDays.push(15);
-          targetDays.push(Math.min(30, daysInMonth));
-        }
+        targetDays.push(inc.due_day || 15);
       }
 
       targetDays.forEach((d) => {

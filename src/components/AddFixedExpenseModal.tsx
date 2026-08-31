@@ -34,6 +34,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
   const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('ves_bcv');
   const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
   const [fixedDueDay, setFixedDueDay] = useState<string>('');
+  const [fixedDueDay2, setFixedDueDay2] = useState<string>('');
   const [fixedCategoryId, setFixedCategoryId] = useState<string>('cat_services');
   const [fixedNotes, setFixedNotes] = useState<string>('');
   const [isFixedCategoryDropdownOpen, setIsFixedCategoryDropdownOpen] = useState<boolean>(false);
@@ -53,6 +54,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
       setFixedPaymentMode(editingExpense.payment_mode || 'ves_bcv');
       setFixedFortnight(editingExpense.default_fortnight || 'q1');
       setFixedDueDay(editingExpense.due_day ? editingExpense.due_day.toString() : '');
+      setFixedDueDay2(editingExpense.due_day_2 ? editingExpense.due_day_2.toString() : '');
       setFixedCategoryId(editingExpense.category_id || 'cat_services');
       setFixedNotes(editingExpense.notes || '');
     } else {
@@ -61,6 +63,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
       setFixedPaymentMode('ves_bcv');
       setFixedFortnight('q1');
       setFixedDueDay('');
+      setFixedDueDay2('');
       setFixedCategoryId('cat_services');
       setFixedNotes('');
     }
@@ -96,6 +99,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
         payment_mode: fixedPaymentMode,
         default_fortnight: fixedFortnight,
         due_day: fixedDueDay ? parseInt(fixedDueDay, 10) : undefined,
+        due_day_2: fixedDueDay2 ? parseInt(fixedDueDay2, 10) : undefined,
         category_id: fixedCategoryId,
         is_active: editingExpense ? editingExpense.is_active : true,
         notes: fixedNotes.trim(),
@@ -205,11 +209,76 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
             </div>
           </div>
 
-          {/* Día de Pago y Quincena */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-muted mb-1">
-                Día del Mes (1-31)
+          {/* Quincena de Pago */}
+          <div>
+            <label className="block text-xs font-bold text-muted mb-1">
+              Quincena de Pago
+            </label>
+            <div className="grid grid-cols-3 gap-1">
+              {[
+                { id: 'q1' as const, label: 'Q15' },
+                { id: 'q2' as const, label: 'Q30' },
+                { id: 'both' as const, label: 'Ambas' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setFixedFortnight(item.id)}
+                  className={`p-2 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                    fixedFortnight === item.id
+                      ? 'bg-primary-custom text-white border-primary-custom shadow-md'
+                      : 'bg-card text-muted border-app hover:text-app'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Días de Pago en el Mes */}
+          {fixedFortnight === 'both' ? (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-card/60 rounded-2xl border border-app/70">
+              <div>
+                <label className="block text-[11px] font-bold text-app mb-1">
+                  📅 Día 1er Pago (Q1)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={fixedDueDay}
+                  onChange={(e) => setFixedDueDay(e.target.value)}
+                  placeholder="Ej. 5, 10, 15..."
+                  className="w-full bg-surface border border-app rounded-xl px-3 py-2 text-xs font-black text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                />
+                <p className="text-[9px] text-muted mt-0.5">
+                  {fixedDueDay ? `1er pago: Día ${fixedDueDay}` : 'Por defecto: Día 15'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-app mb-1">
+                  📅 Día 2do Pago (Q2)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={fixedDueDay2}
+                  onChange={(e) => setFixedDueDay2(e.target.value)}
+                  placeholder="Ej. 20, 25, 30..."
+                  className="w-full bg-surface border border-app rounded-xl px-3 py-2 text-xs font-black text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                />
+                <p className="text-[9px] text-muted mt-0.5">
+                  {fixedDueDay2 ? `2do pago: Día ${fixedDueDay2}` : 'Por defecto: Día 30'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-card/60 rounded-2xl border border-app/70">
+              <label className="block text-[11px] font-bold text-app mb-1">
+                📅 Día del Mes de Pago (1-31)
               </label>
               <input
                 type="number"
@@ -224,37 +293,14 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
                     setFixedFortnight(num <= 15 ? 'q1' : 'q2');
                   }
                 }}
-                placeholder="Ej. 8, 15, 20..."
-                className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs font-bold text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                placeholder={fixedFortnight === 'q1' ? 'Ej. 5, 10, 15...' : 'Ej. 20, 25, 30...'}
+                className="w-full bg-surface border border-app rounded-xl px-3 py-2 text-xs font-black text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
               />
+              <p className="text-[9px] text-muted mt-0.5">
+                {fixedDueDay ? `Fecha programada: Día ${fixedDueDay}` : `Por defecto: Día ${fixedFortnight === 'q1' ? 15 : 30}`}
+              </p>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-muted mb-1">
-                Quincena de Pago
-              </label>
-              <div className="grid grid-cols-3 gap-1">
-                {[
-                  { id: 'q1' as const, label: 'Q15' },
-                  { id: 'q2' as const, label: 'Q30' },
-                  { id: 'both' as const, label: 'Ambas' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setFixedFortnight(item.id)}
-                    className={`p-2 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
-                      fixedFortnight === item.id
-                        ? 'bg-primary-custom text-white border-primary-custom shadow-md'
-                        : 'bg-card text-muted border-app hover:text-app'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Categoría */}
           <div>

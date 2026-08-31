@@ -99,7 +99,8 @@ export interface FixedIncome {
   payment_mode?: FixedExpensePaymentMode;
   default_fortnight: 'q1' | 'q2' | 'both' | 'split'; // q1 = Quincena 15, q2 = Quincena 30, split = 50% en cada quincena, both = monto completo en ambas
   category_id: string;
-  due_day?: number; // Día del mes (1-31) asignado para el cobro
+  due_day?: number; // Día del 1er cobro (1-31)
+  due_day_2?: number; // Día del 2do cobro (1-31) para quincenas 50/50 o ambas
   is_active: boolean;
   notes?: string;
   sync_status: SyncStatus;
@@ -153,7 +154,8 @@ export interface FixedExpense {
   default_quincena?: number | null;
   quincena?: number | null;
   category_id: string;
-  due_day?: number; // Día del mes (1-31) asignado para el pago
+  due_day?: number; // Día del 1er pago (1-31)
+  due_day_2?: number; // Día del 2do pago si aplica ambas quincenas (1-31)
   is_active: boolean; // default status
   assumed_by_third_party?: boolean;
   notes?: string;
@@ -224,7 +226,8 @@ export interface Debt {
   has_late_fee?: boolean;
   late_fee_amount?: number; // Penalización por cuota vencida o no pagada (ej. Cashea $4)
   due_date?: string;
-  due_day?: number; // Día del mes (1-31) asignado para el pago/vencimiento
+  due_day?: number; // Día del 1er pago/vencimiento (1-31)
+  due_day_2?: number; // Día del 2do pago si abona en ambas quincenas (1-31)
   status: 'active' | 'paid';
   priority?: 'low' | 'medium' | 'high' | string;
   notes?: string;
