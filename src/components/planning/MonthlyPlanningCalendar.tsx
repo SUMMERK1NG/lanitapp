@@ -2,7 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Calendar as CalendarIcon,
+  List,
+  LayoutGrid,
   Check,
+  Receipt,
+  CreditCard,
+  Briefcase,
+  PiggyBank,
+  Sparkles,
 } from 'lucide-react';
 import type {
   FixedExpense,
@@ -79,7 +86,9 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
   onOpenQuickPayment,
 }) => {
   const [activeFilter, setActiveFilter] = useState<CalendarFilterType>('all');
+  const [calendarViewMode, setCalendarViewMode] = useState<'grid' | 'agenda'>('grid');
   const [selectedDayForModal, setSelectedDayForModal] = useState<number | null>(null);
+  const [selectedDayInline, setSelectedDayInline] = useState<number>(15);
 
   // Live queries for reactive updates
   const allFortnightStates = useLiveQuery(() => db.fortnight_item_states.toArray(), []) || [];
@@ -109,7 +118,6 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
 
     // 1. Fixed Expenses
     fixedExpenses.forEach((exp) => {
-      // Check monthly override for active/amount
       const override = monthlyOverrides.find(
         (o) => o.fixed_expense_id === exp.id && o.year === selectedYear && o.month === selectedMonth
       );
@@ -118,7 +126,6 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
 
       const amount = override?.custom_amount !== undefined ? override.custom_amount : exp.amount;
 
-      // Determine payment day
       const targetDays: number[] = [];
       if (exp.due_day && exp.due_day >= 1 && exp.due_day <= daysInMonth) {
         targetDays.push(exp.due_day);
@@ -128,7 +135,6 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
         } else if (exp.default_fortnight === 'q2') {
           targetDays.push(Math.min(30, daysInMonth));
         } else {
-          // both
           targetDays.push(15);
           targetDays.push(Math.min(30, daysInMonth));
         }
@@ -160,10 +166,9 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
       });
     });
 
-    // 2. Debts (Cashea, Préstamos, Tarjetas)
+    // 2. Debts
     debts.forEach((debt) => {
       if (debt.status === 'paid' && debt.current_balance <= 0) {
-        // Still check if paid in this month
         const hasPaymentThisMonth = debtPayments.some(
           (p) => p.debt_id === debt.id && p.year === selectedYear && p.month === selectedMonth
         );
@@ -220,7 +225,7 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
           subtitle: 'Gasto Variable',
           amount: ve.amount,
           currency: ve.currency,
-          isPaid: true, // variable expenses already logged
+          isPaid: true,
         };
         const list = map.get(day) || [];
         list.push(item);
@@ -228,7 +233,7 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
       }
     });
 
-    // 4. Incomes (Fixed & Variable)
+    // 4. Incomes
     fixedIncomes.forEach((inc) => {
       if (!inc.is_active) return;
       const targetDays: number[] = [];
@@ -370,7 +375,7 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
   };
 
   const handleToggleExpensePaid = async (expense: FixedExpense, isCurrentlyPaid: boolean) => {
-    const day = selectedDayForModal || 15;
+    const day = selectedDayForModal || selectedDayInline || 15;
     const fortnight: FortnightType = day <= 15 ? 'q1' : 'q2';
     if (isCurrentlyPaid) {
       await unmarkFortnightExpensePaid({
@@ -390,32 +395,79 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
     }
   };
 
-  // Calendar Day Detail Modal Data
+  // Days that have at least one event (for Agenda / Timeline view)
+  const activeDaysList = useMemo(() => {
+    const list: { day: number; items: CalendarDayItem[]; totalCommitted: number; totalIncome: number }[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const allItems = daysData.get(d) || [];
+      const filtered = getFilteredItems(allItems);
+      if (filtered.length > 0) {
+        const totalCommitted = filtered
+          .filter((i) => i.type === 'fixed_expense' || i.type === 'debt' || i.type === 'variable_expense')
+          .reduce((s, i) => s + i.amount, 0);
+        const totalIncome = filtered
+          .filter((i) => i.type === 'income')
+          .reduce((s, i) => s + i.amount, 0);
+        list.push({ day: d, items: filtered, totalCommitted, totalIncome });
+      }
+    }
+    return list;
+  }, [daysData, daysInMonth, activeFilter]);
+
   const selectedDayItems = selectedDayForModal ? daysData.get(selectedDayForModal) || [] : [];
   const selectedDayOfWeekName = selectedDayForModal
     ? WEEKDAY_NAMES[(new Date(selectedYear, selectedMonth, selectedDayForModal).getDay() + 6) % 7]
     : '';
 
+  const inlineDayItems = daysData.get(selectedDayInline) || [];
+
   return (
-    <div className="space-y-5 animate-in fade-in duration-200">
-      {/* Top Bar with Month Navigation & Quincenas Indicators */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl bg-card border border-app shadow-md">
+    <div className="space-y-4 animate-in fade-in duration-200">
+      {/* Top Header: Period, View Mode Switcher (Grid vs Agenda) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-3xl bg-card border border-app shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+          <div className="w-9 h-9 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold shrink-0">
             <CalendarIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-app">
-              Calendario de Planificación
+            <h2 className="text-sm sm:text-base font-black text-app">
+              Planificación de {monthName} {selectedYear}
             </h2>
-            <p className="text-xs text-muted">
-              Visualización diaria de vencimientos, compromisos y tareas
+            <p className="text-[11px] text-muted hidden sm:block">
+              {activeDaysList.length} días con movimientos programados • ${monthlyMetrics.totalCommitted.toFixed(2)} total
             </p>
           </div>
         </div>
 
-        {/* Month Selector & Navigation */}
         <div className="flex items-center gap-2">
+          {/* Mode Switcher */}
+          <div className="flex items-center bg-surface p-1 rounded-xl border border-app">
+            <button
+              onClick={() => setCalendarViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                calendarViewMode === 'grid'
+                  ? 'bg-primary-custom text-white shadow-sm'
+                  : 'text-muted hover:text-app'
+              }`}
+              title="Vista Cuadrícula Compacta"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cuadrícula</span>
+            </button>
+            <button
+              onClick={() => setCalendarViewMode('agenda')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                calendarViewMode === 'agenda'
+                  ? 'bg-primary-custom text-white shadow-sm'
+                  : 'text-muted hover:text-app'
+              }`}
+              title="Vista Agenda / Lista Cronológica"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cronograma</span>
+            </button>
+          </div>
+
           <MonthPicker
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
@@ -424,160 +476,371 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
         </div>
       </div>
 
-      {/* Main Grid + Sidebar Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Calendar Grid (9 Columns on large screens) */}
+      {/* Main Container */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        {/* Main Content (Grid or Agenda) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-3">
-          {/* Quincenas Indicator Header Bar */}
+          {/* Quincenas Indicator Header */}
           <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-            <div className="p-2.5 rounded-2xl bg-primary-custom/10 border border-primary-custom/30 text-primary-custom flex items-center justify-between px-4">
-              <span className="flex items-center gap-1.5">
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-primary-custom/10 border border-primary-custom/30 text-primary-custom flex items-center justify-between px-3 sm:px-4">
+              <span className="flex items-center gap-1.5 text-[11px] sm:text-xs">
                 <span className="w-2 h-2 rounded-full bg-primary-custom" />
-                Quincena 15 (Días 1 al 15)
+                Quincena 15
               </span>
-              <span className="text-app font-black">${monthlyMetrics.totalQ1.toFixed(2)}</span>
+              <span className="text-app font-black text-xs sm:text-sm">
+                ${monthlyMetrics.totalQ1.toFixed(2)}
+              </span>
             </div>
-            <div className="p-2.5 rounded-2xl bg-[#FF914D]/10 border border-[#FF914D]/30 text-[#FF914D] flex items-center justify-between px-4">
-              <span className="flex items-center gap-1.5">
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-[#FF914D]/10 border border-[#FF914D]/30 text-[#FF914D] flex items-center justify-between px-3 sm:px-4">
+              <span className="flex items-center gap-1.5 text-[11px] sm:text-xs">
                 <span className="w-2 h-2 rounded-full bg-[#FF914D]" />
-                Quincena 30 (Días 16 al {daysInMonth})
+                Quincena 30
               </span>
-              <span className="text-app font-black">${monthlyMetrics.totalQ2.toFixed(2)}</span>
+              <span className="text-app font-black text-xs sm:text-sm">
+                ${monthlyMetrics.totalQ2.toFixed(2)}
+              </span>
             </div>
           </div>
 
-          {/* Calendar Table Box */}
-          <div className="bg-card border border-app rounded-3xl shadow-xl overflow-hidden">
-            {/* Weekdays Header */}
-            <div className="grid grid-cols-7 border-b border-app bg-surface-hover/60 text-center text-xs font-black text-muted py-2.5 uppercase tracking-wider">
-              {WEEKDAY_SHORT.map((wd, i) => (
-                <div key={wd} className={i >= 5 ? 'text-slate-500' : ''}>
-                  {wd}
+          {/* VIEW MODE 1: COMPACT CALENDAR GRID */}
+          {calendarViewMode === 'grid' ? (
+            <div className="space-y-3">
+              <div className="bg-card border border-app rounded-3xl shadow-lg overflow-hidden">
+                {/* Weekdays Header */}
+                <div className="grid grid-cols-7 border-b border-app bg-surface-hover/50 text-center text-[10px] sm:text-xs font-black text-muted py-2 uppercase tracking-wider">
+                  {WEEKDAY_SHORT.map((wd, i) => (
+                    <div key={wd} className={i >= 5 ? 'text-slate-500' : ''}>
+                      {wd}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Calendar Cells Grid */}
-            <div className="grid grid-cols-7 auto-rows-fr gap-[1px] bg-app/50 p-[1px]">
-              {/* Padding empty days before day 1 */}
-              {Array.from({ length: startDayOffset }).map((_, index) => (
-                <div
-                  key={`empty-${index}`}
-                  className="min-h-[95px] lg:min-h-[115px] p-2 bg-surface/30 opacity-40 select-none"
-                />
-              ))}
+                {/* Calendar Cells Grid */}
+                <div className="grid grid-cols-7 gap-[1px] bg-app/40 p-[1px]">
+                  {/* Empty leading padding */}
+                  {Array.from({ length: startDayOffset }).map((_, index) => (
+                    <div
+                      key={`empty-${index}`}
+                      className="h-14 sm:h-20 lg:h-24 p-1 sm:p-1.5 bg-surface/20 opacity-30 select-none"
+                    />
+                  ))}
 
-              {/* Month Days 1..N */}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const dayNum = i + 1;
-                const isToday = dayNum === currentDayNum;
-                const rawItems = daysData.get(dayNum) || [];
-                const filteredItems = getFilteredItems(rawItems);
-                const dayTotal = rawItems
-                  .filter((item) => item.type === 'fixed_expense' || item.type === 'debt' || item.type === 'variable_expense')
-                  .reduce((sum, item) => sum + item.amount, 0);
+                  {/* Days */}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const dayNum = i + 1;
+                    const isToday = dayNum === currentDayNum;
+                    const isSelected = selectedDayInline === dayNum;
+                    const rawItems = daysData.get(dayNum) || [];
+                    const filteredItems = getFilteredItems(rawItems);
+                    const dayTotal = rawItems
+                      .filter((item) => item.type === 'fixed_expense' || item.type === 'debt' || item.type === 'variable_expense')
+                      .reduce((sum, item) => sum + item.amount, 0);
 
-                const isQ1 = dayNum <= 15;
-                const allPaid = rawItems.length > 0 && rawItems.every((it) => it.isPaid || it.isSkipped);
+                    const hasIncome = rawItems.some((item) => item.type === 'income');
+                    const hasDebt = rawItems.some((item) => item.type === 'debt');
+                    const hasExpense = rawItems.some((item) => item.type === 'fixed_expense' || item.type === 'variable_expense');
+                    const allPaid = rawItems.length > 0 && rawItems.every((it) => it.isPaid || it.isSkipped);
 
-                return (
-                  <div
-                    key={`day-${dayNum}`}
-                    onClick={() => setSelectedDayForModal(dayNum)}
-                    className={`min-h-[95px] lg:min-h-[115px] p-2 flex flex-col justify-between transition-all cursor-pointer group relative ${
-                      isToday
-                        ? 'bg-primary-custom/10 border-2 border-primary-custom/80 shadow-md'
-                        : isQ1
-                        ? 'bg-surface/90 hover:bg-surface-hover/90'
-                        : 'bg-surface/75 hover:bg-surface-hover/90'
-                    }`}
-                  >
-                    {/* Cell Top Bar: Day Number & Total Due Badge */}
-                    <div className="flex items-center justify-between gap-1">
-                      <span
-                        className={`text-xs font-black rounded-lg w-6 h-6 flex items-center justify-center transition-colors ${
-                          isToday
-                            ? 'bg-primary-custom text-white shadow-sm'
-                            : 'text-app group-hover:text-primary-custom'
+                    return (
+                      <div
+                        key={`day-${dayNum}`}
+                        onClick={() => {
+                          setSelectedDayInline(dayNum);
+                          // On desktop or mobile double click / direct open:
+                          if (window.innerWidth < 768) {
+                            // On mobile, select day inline
+                          } else {
+                            setSelectedDayForModal(dayNum);
+                          }
+                        }}
+                        className={`h-14 sm:h-20 lg:h-24 p-1 sm:p-1.5 flex flex-col justify-between transition-all cursor-pointer relative group ${
+                          isSelected
+                            ? 'bg-primary-custom/20 border border-primary-custom shadow-inner'
+                            : isToday
+                            ? 'bg-primary-custom/10 border border-primary-custom/60'
+                            : rawItems.length > 0
+                            ? 'bg-surface hover:bg-surface-hover'
+                            : 'bg-surface/60 hover:bg-surface-hover/80'
                         }`}
                       >
-                        {dayNum}
-                      </span>
-
-                      {dayTotal > 0 && (
-                        <span
-                          className={`text-[10px] font-black px-1.5 py-0.5 rounded-md border tracking-tight ${
-                            allPaid
-                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                              : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                          }`}
-                        >
-                          ${dayTotal.toFixed(0)}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Cell Items Chips List */}
-                    <div className="flex-1 my-1 space-y-1 overflow-hidden">
-                      {filteredItems.slice(0, 3).map((item) => {
-                        const isIncome = item.type === 'income';
-                        const isSaving = item.type === 'saving';
-                        const isDebt = item.type === 'debt';
-
-                        return (
-                          <div
-                            key={item.id}
-                            className={`flex items-center justify-between px-1.5 py-0.5 rounded-md text-[10px] font-bold border truncate transition-all ${
-                              item.isPaid
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : isIncome
-                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                : isSaving
-                                ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'
-                                : isDebt
-                                ? 'bg-orange-500/15 text-orange-300 border-orange-500/30'
-                                : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                        {/* Day Number + Total Pill */}
+                        <div className="flex items-center justify-between gap-0.5">
+                          <span
+                            className={`text-[10px] sm:text-xs font-black rounded-md w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center transition-colors ${
+                              isToday
+                                ? 'bg-primary-custom text-white'
+                                : isSelected
+                                ? 'bg-white/20 text-white font-black'
+                                : 'text-app group-hover:text-primary-custom'
                             }`}
-                            title={`${item.title}: $${item.amount.toFixed(2)} (${item.isPaid ? 'Pagado' : 'Pendiente'})`}
                           >
-                            <span className="truncate flex items-center gap-1">
-                              {item.isPaid ? (
-                                <Check className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
-                              ) : isDebt ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                              )}
-                              {item.title}
+                            {dayNum}
+                          </span>
+
+                          {dayTotal > 0 && (
+                            <span
+                              className={`text-[9px] sm:text-[10px] font-black px-1 py-0.2 rounded border tracking-tight ${
+                                allPaid
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                              }`}
+                            >
+                              ${dayTotal.toFixed(0)}
                             </span>
-                            <span className="shrink-0 ml-1 font-black">
-                              ${item.amount.toFixed(0)}
+                          )}
+                        </div>
+
+                        {/* Mobile Indicators: Colorful Event Dots */}
+                        <div className="sm:hidden flex items-center justify-center gap-1 py-1">
+                          {hasIncome && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                          {hasDebt && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                          {hasExpense && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />}
+                        </div>
+
+                        {/* Desktop Compact Chips (Visible from sm breakpoint) */}
+                        <div className="hidden sm:block space-y-0.5 overflow-hidden flex-1 my-0.5">
+                          {filteredItems.slice(0, 2).map((item) => (
+                            <div
+                              key={item.id}
+                              className={`flex items-center justify-between px-1 py-0.2 rounded text-[9px] font-bold border truncate ${
+                                item.isPaid
+                                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                  : item.type === 'income'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                  : item.type === 'debt'
+                                  ? 'bg-orange-500/10 text-orange-300 border-orange-500/30'
+                                  : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                              }`}
+                            >
+                              <span className="truncate flex items-center gap-1">
+                                {item.isPaid ? (
+                                  <Check className="w-2 h-2 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <span
+                                    className={`w-1 h-1 rounded-full shrink-0 ${
+                                      item.type === 'debt' ? 'bg-orange-400' : 'bg-indigo-400'
+                                    }`}
+                                  />
+                                )}
+                                {item.title}
+                              </span>
+                              <span className="shrink-0 font-black ml-0.5">
+                                ${item.amount.toFixed(0)}
+                              </span>
+                            </div>
+                          ))}
+
+                          {filteredItems.length > 2 && (
+                            <span className="text-[8px] font-extrabold text-muted block text-center leading-none">
+                              +{filteredItems.length - 2} más
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Quincena Marker */}
+                        {(dayNum === 15 || dayNum === 30) && (
+                          <div className="text-[8px] font-extrabold text-primary-custom text-center leading-none">
+                            Q{dayNum === 15 ? '15' : '30'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile Quick Day Detail Inspector Card (Below grid) */}
+              <div className="block sm:hidden p-4 rounded-3xl bg-card border border-app space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-app">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-app">
+                      📅 Día {selectedDayInline} de {monthName}
+                    </span>
+                    <span className="text-[10px] text-muted font-bold">
+                      ({inlineDayItems.length} movimientos)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setSelectedDayForModal(selectedDayInline)}
+                    className="text-[11px] font-bold text-primary-custom hover:underline"
+                  >
+                    Ver Detalle Completo
+                  </button>
+                </div>
+
+                {inlineDayItems.length === 0 ? (
+                  <div className="py-4 text-center text-muted text-xs">
+                    Sin compromisos para este día. Toca otro día del calendario.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {inlineDayItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-2.5 rounded-2xl bg-surface border border-app flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              item.type === 'income'
+                                ? 'bg-emerald-400'
+                                : item.type === 'debt'
+                                ? 'bg-orange-400'
+                                : 'bg-indigo-400'
+                            }`}
+                          />
+                          <span className="font-bold text-app truncate">{item.title}</span>
+                          {item.isPaid && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-black text-app shrink-0">
+                          {item.type === 'income' ? '+' : '-'}${item.amount.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* VIEW MODE 2: CHRONOLOGICAL AGENDA / TIMELINE */
+            <div className="space-y-3">
+              {activeDaysList.length === 0 ? (
+                <div className="p-8 rounded-3xl bg-card border border-app text-center text-muted space-y-2">
+                  <Sparkles className="w-8 h-8 mx-auto opacity-40" />
+                  <p className="text-sm font-bold text-app">No hay compromisos con los filtros seleccionados</p>
+                  <p className="text-xs">Cambia de mes o ajusta los filtros en el panel lateral.</p>
+                </div>
+              ) : (
+                activeDaysList.map(({ day, items, totalCommitted, totalIncome }) => {
+                  const dayName = WEEKDAY_NAMES[(new Date(selectedYear, selectedMonth, day).getDay() + 6) % 7];
+                  const isQ1 = day <= 15;
+
+                  return (
+                    <div
+                      key={`agenda-day-${day}`}
+                      className="p-3.5 sm:p-4 rounded-3xl bg-card border border-app space-y-3 hover:border-slate-600 transition-all shadow-sm"
+                    >
+                      {/* Day Title & Badges */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-2xl bg-primary-custom/20 text-primary-custom flex flex-col items-center justify-center font-bold">
+                            <span className="text-[9px] uppercase leading-none">{dayName.slice(0, 3)}</span>
+                            <span className="text-sm leading-tight font-black">{day}</span>
+                          </div>
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-bold text-app">
+                              {dayName}, {day} de {monthName}
+                            </h4>
+                            <span className="text-[10px] text-muted font-semibold">
+                              {isQ1 ? '📌 Quincena 15' : '📌 Quincena 30'}
                             </span>
                           </div>
-                        );
-                      })}
+                        </div>
 
-                      {filteredItems.length > 3 && (
-                        <span className="text-[9px] font-extrabold text-muted block text-center">
-                          +{filteredItems.length - 3} más...
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Subtle footer indicator for Quincena milestone */}
-                    {(dayNum === 15 || dayNum === 30) && (
-                      <div className="text-[9px] font-extrabold text-primary-custom uppercase tracking-wider flex items-center justify-center pt-0.5 border-t border-app/40">
-                        Corte Q{dayNum === 15 ? '15' : '30'}
+                        <div className="text-right">
+                          {totalCommitted > 0 && (
+                            <span className="text-xs sm:text-sm font-black text-rose-400 block">
+                              -${totalCommitted.toFixed(2)}
+                            </span>
+                          )}
+                          {totalIncome > 0 && (
+                            <span className="text-xs sm:text-sm font-black text-emerald-400 block">
+                              +${totalIncome.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {/* Items List */}
+                      <div className="space-y-1.5 pt-1 border-t border-app">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 text-xs ${
+                              item.isPaid
+                                ? 'bg-emerald-500/10 border-emerald-500/30'
+                                : 'bg-surface border-app'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                                  item.type === 'income'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : item.type === 'saving'
+                                    ? 'bg-cyan-500/20 text-cyan-400'
+                                    : item.type === 'debt'
+                                    ? 'bg-orange-500/20 text-orange-400'
+                                    : 'bg-indigo-500/20 text-indigo-400'
+                                }`}
+                              >
+                                {item.type === 'income' ? (
+                                  <Briefcase className="w-3.5 h-3.5" />
+                                ) : item.type === 'saving' ? (
+                                  <PiggyBank className="w-3.5 h-3.5" />
+                                ) : item.type === 'debt' ? (
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Receipt className="w-3.5 h-3.5" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-app truncate">{item.title}</span>
+                                  {item.isPaid && (
+                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                      ✓ Pagado
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-muted truncate block">{item.subtitle}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="font-black text-app">
+                                {item.type === 'income' ? '+' : '-'}${item.amount.toFixed(2)}
+                              </span>
+
+                              {item.type === 'fixed_expense' && item.rawExpense && (
+                                <button
+                                  onClick={() => handleToggleExpensePaid(item.rawExpense!, item.isPaid)}
+                                  className={`px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                                    item.isPaid
+                                      ? 'bg-emerald-500/20 text-emerald-300'
+                                      : 'bg-primary-custom text-white hover:opacity-90'
+                                  }`}
+                                >
+                                  {item.isPaid ? '✓' : 'Pagar'}
+                                </button>
+                              )}
+
+                              {item.type === 'debt' && onOpenQuickPayment && (
+                                <button
+                                  onClick={() => onOpenQuickPayment(item.rawDebt?.id)}
+                                  className="px-2 py-1 rounded-xl bg-orange-500/20 text-orange-400 text-[10px] font-bold transition-all cursor-pointer"
+                                >
+                                  Abonar
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Monthly Planning Sidebar (3 Columns on large screens) */}
+        {/* Monthly Planning Sidebar */}
         <div className="lg:col-span-4 xl:col-span-3">
           <CalendarMonthlySidebar
             year={selectedYear}
