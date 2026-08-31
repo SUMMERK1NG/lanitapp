@@ -152,6 +152,7 @@ export interface FixedExpense {
   default_quincena?: number | null;
   quincena?: number | null;
   category_id: string;
+  due_day?: number; // Día del mes (1-31) asignado para el pago
   is_active: boolean; // default status
   assumed_by_third_party?: boolean;
   notes?: string;
@@ -222,6 +223,7 @@ export interface Debt {
   has_late_fee?: boolean;
   late_fee_amount?: number; // Penalización por cuota vencida o no pagada (ej. Cashea $4)
   due_date?: string;
+  due_day?: number; // Día del mes (1-31) asignado para el pago/vencimiento
   status: 'active' | 'paid';
   priority?: 'low' | 'medium' | 'high' | string;
   notes?: string;
@@ -330,4 +332,26 @@ export interface FortnightItemState {
   updated_at?: string;
   sync_status?: SyncStatus;
 }
+
+export interface PlanningTask {
+  id: string;
+  text: string;
+  completed: boolean;
+  due_day?: number;
+  priority?: 'low' | 'medium' | 'high';
+  created_at?: string;
+}
+
+export interface PlanningNote {
+  id: string; // `${user_id}_${year}_${month}`
+  user_id?: string;
+  year: number;
+  month: number; // 0-11
+  notes: string;
+  tasks: PlanningTask[];
+  sync_status?: SyncStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
 

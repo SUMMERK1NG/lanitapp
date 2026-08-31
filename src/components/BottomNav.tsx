@@ -233,7 +233,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <span className="text-[9px] mt-1 font-semibold">Inicio</span>
           </button>
 
-          {/* 2. Quincenas Tab */}
+          {/* 2. Planificación Tab */}
           <button
             onClick={() => onChangeView('fortnight')}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
@@ -243,7 +243,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             }`}
           >
             <Calendar className="w-5 h-5" />
-            <span className="text-[9px] mt-1 font-semibold">Quincenas</span>
+            <span className="text-[9px] mt-1 font-semibold">Planificación</span>
           </button>
 
           {/* 3. Botón Central Prominente (+) */}

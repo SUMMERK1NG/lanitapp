@@ -41,7 +41,7 @@ import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
 import { TransactionHistoryModule } from './components/TransactionHistoryModule.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
-import { FortnightPlanner } from './components/FortnightPlanner.tsx';
+import { PlanningModule } from './components/planning/PlanningModule.tsx';
 import { FixedExpensesModule } from './components/FixedExpensesModule.tsx';
 import { DebtManagementModule } from './components/DebtManagementModule.tsx';
 import { SavingsModule } from './components/SavingsModule.tsx';
@@ -265,7 +265,7 @@ export function App() {
 
   const viewTitles: Record<ActiveViewType, string> = {
     dashboard: 'Dashboard General',
-    fortnight: 'Plan Quincenal',
+    fortnight: 'Planificación',
     incomes: 'Gestión de Ingresos',
     fixed_expenses: 'Gastos Fijos',
     debts: 'Control de Deudas',
@@ -384,10 +384,10 @@ export function App() {
             />
           )}
 
-          {/* VIEW 2: PLANIFICACIÓN POR QUINCENAS (15 / 30) */}
+          {/* VIEW 2: PLANIFICACIÓN INTEGRAL (GESTIÓN QUINCENAL & CALENDARIO) */}
           {activeView === 'fortnight' && (
             <div className="animate-in fade-in duration-200">
-              <FortnightPlanner
+              <PlanningModule
                 selectedYear={selectedYear}
                 selectedMonth={selectedMonth}
                 onChangePeriod={(y, m) => {
@@ -409,6 +409,7 @@ export function App() {
                 rates={rates}
                 userEmail={currentUser?.email}
                 userName={currentUser?.name}
+                userId={activeUserId}
                 onOpenQuickPayment={handleOpenPaymentModal}
                 onNavigateToIncomes={() => setActiveView('incomes')}
                 onNavigateToSavings={() => setActiveView('savings')}

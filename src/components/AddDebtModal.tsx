@@ -190,6 +190,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
   // 7. Quincena Habitual para Abonar
   const [fortnightDue, setFortnightDue] = useState<'q1' | 'q2' | 'both'>(editingDebt?.fortnight_due || 'q1');
+  const [dueDay, setDueDay] = useState<string>(editingDebt?.due_day ? editingDebt.due_day.toString() : '');
 
   // 8. Notas
   const [notes, setNotes] = useState<string>(editingDebt?.notes || initialNotes || '');
@@ -250,6 +251,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setInterestAmount(editingDebt.interest_amount?.toString() || '0');
       setInterestFrequency(editingDebt.interest_frequency || 'monthly');
       setInterestFortnight(editingDebt.interest_fortnight || 'q2');
+      setDueDay(editingDebt.due_day ? editingDebt.due_day.toString() : '');
       setNotes(editingDebt.notes || '');
     } else if (isOpen) {
       const mode = initialDebtMode || 'installments';
@@ -282,6 +284,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       setInterestAmount('0');
       setInterestFrequency('monthly');
       setInterestFortnight('q2');
+      setDueDay('');
       setNotes(initialNotes || '');
     }
   }, [editingDebt, isOpen, initialAmount, initialCreditor, initialDebtMode, initialPlatform, initialStartYear, initialStartMonth, initialStartFortnight, initialNotes, categories]);
@@ -368,6 +371,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
         pending_installments: pendingInstNum,
         installment_amount: debtMode === 'installments' ? installmentAmount || (Math.max(0, numTotal - initialPayment) / (totalInstNum || 1)) : undefined,
         fortnight_due: fortnightDue,
+        due_day: dueDay ? parseInt(dueDay, 10) : undefined,
         start_year: selectedStartOpt.year,
         start_month: selectedStartOpt.month,
         start_fortnight: selectedStartOpt.fortnight,
@@ -796,30 +800,54 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
             )}
           </div>
 
-          {/* 7. Quincena Habitual para Abonar */}
-          <div>
-            <label className="block text-xs font-semibold text-muted mb-1">
-              Quincena Habitual para Abonar
-            </label>
-            <div className="grid grid-cols-3 gap-2 p-1 bg-card rounded-2xl border border-app">
-              {[
-                { id: 'q1', label: 'Quincena 15' },
-                { id: 'q2', label: 'Quincena 30' },
-                { id: 'both', label: 'Ambas (15 y 30)' },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setFortnightDue(opt.id as any)}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
-                    fortnightDue === opt.id
-                      ? 'bg-primary-custom text-white shadow-sm'
-                      : 'text-muted hover:text-app'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          {/* 7. Día del Mes y Quincena Habitual para Abonar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted mb-1">
+                Día de Corte / Pago (1-31)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={dueDay}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDueDay(val);
+                  const num = parseInt(val, 10);
+                  if (!isNaN(num) && num >= 1 && num <= 31) {
+                    setFortnightDue(num <= 15 ? 'q1' : 'q2');
+                  }
+                }}
+                placeholder="Ej. 12, 18, 25..."
+                className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs font-bold text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted mb-1">
+                Quincena Habitual
+              </label>
+              <div className="grid grid-cols-3 gap-1 p-1 bg-card rounded-xl border border-app">
+                {[
+                  { id: 'q1', label: 'Q15' },
+                  { id: 'q2', label: 'Q30' },
+                  { id: 'both', label: 'Ambas' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setFortnightDue(opt.id as any)}
+                    className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all text-center cursor-pointer ${
+                      fortnightDue === opt.id
+                        ? 'bg-primary-custom text-white shadow-sm'
+                        : 'text-muted hover:text-app'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

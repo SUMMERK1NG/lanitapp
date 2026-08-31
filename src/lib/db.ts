@@ -18,6 +18,8 @@ import type {
   FortnightType,
   FortnightItemState,
   SyncStatus,
+  PlanningNote,
+  PlanningTask,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
 import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
@@ -117,6 +119,7 @@ export class LanitappDatabase extends Dexie {
   saving_contributions!: Table<SavingContribution, string>;
   user_profiles!: Table<UserProfile, string>;
   fortnight_item_states!: Table<FortnightItemState, string>;
+  planning_notes!: Table<PlanningNote, string>;
 
   constructor() {
     super('lanitapp_db');
@@ -136,6 +139,10 @@ export class LanitappDatabase extends Dexie {
       saving_contributions: 'id, user_id, goal_id, year, month, fortnight, is_skipped, sync_status',
       user_profiles: 'id, cedula, email, role, is_active, sync_status',
       fortnight_item_states: 'id, user_id, item_id, item_type, period_key, year, month, fortnight, status, sync_status',
+    });
+
+    this.version(11).stores({
+      planning_notes: 'id, user_id, year, month, sync_status',
     });
 
     this.on('populate', async () => {
@@ -1866,6 +1873,7 @@ export async function saveFixedExpense(
     currency: expense.currency || 'USD',
     payment_mode: expense.payment_mode || 'ves_bcv',
     default_fortnight: expense.default_fortnight,
+    due_day: expense.due_day !== undefined ? Number(expense.due_day) : undefined,
     category_id: resolveCategoryCodeToUuid(expense.category_id || 'cat_services'),
     is_active: expense.is_active !== undefined ? expense.is_active : true,
     assumed_by_third_party: expense.assumed_by_third_party || false,
@@ -1945,6 +1953,7 @@ export async function saveDebt(
     interest_frequency: debt.interest_frequency,
     interest_fortnight: debt.interest_fortnight,
     due_date: debt.due_date,
+    due_day: debt.due_day !== undefined ? Number(debt.due_day) : undefined,
     status,
     notes: debt.notes || '',
     sync_status: 'pending',
@@ -2504,4 +2513,148 @@ export async function unmarkSavingContribution(contributionId: string): Promise<
     }
   }
 }
+
+// -------------------------------------------------------------
+// Planning Notes & Tasks (Calendario & Gestión Mensual)
+// -------------------------------------------------------------
+
+export async function savePlanningNote(data: {
+  year: number;
+  month: number;
+  notes?: string;
+  tasks?: PlanningTask[];
+  user_id?: string;
+}): Promise<PlanningNote> {
+  const userId = data.user_id || getActiveUserId();
+  const id = `pn_${userId}_${data.year}_${data.month}`;
+  const existing = await db.planning_notes.get(id);
+
+  const record: PlanningNote = {
+    id,
+    user_id: userId,
+    year: data.year,
+    month: data.month,
+    notes: data.notes !== undefined ? data.notes : existing?.notes || '',
+    tasks: data.tasks !== undefined ? data.tasks : existing?.tasks || [],
+    sync_status: 'pending',
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  await db.planning_notes.put(record);
+
+  if (navigator.onLine && isSupabaseConfigured() && supabase) {
+    try {
+      const { sync_status, ...payload } = record;
+      const { error } = await supabase.from('planning_notes').upsert(payload);
+      if (!error) {
+        record.sync_status = 'synced';
+        await db.planning_notes.put(record);
+      }
+    } catch {
+      // Fallback si la tabla no está en Supabase todavía
+    }
+  }
+
+  return record;
+}
+
+export async function addPlanningTask(data: {
+  year: number;
+  month: number;
+  text: string;
+  due_day?: number;
+  priority?: 'low' | 'medium' | 'high';
+  user_id?: string;
+}): Promise<PlanningTask> {
+  const userId = data.user_id || getActiveUserId();
+  const id = `pn_${userId}_${data.year}_${data.month}`;
+  const existing = await db.planning_notes.get(id);
+
+  const newTask: PlanningTask = {
+    id: generateUuid(),
+    text: data.text.trim(),
+    completed: false,
+    due_day: data.due_day,
+    priority: data.priority || 'medium',
+    created_at: new Date().toISOString(),
+  };
+
+  const tasks = [...(existing?.tasks || []), newTask];
+  await savePlanningNote({
+    year: data.year,
+    month: data.month,
+    tasks,
+    notes: existing?.notes || '',
+    user_id: userId,
+  });
+
+  return newTask;
+}
+
+export async function togglePlanningTask(data: {
+  year: number;
+  month: number;
+  taskId: string;
+  user_id?: string;
+}): Promise<void> {
+  const userId = data.user_id || getActiveUserId();
+  const id = `pn_${userId}_${data.year}_${data.month}`;
+  const existing = await db.planning_notes.get(id);
+  if (!existing || !existing.tasks) return;
+
+  const tasks = existing.tasks.map((t) =>
+    t.id === data.taskId ? { ...t, completed: !t.completed } : t
+  );
+
+  await savePlanningNote({
+    year: data.year,
+    month: data.month,
+    tasks,
+    notes: existing.notes || '',
+    user_id: userId,
+  });
+}
+
+export async function deletePlanningTask(data: {
+  year: number;
+  month: number;
+  taskId: string;
+  user_id?: string;
+}): Promise<void> {
+  const userId = data.user_id || getActiveUserId();
+  const id = `pn_${userId}_${data.year}_${data.month}`;
+  const existing = await db.planning_notes.get(id);
+  if (!existing || !existing.tasks) return;
+
+  const tasks = existing.tasks.filter((t) => t.id !== data.taskId);
+
+  await savePlanningNote({
+    year: data.year,
+    month: data.month,
+    tasks,
+    notes: existing.notes || '',
+    user_id: userId,
+  });
+}
+
+export async function updatePlanningNotesText(data: {
+  year: number;
+  month: number;
+  notes: string;
+  user_id?: string;
+}): Promise<void> {
+  const userId = data.user_id || getActiveUserId();
+  const id = `pn_${userId}_${data.year}_${data.month}`;
+  const existing = await db.planning_notes.get(id);
+
+  await savePlanningNote({
+    year: data.year,
+    month: data.month,
+    notes: data.notes,
+    tasks: existing?.tasks || [],
+    user_id: userId,
+  });
+}
+
 

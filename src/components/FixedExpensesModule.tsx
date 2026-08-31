@@ -134,6 +134,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   const [fixedAmount, setFixedAmount] = useState<number>(0);
   const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('ves_bcv');
   const [fixedFortnight, setFixedFortnight] = useState<'q1' | 'q2' | 'both'>('q1');
+  const [fixedDueDay, setFixedDueDay] = useState<string>('');
   const [fixedCategoryId, setFixedCategoryId] = useState<string>('cat_services');
   const [fixedNotes, setNotes] = useState<string>('');
   const [isFixedCategoryDropdownOpen, setIsFixedCategoryDropdownOpen] = useState<boolean>(false);
@@ -263,6 +264,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
       setFixedAmount(expense.original_amount !== undefined ? expense.original_amount : expense.amount);
       setFixedPaymentMode(expense.payment_mode || 'ves_bcv');
       setFixedFortnight(expense.default_fortnight || 'q1');
+      setFixedDueDay(expense.due_day ? expense.due_day.toString() : '');
       setFixedCategoryId(expense.category_id || 'cat_services');
       setNotes(expense.notes || '');
     } else {
@@ -271,6 +273,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
       setFixedAmount(0);
       setFixedPaymentMode('ves_bcv');
       setFixedFortnight('q1');
+      setFixedDueDay('');
       setFixedCategoryId('cat_services');
       setNotes('');
     }
@@ -302,6 +305,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
       currency: derivedCurrency,
       payment_mode: fixedPaymentMode,
       default_fortnight: fixedFortnight,
+      due_day: fixedDueDay ? parseInt(fixedDueDay, 10) : undefined,
       category_id: fixedCategoryId,
       is_active: editingFixed ? editingFixed.is_active : true,
       notes: fixedNotes.trim(),
@@ -834,30 +838,54 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                 </div>
               </div>
 
-              {/* Quincena Habitual */}
-              <div>
-                <label className="block text-xs font-bold text-muted mb-1">
-                  Quincena de Pago
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'q1' as const, label: 'Quincena 15' },
-                    { id: 'q2' as const, label: 'Quincena 30' },
-                    { id: 'both' as const, label: 'Ambas (15 y 30)' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setFixedFortnight(item.id)}
-                      className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        fixedFortnight === item.id
-                          ? 'bg-primary-custom text-white border-primary-custom shadow-md'
-                          : 'bg-card text-muted border-app hover:text-app'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+              {/* Día de Pago y Quincena */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1">
+                    Día del Mes (1-31)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={fixedDueDay}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFixedDueDay(val);
+                      const num = parseInt(val, 10);
+                      if (!isNaN(num) && num >= 1 && num <= 31) {
+                        setFixedFortnight(num <= 15 ? 'q1' : 'q2');
+                      }
+                    }}
+                    placeholder="Ej. 8, 15, 20..."
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs font-bold text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-muted mb-1">
+                    Quincena de Pago
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { id: 'q1' as const, label: 'Q15' },
+                      { id: 'q2' as const, label: 'Q30' },
+                      { id: 'both' as const, label: 'Ambas' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setFixedFortnight(item.id)}
+                        className={`p-2 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                          fixedFortnight === item.id
+                            ? 'bg-primary-custom text-white border-primary-custom shadow-md'
+                            : 'bg-card text-muted border-app hover:text-app'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const baseMenuItems = [
     { id: 'dashboard' as const, label: 'Dashboard General', icon: LayoutDashboard },
-    { id: 'fortnight' as const, label: 'Plan Quincenal', icon: Calendar },
+    { id: 'fortnight' as const, label: 'Planificación', icon: Calendar },
     { id: 'incomes' as const, label: 'Gestión de Ingresos', icon: Briefcase },
     { id: 'fixed_expenses' as const, label: 'Gastos Fijos', icon: Receipt },
     { id: 'debts' as const, label: 'Control de Deudas', icon: CreditCard },
