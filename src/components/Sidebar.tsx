@@ -13,8 +13,6 @@ import {
   PiggyBank,
   Wallet,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react';
 import type { ExchangeRatesData } from '../types/index.ts';
 
@@ -56,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   rates,
   isAdmin = true,
   isCollapsed = false,
-  onToggleCollapse,
+  onToggleCollapse: _onToggleCollapse,
   onSync,
   onOpenConverter,
   onSignOut,
@@ -85,57 +83,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isCollapsed ? 'w-20 p-2.5' : 'w-64 p-4'
       } bg-surface border-r border-app h-screen sticky top-0 flex flex-col justify-between shrink-0 overflow-y-auto no-scrollbar transition-all duration-300 ease-in-out select-none`}
     >
-      {/* Brand Header con Logotipo Oficial & Toggle Button */}
+      {/* Brand Header con Logotipo Oficial */}
       <div className="space-y-4">
         {/* App Logo & Header */}
         <div
           className={`flex items-center ${
-            isCollapsed ? 'flex-col gap-2 py-2' : 'justify-between px-2 py-3'
+            isCollapsed ? 'justify-center py-2' : 'gap-3 px-2 py-3'
           }`}
         >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 flex items-center justify-center shrink-0">
-              <img
-                src="/icon.png"
-                alt="Lanitapp Icon"
-                className="w-full h-full object-contain drop-shadow-sm"
-              />
-            </div>
-            {!isCollapsed && (
-              <div className="flex flex-col truncate">
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-black text-white tracking-wider truncate">
-                    LANITAPP
-                  </span>
-                  {isAdmin && (
-                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/40 text-orange-400 shrink-0">
-                      ADMIN
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] text-slate-400 font-medium truncate">
-                  Control de Gastos
-                </span>
-              </div>
-            )}
+          <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <img
+              src="/icon.png"
+              alt="Lanitapp Icon"
+              className="w-full h-full object-contain drop-shadow-sm"
+            />
           </div>
-
-          {/* Toggle Collapse/Expand Button */}
-          {onToggleCollapse && (
-            <button
-              onClick={onToggleCollapse}
-              className={`p-1.5 rounded-xl text-muted hover:text-app hover:bg-surface-hover transition-colors cursor-pointer shrink-0 ${
-                isCollapsed ? 'mt-1' : ''
-              }`}
-              title={isCollapsed ? 'Expandir barra lateral' : 'Ocultar barra lateral'}
-              aria-label={isCollapsed ? 'Expandir barra lateral' : 'Ocultar barra lateral'}
-            >
-              {isCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4 text-primary-custom" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4" />
-              )}
-            </button>
+          {!isCollapsed && (
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-black text-white tracking-wider">
+                  LANITAPP
+                </span>
+                {isAdmin && (
+                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/40 text-orange-400 shrink-0">
+                    ADMIN
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
+                Control de Gastos
+              </span>
+            </div>
           )}
         </div>
 
