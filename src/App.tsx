@@ -73,31 +73,18 @@ const AVAILABLE_VIEWS: ActiveViewType[] = [
   'settings',
 ];
 
-const LAST_VIEW_STORAGE_KEY = 'lanitapp_last_view';
-
 export function App() {
-  const [activeView, setActiveView] = useState<ActiveViewType>(() => {
-    try {
-      const saved = localStorage.getItem(LAST_VIEW_STORAGE_KEY);
-      if (saved && AVAILABLE_VIEWS.includes(saved as ActiveViewType)) {
-        return saved as ActiveViewType;
-      }
-    } catch {
-      // ignore
-    }
-    return 'dashboard';
-  });
+  const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
 
   const handleViewChange = async (newView: ActiveViewType) => {
     setActiveView(newView);
-    try {
-      localStorage.setItem(LAST_VIEW_STORAGE_KEY, newView);
-    } catch {
-      // ignore
-    }
     if (currentUser?.id) {
-      updateProfile({ last_active_view: newView });
-      await updatePreference(currentUser.id, 'last_active_view', newView);
+      try {
+        updateProfile({ last_active_view: newView });
+        await updatePreference(currentUser.id, 'last_active_view', newView);
+      } catch (error) {
+        console.error('Error guardando última vista en Supabase:', error);
+      }
     }
   };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -133,6 +120,13 @@ export function App() {
     signOut,
     updateProfile,
   } = useAuth();
+
+  // Sincronizar vista activa cuando el perfil del usuario esté disponible
+  useEffect(() => {
+    if (currentUser?.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
+      setActiveView(currentUser.last_active_view as ActiveViewType);
+    }
+  }, [currentUser?.last_active_view]);
 
   // Selected period state (Month: 0-11, Year)
   const now = new Date();
