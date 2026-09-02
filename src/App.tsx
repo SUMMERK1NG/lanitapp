@@ -55,7 +55,8 @@ import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
 import { AuditPanel } from './components/AuditPanel.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
-import { TrendingUp, RefreshCw, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
+import { LoadingScreen } from './components/LoadingScreen.tsx';
+import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 
 export function App() {
@@ -389,18 +390,13 @@ export function App() {
     settings: 'Configuración & Backup',
   };
 
-  // Auth & Cloud Data Initial Loading Screen
+  // Auth & Cloud Data Initial Loading Screen (Frases Motivacionales & Control Financiero)
   if (authLoading || (isAuthenticated && currentUser && isCloudLoading)) {
     return (
-      <div className="min-h-screen w-full bg-[#0B132B] flex flex-col items-center justify-center p-4 text-white">
-        <div className="h-16 w-16 flex items-center justify-center mb-4 drop-shadow-md animate-pulse">
-          <img src="/icon.png" alt="LANITAPP" className="h-full w-full object-contain" />
-        </div>
-        <p className="text-sm font-bold text-slate-300 flex items-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin text-[#147DF0]" />
-          {authLoading ? 'Iniciando LANITAPP...' : 'Sincronizando con Supabase Cloud...'}
-        </p>
-      </div>
+      <LoadingScreen
+        initialMessage={authLoading ? 'Iniciando LANITAPP...' : undefined}
+        initialSubtext={authLoading ? 'Bienvenido de vuelta 👋' : undefined}
+      />
     );
   }
 
