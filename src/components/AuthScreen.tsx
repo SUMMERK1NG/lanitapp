@@ -51,8 +51,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   });
 
-  console.log('[Login] keepConnected estado:', keepConnected);
-
   // Register form fields
   const [regPrefix, setRegPrefix] = useState<string>('V');
   const [regFirstName, setRegFirstName] = useState<string>('');

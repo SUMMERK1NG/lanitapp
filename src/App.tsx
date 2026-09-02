@@ -178,7 +178,6 @@ export function App() {
   // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keepConnected)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
-  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
   const [keepConnected, setKeepConnected] = useState<boolean>(() => {
     try {
       return (
@@ -202,30 +201,23 @@ export function App() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  console.log('[App] keepConnected:', keepConnected);
-  console.log('[App] user:', currentUser ? 'Autenticado' : 'No autenticado');
-  console.log('[App] isEnabled para timeout:', Boolean(currentUser && !keepConnected));
-
   const handleSessionTimeout = useCallback(async () => {
-    console.log('[App] handleSessionTimeout llamado');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
     await signOut();
   }, [signOut]);
 
   const handleTimeoutWarning = useCallback((seconds: number) => {
-    console.log('[App] handleTimeoutWarning llamado - seconds:', seconds);
     setShowTimeoutWarning(true);
     setRemainingSeconds(seconds);
   }, []);
 
   const handleClearWarning = useCallback(() => {
-    console.log('[App] handleClearWarning llamado');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
   }, []);
 
-  const { resetTimers, getTimerStatus } = useSessionTimeout({
+  const { resetTimers } = useSessionTimeout({
     isEnabled: Boolean(currentUser && !keepConnected),
     onTimeout: handleSessionTimeout,
     onWarning: handleTimeoutWarning,
@@ -233,7 +225,6 @@ export function App() {
   });
 
   const extendSession = useCallback(() => {
-    console.log('[App] extendSession llamado por el usuario');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
     resetTimers();
@@ -901,100 +892,6 @@ export function App() {
             <p className="text-[10px] text-muted text-center leading-relaxed">
               💡 Tip: Marca &quot;Mantenerme conectado&quot; en el login para evitar este mensaje en futuras sesiones.
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* BOTÓN FLOTANTE Y PANEL DE DEBUG DE TIMEOUT */}
-      {currentUser && (
-        <button
-          onClick={() => setShowDebugInfo((prev) => !prev)}
-          className="fixed bottom-20 right-4 z-40 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-amber-400 border border-amber-500/40 text-xs font-black rounded-2xl shadow-xl backdrop-blur-md cursor-pointer flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
-        >
-          <span>🔍</span>
-          <span>Debug Timeout</span>
-        </button>
-      )}
-
-      {showDebugInfo && currentUser && (
-        <div className="fixed bottom-32 right-4 z-50 p-4 bg-slate-950/95 border border-amber-500/50 rounded-2xl shadow-2xl text-xs space-y-2.5 max-w-xs text-white backdrop-blur-md animate-in fade-in zoom-in-95">
-          <div className="flex items-center justify-between border-b border-white/10 pb-2">
-            <h4 className="font-bold text-amber-400 flex items-center gap-1.5">
-              <span>🔍</span> Debug Session Timeout
-            </h4>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${keepConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-              {keepConnected ? 'Conectado ON' : 'Timeout ACTIVO'}
-            </span>
-          </div>
-
-          <div className="space-y-1 text-slate-300 text-[11px] font-mono leading-relaxed">
-            <p className="flex justify-between">
-              <span className="text-slate-400">isEnabled:</span>
-              <strong className={getTimerStatus().isEnabled ? 'text-emerald-400' : 'text-rose-400'}>
-                {getTimerStatus().isEnabled ? 'true' : 'false'}
-              </strong>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">keepConnected:</span>
-              <strong>{keepConnected ? 'true' : 'false'}</strong>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">Usuario:</span>
-              <span>{currentUser ? 'Autenticado' : 'No autenticado'}</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">hasWarning Timer:</span>
-              <span className={getTimerStatus().hasWarning ? 'text-emerald-400' : 'text-slate-500'}>
-                {getTimerStatus().hasWarning ? 'Activo' : 'Inactivo'}
-              </span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">hasTimeout Timer:</span>
-              <span className={getTimerStatus().hasTimeout ? 'text-emerald-400' : 'text-slate-500'}>
-                {getTimerStatus().hasTimeout ? 'Activo' : 'Inactivo'}
-              </span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">Hora Warning:</span>
-              <span className="text-amber-300">{getTimerStatus().warningTargetTime}</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-400">Hora Cierre:</span>
-              <span className="text-rose-300">{getTimerStatus().timeoutTargetTime}</span>
-            </p>
-            {getTimerStatus().secondsToWarning !== null && (
-              <p className="flex justify-between text-amber-400 font-bold">
-                <span>Faltan para Warning:</span>
-                <span>{getTimerStatus().secondsToWarning}s</span>
-              </p>
-            )}
-          </div>
-
-          <div className="pt-2 border-t border-white/10 space-y-1.5">
-            <button
-              onClick={() => {
-                console.log('[TEST] Forzando advertencia de timeout (120s)');
-                handleTimeoutWarning(120);
-              }}
-              className="w-full py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded-xl cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1"
-            >
-              <span>⚠️</span> Probar Modal (2 min)
-            </button>
-            <button
-              onClick={() => {
-                console.log('[TEST] Forzando timeout inmediatamente');
-                handleSessionTimeout();
-              }}
-              className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold rounded-xl cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1"
-            >
-              <span>🛑</span> Forzar Cierre Sesión
-            </button>
-            <button
-              onClick={() => setShowDebugInfo(false)}
-              className="w-full py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[10px] font-bold cursor-pointer transition-all"
-            >
-              Cerrar Panel
-            </button>
           </div>
         </div>
       )}
