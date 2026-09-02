@@ -259,21 +259,49 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             </div>
 
-            {/* Checkbox Mantenerme Conectado */}
-            <div className="flex items-center gap-2 pt-0.5 pb-1">
-              <input
-                type="checkbox"
-                id="keepConnected"
-                checked={keepConnected}
-                onChange={(e) => {
-                  setKeepConnected(e.target.checked);
-                  localStorage.setItem('lanitapp_keep_connected', e.target.checked ? 'true' : 'false');
-                }}
-                className="w-4 h-4 rounded border-white/20 bg-[#0B132B] text-[#147DF0] focus:ring-[#147DF0] cursor-pointer accent-[#147DF0]"
-              />
-              <label htmlFor="keepConnected" className="text-xs text-slate-300 cursor-pointer select-none">
-                Mantenerme conectado (no cerrar sesión por inactividad)
-              </label>
+            {/* Control Moderno: Mantenerme Conectado (Toggle Switch) */}
+            <div
+              onClick={() => {
+                const nextVal = !keepConnected;
+                setKeepConnected(nextVal);
+                localStorage.setItem('lanitapp_keep_connected', nextVal ? 'true' : 'false');
+              }}
+              className="flex items-center justify-between p-3 rounded-2xl bg-[#0B132B]/80 border border-white/10 hover:border-[#147DF0]/50 transition-all cursor-pointer group select-none shadow-sm"
+              title="Activa esta opción para no cerrar sesión tras 15 minutos de inactividad"
+            >
+              <div className="flex items-center gap-2.5 pr-2">
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                    keepConnected
+                      ? 'bg-[#147DF0]/20 text-[#00C2C7] ring-1 ring-[#147DF0]/40'
+                      : 'bg-white/5 text-slate-400 group-hover:text-slate-200'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-white block cursor-pointer">
+                    Mantenerme conectado
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    No cerrar sesión por inactividad
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`w-11 h-6 rounded-full transition-all relative shrink-0 p-0.5 ${
+                  keepConnected
+                    ? 'bg-gradient-to-r from-[#147DF0] to-[#00C2C7] shadow-md shadow-[#147DF0]/30'
+                    : 'bg-white/15 border border-white/10'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 transform ${
+                    keepConnected ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </div>
             </div>
 
             <button
