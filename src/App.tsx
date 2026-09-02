@@ -59,8 +59,42 @@ import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 
+const AVAILABLE_VIEWS: ActiveViewType[] = [
+  'dashboard',
+  'fortnight',
+  'incomes',
+  'fixed_expenses',
+  'debts',
+  'savings',
+  'accounts',
+  'transactions',
+  'rates',
+  'settings',
+];
+
+const LAST_VIEW_STORAGE_KEY = 'lanitapp_last_view';
+
 export function App() {
-  const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
+  const [activeView, setActiveView] = useState<ActiveViewType>(() => {
+    try {
+      const saved = localStorage.getItem(LAST_VIEW_STORAGE_KEY);
+      if (saved && AVAILABLE_VIEWS.includes(saved as ActiveViewType)) {
+        return saved as ActiveViewType;
+      }
+    } catch {
+      // ignore
+    }
+    return 'dashboard';
+  });
+
+  const handleViewChange = (newView: ActiveViewType) => {
+    setActiveView(newView);
+    try {
+      localStorage.setItem(LAST_VIEW_STORAGE_KEY, newView);
+    } catch {
+      // ignore
+    }
+  };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('lanitapp_sidebar_collapsed') === 'true';
@@ -233,7 +267,7 @@ export function App() {
 
   const handleNavigateToSettings = (tab: 'themes' | 'categories' | 'users' | 'backup' = 'themes') => {
     setSettingsInitialTab(tab);
-    setActiveView('settings');
+    handleViewChange('settings');
   };
 
   // Detect Password Recovery URL / Events
@@ -428,7 +462,7 @@ export function App() {
       <div className="hidden lg:block shrink-0">
         <Sidebar
           activeView={activeView}
-          onChangeView={setActiveView}
+          onChangeView={handleViewChange}
           isOnline={isOnline}
           isSyncing={isSyncing}
           pendingCount={pendingCount}
@@ -496,7 +530,7 @@ export function App() {
               savingsGoals={savingsGoals}
               savingContributions={savingContributions}
               rates={rates}
-              onNavigate={setActiveView}
+              onNavigate={handleViewChange}
               userCreatedAt={currentUser?.created_at}
             />
           )}
@@ -528,10 +562,10 @@ export function App() {
                 userName={currentUser?.name}
                 userId={activeUserId}
                 onOpenQuickPayment={handleOpenPaymentModal}
-                onNavigateToIncomes={() => setActiveView('incomes')}
-                onNavigateToSavings={() => setActiveView('savings')}
-                onNavigateToDebts={() => setActiveView('debts')}
-                onNavigateToFixedExpenses={() => setActiveView('fixed_expenses')}
+                onNavigateToIncomes={() => handleViewChange('incomes')}
+                onNavigateToSavings={() => handleViewChange('savings')}
+                onNavigateToDebts={() => handleViewChange('debts')}
+                onNavigateToFixedExpenses={() => handleViewChange('fixed_expenses')}
               />
             </div>
           )}
@@ -895,7 +929,7 @@ export function App() {
       {/* Mobile-First Fixed Bottom Navigation Bar */}
       <BottomNav
         activeView={activeView}
-        onChangeView={setActiveView}
+        onChangeView={handleViewChange}
         onOpenQuickAction={() => setIsQuickActionOpen(true)}
         onOpenConverter={() => setIsConverterOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
