@@ -54,6 +54,8 @@ export function useAuth() {
                 currency: profileData.currency || 'USD',
                 theme_mode: profileData.theme_mode || 'navy',
                 accent_color: profileData.accent_color || '#147DF0',
+                last_active_view: profileData.last_active_view || 'dashboard',
+                keep_session: profileData.keep_session ?? false,
                 sync_status: 'synced',
                 created_at: profileData.created_at,
                 last_sign_in_at: profileData.last_sign_in_at || profileData.last_login_at || authUser.last_sign_in_at || new Date().toISOString(),
@@ -240,7 +242,8 @@ export function useAuth() {
    */
   const signInWithCedula = async (
     fullCedula: string,
-    password: string
+    password: string,
+    keepConnectedOption?: boolean
   ): Promise<{ success: boolean; error?: string }> => {
     setError(null);
     setLoading(true);
@@ -293,6 +296,7 @@ export function useAuth() {
       if (authData.user) {
         const role: UserRole = profile.role === 'admin' ? 'admin' : 'user';
         const nowIso = new Date().toISOString();
+        const keepSessionVal = keepConnectedOption !== undefined ? keepConnectedOption : (profile.keep_session ?? false);
         const userProfile: UserProfile = {
           id: authData.user.id,
           email: authData.user.email,
@@ -306,6 +310,8 @@ export function useAuth() {
           currency: profile.currency || 'USD',
           theme_mode: profile.theme_mode || 'navy',
           accent_color: profile.accent_color || '#147DF0',
+          last_active_view: profile.last_active_view || 'dashboard',
+          keep_session: keepSessionVal,
           last_sign_in_at: nowIso,
           last_login_at: nowIso,
           sync_status: 'synced',
@@ -330,7 +336,12 @@ export function useAuth() {
           try {
             await supabase
               .from('profiles')
-              .update({ last_sign_in_at: nowIso, last_login_at: nowIso, updated_at: nowIso })
+              .update({
+                last_sign_in_at: nowIso,
+                last_login_at: nowIso,
+                keep_session: keepSessionVal,
+                updated_at: nowIso,
+              })
               .eq('id', authData.user.id);
           } catch (e) {
             console.warn('Could not update last_sign_in_at:', e);
@@ -592,6 +603,8 @@ export function useAuth() {
         if (updates.avatar !== undefined) updatePayload.avatar = updates.avatar;
         if (updates.avatar_url !== undefined) updatePayload.avatar_url = updates.avatar_url;
         if (updates.currency !== undefined) updatePayload.currency = updates.currency;
+        if (updates.last_active_view !== undefined) updatePayload.last_active_view = updates.last_active_view;
+        if (updates.keep_session !== undefined) updatePayload.keep_session = updates.keep_session;
 
         console.log('[Supabase Profiles Update Payload]:', updatePayload);
         const { error } = await supabase

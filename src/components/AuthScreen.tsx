@@ -15,7 +15,7 @@ import {
 import { ForgotPasswordModal } from './ForgotPasswordModal.tsx';
 
 interface AuthScreenProps {
-  onSignIn: (cedula: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  onSignIn: (cedula: string, password: string, keepConnected?: boolean) => Promise<{ success: boolean; error?: string }>;
   onSignUp: (data: {
     firstName: string;
     lastName: string;
@@ -84,7 +84,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     localStorage.setItem('keepConnected', keepConnected ? 'true' : 'false');
     localStorage.setItem('lanitapp_keep_connected', keepConnected ? 'true' : 'false');
-    const res = await onSignIn(fullCedula, loginPassword);
+    const res = await onSignIn(fullCedula, loginPassword, keepConnected);
     setIsSubmitting(false);
 
     if (!res.success && res.error) {

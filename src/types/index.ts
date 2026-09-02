@@ -42,6 +42,8 @@ export interface UserProfile {
   currency: string;
   theme_mode: ThemeMode;
   accent_color: AccentColor;
+  last_active_view?: string;
+  keep_session?: boolean;
   created_at?: string;
   last_sign_in_at?: string;
   last_login_at?: string;

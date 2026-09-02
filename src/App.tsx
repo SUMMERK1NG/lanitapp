@@ -58,6 +58,7 @@ import { DashboardModule } from './components/DashboardModule.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
+import { getUserPreferences, updatePreference } from './lib/profilePreferences.ts';
 
 const AVAILABLE_VIEWS: ActiveViewType[] = [
   'dashboard',
@@ -87,12 +88,16 @@ export function App() {
     return 'dashboard';
   });
 
-  const handleViewChange = (newView: ActiveViewType) => {
+  const handleViewChange = async (newView: ActiveViewType) => {
     setActiveView(newView);
     try {
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, newView);
     } catch {
       // ignore
+    }
+    if (currentUser?.id) {
+      updateProfile({ last_active_view: newView });
+      await updatePreference(currentUser.id, 'last_active_view', newView);
     }
   };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -193,6 +198,77 @@ export function App() {
       setAccentColor(currentUser.accent_color);
     }
   }, [currentUser?.theme_mode, currentUser?.accent_color]);
+
+  // Synchronize all user preferences from Supabase profiles on login or session restore
+  useEffect(() => {
+    if (currentUser?.id) {
+      if (currentUser.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
+        setActiveView(currentUser.last_active_view as ActiveViewType);
+      }
+      if (currentUser.keep_session !== undefined) {
+        setKeepConnected(currentUser.keep_session);
+      }
+
+      // Fetch fresh preferences from profiles in Supabase
+      getUserPreferences(currentUser.id).then((prefs) => {
+        if (prefs) {
+          if (prefs.last_active_view && AVAILABLE_VIEWS.includes(prefs.last_active_view as ActiveViewType)) {
+            setActiveView(prefs.last_active_view as ActiveViewType);
+          }
+          if (prefs.keep_session !== undefined) {
+            setKeepConnected(prefs.keep_session);
+          }
+          if (prefs.theme_mode && prefs.theme_mode !== themeMode) {
+            setThemeMode(prefs.theme_mode as ThemeMode);
+          }
+          if (prefs.accent_color && prefs.accent_color !== accentColor) {
+            setAccentColor(prefs.accent_color as AccentColor);
+          }
+        }
+      });
+    }
+  }, [currentUser?.id]);
+
+  // Realtime subscription for preferences synchronization across multiple devices
+  useEffect(() => {
+    if (!currentUser?.id || !isSupabaseConfigured() || !supabase) return;
+
+    const profileChannel = supabase
+      .channel(`profile-preferences-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (!updated) return;
+
+          if (updated.theme_mode && updated.theme_mode !== themeMode) {
+            setThemeMode(updated.theme_mode as ThemeMode);
+          }
+          if (updated.accent_color && updated.accent_color !== accentColor) {
+            setAccentColor(updated.accent_color as AccentColor);
+          }
+          if (updated.last_active_view && AVAILABLE_VIEWS.includes(updated.last_active_view as ActiveViewType)) {
+            setActiveView(updated.last_active_view as ActiveViewType);
+          }
+          if (updated.keep_session !== undefined) {
+            setKeepConnected(updated.keep_session);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(profileChannel);
+      }
+    };
+  }, [currentUser?.id, themeMode, accentColor]);
 
   // Modals state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
