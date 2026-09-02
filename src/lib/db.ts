@@ -226,63 +226,15 @@ export class LanitappDatabase extends Dexie {
 
 export const db = new LanitappDatabase();
 
-// Ensure initialization on cold start: purge legacy test records and keep clean 0-data baseline
+// Ensure initialization on cold start: ensure default categories exist
 export async function initializeDatabase(): Promise<void> {
   try {
-    const legacyDebtIds = ['debt_cashea', 'debt_laptop', 'debt_creditotal'];
-    const legacyFixedIncomeIds = ['fi_salary_q1', 'fi_salary_q2', 'fi_tickets_q1'];
-    const legacyFixedExpenseIds = [
-      'fe_rent',
-      'fe_condo',
-      'fe_groceries_q1',
-      'fe_groceries_q2',
-      'fe_internet',
-      'fe_phone',
-      'fe_services',
-      'fe_stream',
-    ];
-    const legacyGoalIds = ['save_emergency', 'save_laptop'];
-    const legacyVarIncomeIds = ['vi_plus_1', 'vi_guard_1', 'vi_freelance_1'];
-
-    await db.debts.bulkDelete(legacyDebtIds);
-    await db.fixed_incomes.bulkDelete(legacyFixedIncomeIds);
-    await db.fixed_expenses.bulkDelete(legacyFixedExpenseIds);
-    await db.savings_goals.bulkDelete(legacyGoalIds);
-    await db.variable_incomes.bulkDelete(legacyVarIncomeIds);
-
-    const allTx = await db.transactions.toArray();
-    const legacyTxIds = allTx
-      .filter((t) => t.id.startsWith('tx_sample_') || t.user_id === 'usr_admin')
-      .map((t) => t.id);
-    if (legacyTxIds.length > 0) {
-      await db.transactions.bulkDelete(legacyTxIds);
-    }
-
-    const legacyAccountIds = [
-      'acc_cash',
-      'acc_bank_usd',
-      'acc_bank_ves',
-      'acc_savings',
-      '11111111-1111-4111-8111-111111111111',
-      '22222222-2222-4222-8222-222222222222',
-      '33333333-3333-4333-8333-333333333333',
-      '44444444-4444-4444-8444-444444444444',
-    ];
-    await db.accounts.bulkDelete(legacyAccountIds);
-
-    const unassignedAccounts = (await db.accounts.toArray())
-      .filter((a) => !a.user_id || legacyAccountIds.includes(a.id))
-      .map((a) => a.id);
-    if (unassignedAccounts.length > 0) {
-      await db.accounts.bulkDelete(unassignedAccounts);
-    }
-
     const categoriesCount = await db.categories.count();
     if (categoriesCount === 0) {
       await db.categories.bulkPut(DEFAULT_CATEGORIES);
     }
   } catch (err) {
-    console.error('Database init / purge error:', err);
+    console.error('Database init error:', err);
   }
 }
 
@@ -384,77 +336,13 @@ export async function migrateLocalDataToCloud(userId: string): Promise<void> {
   if (!userId || !isSupabaseConfigured() || !supabase || !navigator.onLine) return;
 
   try {
-    // 1. Verificar llaves previas en localStorage
-    const localAccounts = JSON.parse(localStorage.getItem('lanita_accounts') || localStorage.getItem('lanitapp_accounts') || '[]');
-    const localFixedExpenses = JSON.parse(localStorage.getItem('lanita_fixed_expenses') || localStorage.getItem('lanitapp_fixed_expenses') || '[]');
-    const localDebts = JSON.parse(localStorage.getItem('lanita_debts') || localStorage.getItem('lanitapp_debts') || '[]');
-    const localIncomes = JSON.parse(localStorage.getItem('lanita_incomes') || localStorage.getItem('lanitapp_incomes') || '[]');
-    const localTxs = JSON.parse(localStorage.getItem('lanita_transactions') || localStorage.getItem('lanitapp_transactions') || '[]');
-
-    if (Array.isArray(localAccounts) && localAccounts.length > 0) {
-      for (const a of localAccounts) {
-        await upsertAccountToSupabase(toSupabaseAccountPayload(a, userId));
-      }
-      localStorage.removeItem('lanita_accounts');
-      localStorage.removeItem('lanitapp_accounts');
-    }
-    if (Array.isArray(localFixedExpenses) && localFixedExpenses.length > 0) {
-      const sanitized = localFixedExpenses.map((f: any) => {
-        const { sync_status, isEditing, ...rest } = f;
-        return { ...rest, user_id: userId, amount: Number(f.amount || 0) };
-      });
-      const { error } = await supabase.from('fixed_expenses').upsert(sanitized);
-      if (error) console.error('[Supabase Fixed Expenses Migration Error]:', error.message, error.details);
-      localStorage.removeItem('lanita_fixed_expenses');
-      localStorage.removeItem('lanitapp_fixed_expenses');
-    }
-    if (Array.isArray(localDebts) && localDebts.length > 0) {
-      const sanitized = localDebts.map((d: any) => {
-        const { sync_status, isEditing, currency, creditor, ...rest } = d;
-        return {
-          ...rest,
-          creditor_name: d.creditor || d.creditor_name || d.name || 'Deuda',
-          currency_type: d.currency || d.currency_type || 'USD',
-          user_id: userId,
-          total_amount: Number(d.total_amount || 0),
-          original_amount: Number(d.total_amount || d.original_amount || 0),
-          remaining_amount: Number(d.current_balance || d.remaining_amount || d.total_amount || 0),
-          current_balance: Number(d.current_balance || d.total_amount || 0),
-        };
-      });
-      const { error } = await supabase.from('debts').upsert(sanitized);
-      if (error) console.error('[Supabase Debts Migration Error]:', error.message, error.details);
-      localStorage.removeItem('lanita_debts');
-      localStorage.removeItem('lanitapp_debts');
-    }
-    if (Array.isArray(localIncomes) && localIncomes.length > 0) {
-      const sanitized = localIncomes.map((i: any) => {
-        const { sync_status, isEditing, ...rest } = i;
-        return { ...rest, user_id: userId, amount: Number(i.amount || 0) };
-      });
-      const { error } = await supabase.from('fixed_incomes').upsert(sanitized);
-      if (error) console.error('[Supabase Incomes Migration Error]:', error.message, error.details);
-      localStorage.removeItem('lanita_incomes');
-      localStorage.removeItem('lanitapp_incomes');
-    }
-    if (Array.isArray(localTxs) && localTxs.length > 0) {
-      const sanitized = localTxs.map((t: any) => {
-        const { sync_status, ...rest } = t;
-        return { ...rest, user_id: userId, amount: Number(t.amount || 0) };
-      });
-      const { error } = await supabase.from('transactions').upsert(sanitized);
-      if (error) console.error('[Supabase Transactions Migration Error]:', error.message, error.details);
-      localStorage.removeItem('lanita_transactions');
-      localStorage.removeItem('lanitapp_transactions');
-    }
-
-    // 2. Subir también registros pendientes en Dexie
+    // 1. Subir registros pendientes en Dexie
     await pushPendingLocalRecords(userId);
 
-    // 3. Recargar estado completo directo desde Supabase (prioridad nube)
+    // 2. Recargar estado completo directo desde Supabase (prioridad nube)
     await fetchAndConsolidateUserCloudData(userId);
   } catch (err) {
-    console.error('Error migrating data to cloud:', err);
+    console.error('Error synchronizing local data to cloud:', err);
   }
 }
 
