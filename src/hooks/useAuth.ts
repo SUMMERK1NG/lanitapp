@@ -70,6 +70,13 @@ export function useAuth() {
               if (userProfile.accent_color) {
                 localStorage.setItem('lanitapp_accent_color', userProfile.accent_color);
               }
+              if (typeof document !== 'undefined') {
+                const root = document.documentElement;
+                root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+                root.classList.add(`theme-${userProfile.theme_mode || 'navy'}`);
+                root.style.setProperty('--primary', userProfile.accent_color || '#147DF0');
+                root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
+              }
               setCurrentUser(userProfile);
               setLoading(false);
               return;
@@ -304,6 +311,20 @@ export function useAuth() {
           sync_status: 'synced',
         };
 
+        if (userProfile.theme_mode) {
+          localStorage.setItem('lanitapp_theme_mode', userProfile.theme_mode);
+        }
+        if (userProfile.accent_color) {
+          localStorage.setItem('lanitapp_accent_color', userProfile.accent_color);
+        }
+        if (typeof document !== 'undefined') {
+          const root = document.documentElement;
+          root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+          root.classList.add(`theme-${userProfile.theme_mode || 'navy'}`);
+          root.style.setProperty('--primary', userProfile.accent_color || '#147DF0');
+          root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
+        }
+
         // Update profiles in Supabase
         if (supabase) {
           try {
@@ -535,19 +556,35 @@ export function useAuth() {
       localStorage.setItem('lanitapp_accent_color', updates.accent_color);
     }
 
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      if (updates.theme_mode) {
+        root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+        root.classList.add(`theme-${updates.theme_mode}`);
+      }
+      if (updates.accent_color) {
+        root.style.setProperty('--primary', updates.accent_color);
+        root.style.setProperty('--primary-custom', updates.accent_color);
+      }
+    }
+
     if (isSupabaseConfigured() && supabase && navigator.onLine) {
       try {
-        const updatePayload: any = {
-          email: currentUser.email || `${currentUser.id}@lanitapp.local`,
-          first_name: updated.first_name || updated.name?.split(' ')[0] || '',
-          last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
-          avatar: updated.avatar || '👑',
-          avatar_url: updated.avatar_url || updated.avatar || '👑',
-          theme_mode: updated.theme_mode || 'navy',
-          accent_color: updated.accent_color || '#147DF0',
-          currency: updated.currency || 'USD',
+        const updatePayload: Record<string, any> = {
           updated_at: new Date().toISOString(),
         };
+        if (updates.theme_mode !== undefined) updatePayload.theme_mode = updates.theme_mode;
+        if (updates.accent_color !== undefined) updatePayload.accent_color = updates.accent_color;
+        if (updates.first_name !== undefined) updatePayload.first_name = updates.first_name;
+        if (updates.last_name !== undefined) updatePayload.last_name = updates.last_name;
+        if (updates.name !== undefined) {
+          updatePayload.first_name = updates.first_name || updates.name.split(' ')[0] || '';
+          updatePayload.last_name = updates.last_name || updates.name.split(' ').slice(1).join(' ') || '';
+        }
+        if (updates.avatar !== undefined) updatePayload.avatar = updates.avatar;
+        if (updates.avatar_url !== undefined) updatePayload.avatar_url = updates.avatar_url;
+        if (updates.currency !== undefined) updatePayload.currency = updates.currency;
+
         console.log('[Supabase Profiles Update Payload]:', updatePayload);
         const { error } = await supabase
           .from('profiles')
@@ -556,13 +593,12 @@ export function useAuth() {
 
         if (error) {
           console.warn('[Supabase Profiles Update Notice]:', error.message);
-          const fallback = {
-            first_name: updated.first_name || updated.name?.split(' ')[0] || '',
-            last_name: updated.last_name || updated.name?.split(' ').slice(1).join(' ') || '',
-            avatar: updated.avatar || '👑',
-            updated_at: new Date().toISOString(),
-          };
-          await supabase.from('profiles').update(fallback).eq('id', currentUser.id);
+          if (error.code === '42703' || error.message?.toLowerCase().includes('column')) {
+            const { theme_mode, accent_color, ...safeFallback } = updatePayload;
+            if (Object.keys(safeFallback).length > 1) {
+              await supabase.from('profiles').update(safeFallback).eq('id', currentUser.id);
+            }
+          }
         }
       } catch (e) {
         console.warn('Sync profile err:', e);

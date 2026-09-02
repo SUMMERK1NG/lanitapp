@@ -102,17 +102,17 @@ export function App() {
   const { themeMode, accentColor, setThemeMode, setAccentColor } = useTheme();
 
   // Cloud Sync for Theme & Accent Color
-  const handleChangeThemeMode = (mode: ThemeMode) => {
+  const handleChangeThemeMode = async (mode: ThemeMode) => {
     setThemeMode(mode);
     if (currentUser?.id) {
-      updateProfile({ theme_mode: mode });
+      await updateProfile({ theme_mode: mode });
     }
   };
 
-  const handleChangeAccentColor = (color: AccentColor) => {
+  const handleChangeAccentColor = async (color: AccentColor) => {
     setAccentColor(color);
     if (currentUser?.id) {
-      updateProfile({ accent_color: color });
+      await updateProfile({ accent_color: color });
     }
   };
 

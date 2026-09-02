@@ -1817,6 +1817,13 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
     }
   }
 
+  if (record.theme_mode) {
+    localStorage.setItem('lanitapp_theme_mode', record.theme_mode);
+  }
+  if (record.accent_color) {
+    localStorage.setItem('lanitapp_accent_color', record.accent_color);
+  }
+
   await db.user_profiles.put(record);
   return record;
 }

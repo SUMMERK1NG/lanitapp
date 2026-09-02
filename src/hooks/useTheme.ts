@@ -41,6 +41,7 @@ export function useTheme() {
 
     // Set dynamic primary color variable
     root.style.setProperty('--primary', color);
+    root.style.setProperty('--primary-custom', color);
 
     // Convert hex to rgb for opacity helpers if needed
     const hex = color.replace('#', '');

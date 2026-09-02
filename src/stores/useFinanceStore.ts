@@ -487,6 +487,39 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     });
 
     switch (table) {
+      case 'profiles': {
+        if (newRow?.id && newRow.id === userId) {
+          if (newRow.theme_mode) {
+            localStorage.setItem('lanitapp_theme_mode', newRow.theme_mode);
+            if (typeof document !== 'undefined') {
+              const root = document.documentElement;
+              root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+              root.classList.add(`theme-${newRow.theme_mode}`);
+            }
+          }
+          if (newRow.accent_color) {
+            localStorage.setItem('lanitapp_accent_color', newRow.accent_color);
+            if (typeof document !== 'undefined') {
+              document.documentElement.style.setProperty('--primary', newRow.accent_color);
+              document.documentElement.style.setProperty('--primary-custom', newRow.accent_color);
+            }
+          }
+          const activeUserStr = localStorage.getItem('lanitapp_active_user');
+          if (activeUserStr) {
+            try {
+              const u = JSON.parse(activeUserStr);
+              if (newRow.theme_mode) u.theme_mode = newRow.theme_mode;
+              if (newRow.accent_color) u.accent_color = newRow.accent_color;
+              if (newRow.first_name) u.first_name = newRow.first_name;
+              if (newRow.last_name) u.last_name = newRow.last_name;
+              if (newRow.avatar) u.avatar = newRow.avatar;
+              localStorage.setItem('lanitapp_active_user', JSON.stringify(u));
+              window.dispatchEvent(new Event('storage'));
+            } catch {}
+          }
+        }
+        break;
+      }
       case 'accounts': {
         if (eventType === 'DELETE' && oldRow?.id) {
           set((s) => ({ accounts: s.accounts.filter((a) => a.id !== oldRow.id) }));
