@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, KeyRound, CheckCircle2, AlertCircle, Send, ArrowLeft } from 'lucide-react';
+import { X, KeyRound, CheckCircle2, Send, ArrowLeft } from 'lucide-react';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -28,17 +28,14 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     const result = await onResetPassword(identifier.trim());
     setIsSubmitting(false);
 
-    if (result.success) {
-      setFeedback({
-        type: 'success',
-        message: result.message || 'Se ha enviado un enlace de recuperación a tu correo electrónico.',
-      });
-    } else {
-      setFeedback({
-        type: 'error',
-        message: result.error || 'No se pudo procesar la solicitud. Verifica los datos.',
-      });
-    }
+    // Siempre mostrar mensaje genérico seguro contra enumeración y limpiar el formulario
+    setFeedback({
+      type: 'success',
+      message:
+        result.message ||
+        'Si existe una cuenta asociada a ese correo o cédula, recibirás un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada y spam.',
+    });
+    setIdentifier('');
   };
 
   return (
@@ -63,19 +60,20 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         </div>
 
         {feedback && (
-          <div
-            className={`p-3.5 rounded-2xl mb-4 text-xs font-semibold flex items-start gap-2.5 ${
-              feedback.type === 'success'
-                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-                : 'bg-[#ef4444]/15 border border-[#ef4444]/30 text-[#ef4444]'
-            }`}
-          >
-            {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            )}
-            <p className="leading-relaxed">{feedback.message}</p>
+          <div className="p-4 rounded-2xl mb-4 bg-emerald-500/10 border border-emerald-500/30 space-y-1 animate-in fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-emerald-400">
+                  Solicitud procesada con éxito
+                </p>
+                <p className="text-[11px] text-emerald-300/80 mt-0.5 leading-relaxed">
+                  {feedback.message}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

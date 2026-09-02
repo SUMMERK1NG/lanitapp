@@ -470,45 +470,53 @@ export function useAuth() {
   };
 
   /**
-   * Recuperación de Contraseña por Cédula o Email
+   * Recuperación de Contraseña por Cédula o Email (Segura contra enumeración de usuarios)
    */
   const resetPassword = async (
     identifier: string
   ): Promise<{ success: boolean; error?: string; message?: string }> => {
     const cleanId = identifier.trim();
     if (!cleanId) {
-      return { success: false, error: 'Por favor ingresa tu cédula de identidad.' };
+      return { success: false, error: 'Por favor ingresa tu documento o correo electrónico.' };
     }
 
     if (!isSupabaseConfigured() || !supabase) {
-      return { success: false, error: 'Supabase no está configurado.' };
+      return { success: false, error: 'El servicio de autenticación no está disponible en este momento.' };
     }
+
+    const safeGenericMessage =
+      'Si existe una cuenta asociada a ese correo o cédula, recibirás un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada y spam.';
 
     try {
       let targetEmail = cleanId;
 
       if (!cleanId.includes('@')) {
         const profile = await findProfileByDocument(cleanId);
-        if (!profile || !profile.email) {
-          return { success: false, error: `No se encontró ningún usuario registrado con el documento ${cleanId}` };
+        if (profile && profile.email) {
+          targetEmail = profile.email;
+        } else {
+          // Protección contra enumeración: Retornar mensaje genérico con éxito
+          return {
+            success: true,
+            message: safeGenericMessage,
+          };
         }
-        targetEmail = profile.email;
       }
 
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+      await supabase.auth.resetPasswordForEmail(targetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
-      if (resetErr) {
-        return { success: false, error: resetErr.message };
-      }
-
       return {
         success: true,
-        message: `Se ha enviado el enlace de restablecimiento a tu correo electrónico asociado (${targetEmail}). Revisa tu bandeja de entrada o spam.`,
+        message: safeGenericMessage,
       };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al procesar la recuperación de contraseña.' };
+    } catch {
+      // Protección contra enumeración: Nunca filtrar errores que revelen existencia de usuarios
+      return {
+        success: true,
+        message: safeGenericMessage,
+      };
     }
   };
 

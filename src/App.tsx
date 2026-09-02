@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db,
@@ -55,7 +55,8 @@ import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
 import { AuditPanel } from './components/AuditPanel.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
-import { TrendingUp, RefreshCw } from 'lucide-react';
+import { TrendingUp, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 
 export function App() {
   const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
@@ -173,6 +174,49 @@ export function App() {
   const [preselectedDebtForPayment, setPreselectedDebtForPayment] = useState<string | undefined>(undefined);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Inactivity session timeout management (15 minutes inactivity -> auto logout unless keepConnected)
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
+  const [timeoutRemainingSeconds, setTimeoutRemainingSeconds] = useState<number>(120);
+  const keepConnected = typeof localStorage !== 'undefined' && localStorage.getItem('lanitapp_keep_connected') === 'true';
+
+  const handleSessionTimeout = useCallback(async () => {
+    setShowTimeoutWarning(false);
+    await signOut();
+    alert('Tu sesión ha sido cerrada automáticamente por inactividad (15 min) para proteger tus finanzas. Inicia sesión nuevamente.');
+  }, [signOut]);
+
+  const handleTimeoutWarning = useCallback((seconds: number) => {
+    setShowTimeoutWarning(true);
+    setTimeoutRemainingSeconds(seconds);
+  }, []);
+
+  const { resetTimers } = useSessionTimeout({
+    isEnabled: Boolean(currentUser && !keepConnected),
+    onTimeout: handleSessionTimeout,
+    onWarning: handleTimeoutWarning,
+  });
+
+  // Countdown timer while warning modal is open
+  useEffect(() => {
+    if (!showTimeoutWarning) return;
+    const interval = setInterval(() => {
+      setTimeoutRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showTimeoutWarning]);
+
+  const extendSession = useCallback(() => {
+    setShowTimeoutWarning(false);
+    setTimeoutRemainingSeconds(120);
+    resetTimers();
+  }, [resetTimers]);
 
   const handleNavigateToSettings = (tab: 'themes' | 'categories' | 'users' | 'backup' = 'themes') => {
     setSettingsInitialTab(tab);
@@ -779,6 +823,46 @@ export function App() {
         onClose={() => setIsAuditModalOpen(false)}
         currentUser={currentUser}
       />
+
+      {/* Modal de Advertencia de Inactividad */}
+      {showTimeoutWarning && currentUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-surface border border-amber-500/50 rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-app">
+                  Sesión a punto de expirar
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Por inactividad, tu sesión se cerrará en <strong className="text-amber-400 font-bold">{timeoutRemainingSeconds} segundos</strong>
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted leading-relaxed">
+              Por tu seguridad financiera, cerramos la sesión automáticamente tras 15 minutos sin actividad. ¿Deseas mantener tu sesión abierta?
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={extendSession}
+                className="flex-1 py-3 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-md hover:opacity-95 cursor-pointer transition-all active:scale-95"
+              >
+                Mantener sesión activa
+              </button>
+              <button
+                onClick={handleSessionTimeout}
+                className="flex-1 py-3 rounded-2xl bg-card hover:bg-surface-hover text-app text-xs font-bold border border-app cursor-pointer transition-all active:scale-95"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile-First Fixed Bottom Navigation Bar */}
       <BottomNav

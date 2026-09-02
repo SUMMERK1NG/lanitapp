@@ -41,6 +41,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [loginCedula, setLoginCedula] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('lanitapp_keep_connected') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Register form fields
   const [regPrefix, setRegPrefix] = useState<string>('V');
@@ -73,6 +80,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       ? rawNumber.toUpperCase()
       : `${loginPrefix}-${rawNumber}`;
 
+    localStorage.setItem('lanitapp_keep_connected', keepConnected ? 'true' : 'false');
     const res = await onSignIn(fullCedula, loginPassword);
     setIsSubmitting(false);
 
@@ -249,6 +257,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            {/* Checkbox Mantenerme Conectado */}
+            <div className="flex items-center gap-2 pt-0.5 pb-1">
+              <input
+                type="checkbox"
+                id="keepConnected"
+                checked={keepConnected}
+                onChange={(e) => {
+                  setKeepConnected(e.target.checked);
+                  localStorage.setItem('lanitapp_keep_connected', e.target.checked ? 'true' : 'false');
+                }}
+                className="w-4 h-4 rounded border-white/20 bg-[#0B132B] text-[#147DF0] focus:ring-[#147DF0] cursor-pointer accent-[#147DF0]"
+              />
+              <label htmlFor="keepConnected" className="text-xs text-slate-300 cursor-pointer select-none">
+                Mantenerme conectado (no cerrar sesión por inactividad)
+              </label>
             </div>
 
             <button
