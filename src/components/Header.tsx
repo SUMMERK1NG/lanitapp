@@ -217,30 +217,30 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Indicador de Estado de Sincronización Realtime (4 Estados Visuales) */}
+          {/* Indicador de Estado de Sincronización Realtime (Amigable para el Usuario) */}
           {(() => {
             const effectiveStatus: RealtimeSyncStatus = syncStatus || (!isOnline ? 'offline' : isSyncing ? 'syncing' : 'connected');
 
-            let buttonClass = 'bg-card text-emerald-400 border-emerald-500/30';
-            let dotElement = <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />;
-            let labelText = 'Sincronizado';
-            let tooltipText = `🟢 Sincronizado: ${lastSyncTime || 'Tiempo Real Activo'}`;
+            let buttonClass = 'bg-card text-emerald-400 border-emerald-500/30 hover:border-emerald-500/50';
+            let dotElement = <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400/50" />;
+            let labelText = 'Al día';
+            let tooltipText = `Todos tus datos están guardados y al día${lastSyncTime ? ` (${lastSyncTime})` : ''}`;
 
             if (effectiveStatus === 'syncing') {
-              buttonClass = 'bg-card text-[#00C2C7] border-[#00C2C7]/30';
-              dotElement = <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00C2C7]" />;
-              labelText = 'Sincronizando...';
-              tooltipText = '🔄 Sincronizando datos con Supabase...';
+              buttonClass = 'bg-card text-amber-400 border-amber-500/30';
+              dotElement = <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />;
+              labelText = 'Guardando...';
+              tooltipText = 'Guardando tus cambios de forma segura...';
             } else if (effectiveStatus === 'offline') {
-              buttonClass = 'bg-card text-amber-400 border-amber-400/30';
-              dotElement = <span className="w-2 h-2 rounded-full bg-amber-400" />;
-              labelText = 'Modo Offline';
-              tooltipText = '🟡 Modo Offline: datos guardados localmente en Dexie';
+              buttonClass = 'bg-card text-slate-400 border-slate-500/30';
+              dotElement = <span className="w-2 h-2 rounded-full bg-slate-400" />;
+              labelText = 'Sin conexión';
+              tooltipText = 'Sin conexión: tus datos están seguros en este dispositivo';
             } else if (effectiveStatus === 'error') {
               buttonClass = 'bg-card text-rose-400 border-rose-500/30';
-              dotElement = <span className="w-2 h-2 rounded-full bg-rose-500" />;
-              labelText = 'Error';
-              tooltipText = '🔴 Error de sincronización. Clic para reintentar.';
+              dotElement = <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />;
+              labelText = 'Reintentando...';
+              tooltipText = 'Hubo un problema de red. Clic para reintentar.';
             }
 
             return (

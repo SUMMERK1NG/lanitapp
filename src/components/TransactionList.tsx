@@ -319,15 +319,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                             {tx.sync_status === 'synced' ? (
                               <span
                                 className="inline-flex items-center text-[10px] text-emerald-400 font-semibold"
-                                title="Sincronizado con Supabase"
+                                title="Guardado de forma segura en la nube"
                               >
                                 <CloudCheck className="w-3 h-3 mr-0.5" />
-                                Sync
+                                Guardado
                               </span>
                             ) : tx.sync_status === 'pending' ? (
                               <span
                                 className="inline-flex items-center text-[10px] text-[#ff914d] font-semibold"
-                                title="Guardado local (Pendiente de subir a Supabase)"
+                                title="Guardado en este dispositivo (pendiente de sincronizar)"
                               >
                                 <Clock className="w-3 h-3 mr-0.5 animate-pulse" />
                                 Local

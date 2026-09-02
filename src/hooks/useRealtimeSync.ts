@@ -133,10 +133,10 @@ export function useRealtimeSync(userId: string | null) {
   }, [userId, isOnline, fetchInitialData, handleRealtimePayload, loadFromLocalCache, setSyncStatus]);
 
   const syncStatusInfo = {
-    connected: { label: 'Sincronizado', color: 'green', icon: '🟢' },
-    syncing: { label: 'Sincronizando...', color: 'blue', icon: '🔄' },
-    offline: { label: 'Modo Offline', color: 'yellow', icon: '🟡' },
-    error: { label: 'Error de Sincronización', color: 'red', icon: '🔴' },
+    connected: { label: 'Al día', color: 'green', icon: '🟢' },
+    syncing: { label: 'Guardando...', color: 'amber', icon: '🔄' },
+    offline: { label: 'Sin conexión', color: 'slate', icon: '🟡' },
+    error: { label: 'Reintentando...', color: 'red', icon: '🔴' },
   }[syncStatus as RealtimeSyncStatus];
 
   return {
