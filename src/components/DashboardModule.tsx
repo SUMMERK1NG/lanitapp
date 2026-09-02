@@ -49,6 +49,7 @@ import type {
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
+import { Skeleton } from './ui/Skeleton.tsx';
 import { updatePreference, getUserPreferences } from '../lib/profilePreferences.ts';
 import { getActiveUserId } from '../lib/db.ts';
 
@@ -69,6 +70,7 @@ interface DashboardModuleProps {
   userCreatedAt?: string;
   currentUserId?: string;
   initialWidgets?: DashboardWidgetConfig | null;
+  isLoading?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -123,6 +125,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   userCreatedAt,
   currentUserId,
   initialWidgets,
+  isLoading,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -437,6 +440,47 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   const handlePrintReport = () => {
     window.print();
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        {/* Toolbar Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md">
+          <div className="flex items-center gap-3">
+            <Skeleton variant="circular" className="w-10 h-10 rounded-2xl" />
+            <div className="space-y-2">
+              <Skeleton variant="text" className="w-40 h-5" />
+              <Skeleton variant="text" className="w-64 h-3" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton variant="rectangular" className="w-32 h-9 rounded-2xl" />
+            <Skeleton variant="rectangular" className="w-16 h-9 rounded-2xl" />
+          </div>
+        </div>
+
+        {/* KPIs Cards Skeleton Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Skeleton variant="card" className="h-28 rounded-3xl" />
+          <Skeleton variant="card" className="h-28 rounded-3xl" />
+          <Skeleton variant="card" className="h-28 rounded-3xl" />
+          <Skeleton variant="card" className="h-28 rounded-3xl" />
+        </div>
+
+        {/* Quincenas Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton variant="card" className="h-56 rounded-3xl" />
+          <Skeleton variant="card" className="h-56 rounded-3xl" />
+        </div>
+
+        {/* Cashflow & Categories Chart Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Skeleton variant="rectangular" className="lg:col-span-2 h-72 rounded-3xl" />
+          <Skeleton variant="rectangular" className="h-72 rounded-3xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">

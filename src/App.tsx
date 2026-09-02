@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db,
@@ -39,25 +39,48 @@ import { AuthScreen } from './components/AuthScreen.tsx';
 import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx';
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
-import { TransactionHistoryModule } from './components/TransactionHistoryModule.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
-import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
-import { PlanningModule } from './components/planning/PlanningModule.tsx';
-import { FixedExpensesModule } from './components/FixedExpensesModule.tsx';
-import { DebtManagementModule } from './components/DebtManagementModule.tsx';
-import { SavingsModule } from './components/SavingsModule.tsx';
-import { AccountsManagementModule } from './components/AccountsManagementModule.tsx';
-import { SettingsView } from './components/SettingsView.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
 import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
 import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
-import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
-import { AuditPanel } from './components/AuditPanel.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
-import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
+import { Skeleton } from './components/ui/Skeleton.tsx';
+import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2, WifiOff } from 'lucide-react';
+
+// Lazy loading de módulos secundarios para optimizar el bundle inicial y tiempo de carga
+const PlanningModule = lazy(() =>
+  import('./components/planning/PlanningModule.tsx').then((m) => ({ default: m.PlanningModule }))
+);
+const IncomesManagementModule = lazy(() =>
+  import('./components/IncomesManagementModule.tsx').then((m) => ({ default: m.IncomesManagementModule }))
+);
+const FixedExpensesModule = lazy(() =>
+  import('./components/FixedExpensesModule.tsx').then((m) => ({ default: m.FixedExpensesModule }))
+);
+const DebtManagementModule = lazy(() =>
+  import('./components/DebtManagementModule.tsx').then((m) => ({ default: m.DebtManagementModule }))
+);
+const SavingsModule = lazy(() =>
+  import('./components/SavingsModule.tsx').then((m) => ({ default: m.SavingsModule }))
+);
+const AccountsManagementModule = lazy(() =>
+  import('./components/AccountsManagementModule.tsx').then((m) => ({ default: m.AccountsManagementModule }))
+);
+const TransactionHistoryModule = lazy(() =>
+  import('./components/TransactionHistoryModule.tsx').then((m) => ({ default: m.TransactionHistoryModule }))
+);
+const RatesHistoryModule = lazy(() =>
+  import('./components/RatesHistoryModule.tsx').then((m) => ({ default: m.RatesHistoryModule }))
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView.tsx').then((m) => ({ default: m.SettingsView }))
+);
+const AuditPanel = lazy(() =>
+  import('./components/AuditPanel.tsx').then((m) => ({ default: m.AuditPanel }))
+);
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 import { getUserPreferences, updatePreference } from './lib/profilePreferences.ts';
 
@@ -73,6 +96,26 @@ const AVAILABLE_VIEWS: ActiveViewType[] = [
   'rates',
   'settings',
 ];
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <Skeleton variant="circular" className="w-10 h-10 rounded-2xl" />
+        <div className="space-y-2">
+          <Skeleton variant="text" className="w-40 h-5" />
+          <Skeleton variant="text" className="w-56 h-3" />
+        </div>
+      </div>
+      <Skeleton variant="rectangular" className="w-28 h-9 rounded-2xl" />
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Skeleton variant="rectangular" className="h-64 rounded-3xl" />
+      <Skeleton variant="rectangular" className="h-64 rounded-3xl" />
+    </div>
+    <Skeleton variant="card" className="h-44 rounded-3xl" />
+  </div>
+);
 
 export function App() {
   const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
@@ -90,6 +133,7 @@ export function App() {
   };
   const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
+  const isStoreLoading = useFinanceStore((state) => state.isLoading);
 
   // Authentication hook
   const {
@@ -557,6 +601,16 @@ export function App() {
           onOpenAudit={() => setIsAuditModalOpen(true)}
         />
 
+        {/* Offline Mode Banner */}
+        {!isOnline && (
+          <div className="w-full bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 flex items-center justify-center gap-2 animate-in slide-in-from-top-2">
+            <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-xs font-medium text-amber-400 text-center">
+              Modo Offline: Mostrando últimos datos en caché. La sincronización se reanudará al recuperar la conexión.
+            </span>
+          </div>
+        )}
+
         {/* Toast Alert */}
         {toastMessage && (
           <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-primary-custom text-white text-xs font-bold rounded-full shadow-xl backdrop-blur-md border border-white/20 animate-in fade-in zoom-in-95 duration-200">
@@ -566,27 +620,29 @@ export function App() {
 
         {/* Main Workspace Body */}
         <div className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 space-y-6">
-          {/* VIEW 1: DASHBOARD GENERAL (INTERACTIVO Y MODULAR) */}
-          {activeView === 'dashboard' && (
-            <DashboardModule
-              transactions={transactions}
-              categories={categories}
-              accounts={accounts}
-              fixedIncomes={fixedIncomes}
-              variableIncomes={variableIncomes}
-              fixedExpenses={fixedExpenses}
-              variableExpenses={variableExpenses}
-              debts={debts}
-              debtPayments={debtPayments}
-              savingsGoals={savingsGoals}
-              savingContributions={savingContributions}
-              rates={rates}
-              onNavigate={handleViewChange}
-              userCreatedAt={currentUser?.created_at}
-              currentUserId={currentUser?.id}
-              initialWidgets={currentUser?.dashboard_widgets}
-            />
-          )}
+          <Suspense fallback={<ViewLoadingFallback />}>
+            {/* VIEW 1: DASHBOARD GENERAL (INTERACTIVO Y MODULAR) */}
+            {activeView === 'dashboard' && (
+              <DashboardModule
+                transactions={transactions}
+                categories={categories}
+                accounts={accounts}
+                fixedIncomes={fixedIncomes}
+                variableIncomes={variableIncomes}
+                fixedExpenses={fixedExpenses}
+                variableExpenses={variableExpenses}
+                debts={debts}
+                debtPayments={debtPayments}
+                savingsGoals={savingsGoals}
+                savingContributions={savingContributions}
+                rates={rates}
+                onNavigate={handleViewChange}
+                userCreatedAt={currentUser?.created_at}
+                currentUserId={currentUser?.id}
+                initialWidgets={currentUser?.dashboard_widgets}
+                isLoading={authLoading || isStoreLoading}
+              />
+            )}
 
           {/* VIEW 2: PLANIFICACIÓN INTEGRAL (GESTIÓN QUINCENAL & CALENDARIO) */}
           {activeView === 'fortnight' && (
@@ -816,6 +872,7 @@ export function App() {
               />
             </div>
           )}
+          </Suspense>
         </div>
       </main>
 
@@ -913,11 +970,13 @@ export function App() {
       />
 
       {/* Supabase Audit & Diagnostics Panel (Admin Only) */}
-      <AuditPanel
-        isOpen={isAuditModalOpen}
-        onClose={() => setIsAuditModalOpen(false)}
-        currentUser={currentUser}
-      />
+      <Suspense fallback={null}>
+        <AuditPanel
+          isOpen={isAuditModalOpen}
+          onClose={() => setIsAuditModalOpen(false)}
+          currentUser={currentUser}
+        />
+      </Suspense>
 
       {/* Modal de Advertencia de Timeout (5 min de inactividad, 2 min de advertencia) */}
       {showTimeoutWarning && currentUser && (
