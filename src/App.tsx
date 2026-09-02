@@ -102,18 +102,50 @@ export function App() {
   const { themeMode, accentColor, setThemeMode, setAccentColor } = useTheme();
 
   // Cloud Sync for Theme & Accent Color
-  const handleChangeThemeMode = async (mode: ThemeMode) => {
-    setThemeMode(mode);
-    if (currentUser?.id) {
-      await updateProfile({ theme_mode: mode });
+  const handleThemeUpdate = async (newTheme: ThemeMode, newColor: AccentColor) => {
+    try {
+      // 1. Inmediata aplicación en UI local y DOM
+      setThemeMode(newTheme);
+      setAccentColor(newColor);
+      if (typeof document !== 'undefined') {
+        const root = document.documentElement;
+        root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+        root.classList.add(`theme-${newTheme}`);
+        root.style.setProperty('--primary-custom', newColor);
+        root.style.setProperty('--primary', newColor);
+      }
+
+      // 2. Persistir en Supabase y localmente
+      if (currentUser?.id) {
+        await updateProfile({ theme_mode: newTheme, accent_color: newColor });
+        if (isSupabaseConfigured() && supabase && navigator.onLine) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({
+              theme_mode: newTheme,
+              accent_color: newColor,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', currentUser.id);
+
+          if (error) {
+            console.warn('[Supabase Theme Save Notice]:', error.message);
+          } else {
+            console.log('✅ Tema guardado exitosamente en Supabase:', { theme: newTheme, color: newColor });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error inesperado al guardar tema:', err);
     }
   };
 
+  const handleChangeThemeMode = async (mode: ThemeMode) => {
+    await handleThemeUpdate(mode, accentColor);
+  };
+
   const handleChangeAccentColor = async (color: AccentColor) => {
-    setAccentColor(color);
-    if (currentUser?.id) {
-      await updateProfile({ accent_color: color });
-    }
+    await handleThemeUpdate(themeMode, color);
   };
 
   // Synchronize theme & accent color if currentUser profile is loaded or synced from another device
@@ -336,7 +368,10 @@ export function App() {
   }
 
   return (
-    <div className="h-screen bg-app text-app flex font-sans selection:bg-primary-custom selection:text-white transition-colors duration-200 overflow-hidden">
+    <div
+      className="h-screen bg-app text-app flex font-sans selection:bg-primary-custom selection:text-white transition-colors duration-200 overflow-hidden"
+      style={{ '--primary-custom': accentColor, '--primary': accentColor } as React.CSSProperties}
+    >
       {/* Desktop Sidebar */}
       <div className="hidden lg:block shrink-0">
         <Sidebar
