@@ -1,3 +1,5 @@
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+
 export interface BiweeklyEmailPayload {
   to: string;
   userName: string;
@@ -11,12 +13,47 @@ export interface BiweeklyEmailPayload {
   bcvRate: number;
 }
 
-export const sendBiweeklyReportEmail = async (payload: BiweeklyEmailPayload) => {
-  const apiKey = import.meta.env.VITE_RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error('No se pudo conectar con el servicio de correo. Verifica la configuración de Resend.');
+/**
+ * Envío seguro de correos electrónicos a través de Supabase Edge Function 'send-email'.
+ * La clave de Resend se mantiene 100% segura en el servidor/Edge sin exponerse al cliente.
+ */
+export const sendEmail = async (
+  to: string,
+  subject: string,
+  html: string,
+  text?: string
+): Promise<{ success: boolean; data?: any }> => {
+  if (!isSupabaseConfigured() || !supabase) {
+    throw new Error('Supabase no está configurado para el envío de correos.');
   }
 
+  try {
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: {
+        to,
+        subject,
+        html,
+        text,
+      },
+    });
+
+    if (error) {
+      console.error('Error al invocar Edge Function send-email:', error);
+      throw new Error(error.message || 'Error al enviar el correo a través de Supabase.');
+    }
+
+    console.log('✅ Correo enviado exitosamente:', data);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('❌ Error al enviar correo:', err);
+    throw err;
+  }
+};
+
+/**
+ * Genera el reporte quincenal en HTML y lo envía de forma segura usando la Edge Function.
+ */
+export const sendBiweeklyReportEmail = async (payload: BiweeklyEmailPayload) => {
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="es">
@@ -83,65 +120,9 @@ export const sendBiweeklyReportEmail = async (payload: BiweeklyEmailPayload) => 
     </html>
   `;
 
-  const emailPayload = {
-    from: 'LANITAPP <onboarding@resend.dev>',
-    to: [payload.to],
-    subject: `📊 Resumen Quincena ${payload.quincena} - LANITAPP`,
-    html: htmlContent,
-    apiKey,
-  };
-
-  // 1. Intentar envío a través del endpoint local/worker intermediario (/api/send-email)
-  try {
-    const response = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(emailPayload),
-    });
-
-    if (response.ok) {
-      return await response.json();
-    }
-
-    if (response.status !== 404) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.message || 'Error al enviar email');
-    }
-  } catch (err: any) {
-    if (err?.message && !err.message.includes('404') && !err.message.includes('Failed to fetch')) {
-      throw err;
-    }
-  }
-
-  // 2. Si no hay backend intermediario en la ruta /api/send-email, intentar endpoint directo de Resend con captura de CORS
-  try {
-    const directResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from: emailPayload.from,
-        to: emailPayload.to,
-        subject: emailPayload.subject,
-        html: emailPayload.html,
-      }),
-    });
-
-    if (!directResponse.ok) {
-      const err = await directResponse.json().catch(() => ({}));
-      throw new Error(err.message || 'Error al enviar email');
-    }
-    return await directResponse.json();
-  } catch (directErr: any) {
-    const msg = directErr?.message || '';
-    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('CORS')) {
-      throw new Error('No se pudo conectar con el servicio de correo. Verifica la configuración de Resend.');
-    }
-    throw directErr;
-  }
+  return await sendEmail(
+    payload.to,
+    `📊 Resumen Quincena ${payload.quincena} - LANITAPP`,
+    htmlContent
+  );
 };
