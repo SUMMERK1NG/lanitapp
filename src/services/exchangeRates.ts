@@ -1,5 +1,8 @@
 import type { ExchangeRatesData } from '../types/index.ts';
 
+// URL base configurable para la API de tasas de cambio con fallback seguro
+const DOLAR_API_BASE_URL = import.meta.env.VITE_DOLAR_API_BASE_URL || 'https://ve.dolarapi.com/v1';
+
 const CACHE_KEY = 'lanitapp_exchange_rates_cache';
 
 // Fallback rates if offline and no cache is present
@@ -36,8 +39,8 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
 
     // 2. Fetch live data from DolarAPI
     const [dolaresRes, eurosRes] = await Promise.allSettled([
-      fetch('https://ve.dolarapi.com/v1/dolares', { headers: { Accept: 'application/json' } }),
-      fetch('https://ve.dolarapi.com/v1/euros', { headers: { Accept: 'application/json' } }),
+      fetch(`${DOLAR_API_BASE_URL}/dolares`, { headers: { Accept: 'application/json' } }),
+      fetch(`${DOLAR_API_BASE_URL}/euros`, { headers: { Accept: 'application/json' } }),
     ]);
 
     let bcvDollar = cachedData?.bcvDollar || DEFAULT_FALLBACK_RATES.bcvDollar;

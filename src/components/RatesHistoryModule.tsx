@@ -30,27 +30,30 @@ interface HistoricalRateEntry {
   fuente?: string;
 }
 
+// URL base configurable para la API de tasas de cambio con fallback seguro
+const DOLAR_API_BASE_URL = import.meta.env.VITE_DOLAR_API_BASE_URL || 'https://ve.dolarapi.com/v1';
+
 const RATE_OPTIONS: { id: RateTypeOption; label: string; icon: string; color: string; url: string }[] = [
   {
     id: 'bcv_usd',
     label: 'BCV Dólar Oficial',
     icon: '🏛️',
     color: '#147DF0',
-    url: 'https://ve.dolarapi.com/v1/historicos/dolares/oficial',
+    url: `${DOLAR_API_BASE_URL}/historicos/dolares/oficial`,
   },
   {
     id: 'parallel_usd',
     label: 'Dólar Promedio',
     icon: '⚡',
     color: '#FF914D',
-    url: 'https://ve.dolarapi.com/v1/historicos/dolares/paralelo',
+    url: `${DOLAR_API_BASE_URL}/historicos/dolares/paralelo`,
   },
   {
     id: 'bcv_eur',
     label: 'Euro BCV Oficial',
     icon: '🇪🇺',
     color: '#00C2C7',
-    url: 'https://ve.dolarapi.com/v1/historicos/euros/oficial',
+    url: `${DOLAR_API_BASE_URL}/historicos/euros/oficial`,
   },
 ];
 
