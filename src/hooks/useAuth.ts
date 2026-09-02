@@ -38,8 +38,7 @@ export function useAuth() {
 
           if (profileData && !profileErr) {
               const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
-              const savedAvatar = (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) || '👑';
-              const avatarResolved = profileData.avatar_url || profileData.avatar || savedAvatar;
+              const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
               const userProfile: UserProfile = {
                 id: profileData.id,
                 email: profileData.email || authUser.email,
@@ -65,7 +64,6 @@ export function useAuth() {
               await saveUserProfile(userProfile);
               localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
               // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
-              localStorage.setItem('user_avatar', avatarResolved);
               // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
               if (typeof document !== 'undefined') {
                 const root = document.documentElement;
@@ -80,7 +78,7 @@ export function useAuth() {
             } else {
               // If profile record does not exist in profiles yet, create it
               const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
-              const savedAvatar = (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) || '👑';
+              const defaultAvatar = '👑';
               const newProfile: UserProfile = {
                 id: authUser.id,
                 email: authUser.email,
@@ -88,8 +86,8 @@ export function useAuth() {
                 first_name: authUser.user_metadata?.first_name || '',
                 last_name: authUser.user_metadata?.last_name || '',
                 name: authUser.user_metadata?.first_name ? `${authUser.user_metadata.first_name || ''} ${authUser.user_metadata.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario',
-                avatar: savedAvatar,
-                avatar_url: savedAvatar,
+                avatar: defaultAvatar,
+                avatar_url: defaultAvatar,
                 role,
                 is_active: true,
                 currency: 'USD',
@@ -158,8 +156,7 @@ export function useAuth() {
 
           if (profileData) {
             const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
-            const savedAvatar = (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) || '👑';
-            const avatarResolved = profileData.avatar_url || profileData.avatar || savedAvatar;
+            const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
             const userProfile: UserProfile = {
               id: profileData.id,
               email: profileData.email || authUser.email,
@@ -180,7 +177,6 @@ export function useAuth() {
             await saveUserProfile(userProfile);
             localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
             // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
-            localStorage.setItem('user_avatar', avatarResolved);
             setCurrentUser(userProfile);
           }
         } else if (event === 'SIGNED_OUT') {
@@ -541,7 +537,7 @@ export function useAuth() {
    */
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!currentUser) return;
-    const avatarVal = updates.avatar_url || updates.avatar || currentUser.avatar_url || currentUser.avatar || localStorage.getItem('user_avatar') || '👑';
+    const avatarVal = updates.avatar_url || updates.avatar || currentUser.avatar_url || currentUser.avatar || '👑';
     const updated: UserProfile = {
       ...currentUser,
       ...updates,
@@ -550,7 +546,6 @@ export function useAuth() {
       sync_status: 'synced',
     };
 
-    localStorage.setItem('user_avatar', avatarVal);
     await saveUserProfile(updated);
     localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updated));
     setCurrentUser(updated);

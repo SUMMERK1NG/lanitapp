@@ -53,7 +53,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 }) => {
   const [name, setName] = useState<string>(profile?.name || 'Usuario');
   const [avatar, setAvatar] = useState<string>(() => {
-    return profile?.avatar_url || profile?.avatar || (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) || '👨‍💻';
+    return profile?.avatar_url || profile?.avatar || '👨‍💻';
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -64,7 +64,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   React.useEffect(() => {
     if (profile) {
       setName(profile.name);
-      setAvatar(profile.avatar_url || profile.avatar || localStorage.getItem('user_avatar') || '👨‍💻');
+      setAvatar(profile.avatar_url || profile.avatar || '👨‍💻');
     }
   }, [profile, isOpen]);
 
@@ -75,7 +75,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     if (!name.trim()) return;
 
     setIsSaving(true);
-    localStorage.setItem('user_avatar', avatar);
 
     const updates = {
       name: name.trim(),
@@ -112,7 +111,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleSelectAvatar = async (emoji: string) => {
     // 1. Actualizar estado local inmediato para respuesta visual instantánea
     setAvatar(emoji);
-    localStorage.setItem('user_avatar', emoji);
 
     // 2. Persistir automáticamente en Supabase sin requerir presionar "Guardar"
     if (onUpdateProfile) {

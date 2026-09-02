@@ -66,12 +66,8 @@ export const Header: React.FC<HeaderProps> = ({
   const notifications = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
   const unreadCount = notifications.length;
 
-  // Resolve user avatar: profile.avatar_url > profile.avatar > localStorage('user_avatar') > '👑'
-  const userAvatar =
-    activeProfile?.avatar_url ||
-    activeProfile?.avatar ||
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('user_avatar') : null) ||
-    '👑';
+  // Resolve user avatar exclusivamente desde el perfil de Supabase
+  const userAvatar = activeProfile?.avatar_url || activeProfile?.avatar || '👑';
 
   const isImageAvatar = Boolean(
     userAvatar && (userAvatar.startsWith('data:') || userAvatar.startsWith('http') || userAvatar.startsWith('/'))
