@@ -34,18 +34,31 @@ import {
   toSupabaseTransactionPayload,
 } from './supabasePayloads.ts';
 
+// Gestión en memoria del ID del usuario autenticado (desacoplado de localStorage por seguridad)
+let _activeUserIdInMemory: string = '';
+
+export function setActiveUserId(id: string): void {
+  _activeUserIdInMemory = id ? id.trim() : '';
+}
+
 export function getActiveUserId(): string {
+  return _activeUserIdInMemory;
+}
+
+export async function fetchActiveUserId(): Promise<string | null> {
+  if (_activeUserIdInMemory) return _activeUserIdInMemory;
   try {
-    const stored = localStorage.getItem('lanitapp_active_user');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed?.id) return parsed.id;
-      if (parsed?.cedula) return parsed.cedula;
+    if (isSupabaseConfigured() && supabase) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (!error && user?.id) {
+        _activeUserIdInMemory = user.id;
+        return user.id;
+      }
     }
-  } catch {
-    // fallback
+  } catch (err) {
+    console.warn('Error al obtener usuario activo desde Supabase:', err);
   }
-  return '';
+  return null;
 }
 
 export const DEFAULT_USER_PROFILES: UserProfile[] = [];

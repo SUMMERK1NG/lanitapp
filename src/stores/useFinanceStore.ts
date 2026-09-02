@@ -504,19 +504,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
               document.documentElement.style.setProperty('--primary-custom', newRow.accent_color);
             }
           }
-          const activeUserStr = localStorage.getItem('lanitapp_active_user');
-          if (activeUserStr) {
-            try {
-              const u = JSON.parse(activeUserStr);
-              if (newRow.theme_mode) u.theme_mode = newRow.theme_mode;
-              if (newRow.accent_color) u.accent_color = newRow.accent_color;
-              if (newRow.first_name) u.first_name = newRow.first_name;
-              if (newRow.last_name) u.last_name = newRow.last_name;
-              if (newRow.avatar) u.avatar = newRow.avatar;
-              localStorage.setItem('lanitapp_active_user', JSON.stringify(u));
-              window.dispatchEvent(new Event('storage'));
-            } catch {}
-          }
         }
         break;
       }

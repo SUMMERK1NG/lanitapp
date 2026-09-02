@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { saveUserProfile } from '../lib/db.ts';
-
-const ACTIVE_USER_STORAGE_KEY = 'lanitapp_active_user';
+import { saveUserProfile, setActiveUserId } from '../lib/db.ts';
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -21,7 +19,7 @@ export function useAuth() {
 
         if (sessionErr) {
           console.warn('Session check error:', sessionErr.message);
-          localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+          setActiveUserId('');
           setCurrentUser(null);
           setLoading(false);
           return;
@@ -62,7 +60,7 @@ export function useAuth() {
               };
 
               await saveUserProfile(userProfile);
-              localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
+              setActiveUserId(userProfile.id);
               // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
               // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
               if (typeof document !== 'undefined') {
@@ -117,7 +115,7 @@ export function useAuth() {
             }
 
             await saveUserProfile(newProfile);
-            localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(newProfile));
+            setActiveUserId(newProfile.id);
             // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             setCurrentUser(newProfile);
             setLoading(false);
@@ -127,12 +125,12 @@ export function useAuth() {
       }
 
       // No active session in Supabase: Clear any residual tokens
-      localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+      setActiveUserId('');
       sessionStorage.clear();
       setCurrentUser(null);
     } catch (err: any) {
       console.error('Auth initialization error:', err);
-      localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+      setActiveUserId('');
       setCurrentUser(null);
     } finally {
       setLoading(false);
@@ -175,12 +173,12 @@ export function useAuth() {
               created_at: profileData.created_at,
             };
             await saveUserProfile(userProfile);
-            localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
+            setActiveUserId(userProfile.id);
             // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             setCurrentUser(userProfile);
           }
         } else if (event === 'SIGNED_OUT') {
-          localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+          setActiveUserId('');
           sessionStorage.clear();
           setCurrentUser(null);
         }
@@ -332,7 +330,7 @@ export function useAuth() {
         }
 
         await saveUserProfile(userProfile);
-        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
+        setActiveUserId(userProfile.id);
         setCurrentUser(userProfile);
         setLoading(false);
         return { success: true };
@@ -447,7 +445,7 @@ export function useAuth() {
         }
 
         await saveUserProfile(userProfile);
-        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
+        setActiveUserId(userProfile.id);
         setCurrentUser(userProfile);
         setLoading(false);
         return { success: true };
@@ -523,7 +521,7 @@ export function useAuth() {
       if (isSupabaseConfigured() && supabase) {
         await supabase.auth.signOut().catch((e) => console.warn('Supabase signout notice:', e));
       }
-      localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+      setActiveUserId('');
       localStorage.removeItem('lanitapp_last_sync');
       sessionStorage.clear();
       setCurrentUser(null);
@@ -547,7 +545,7 @@ export function useAuth() {
     };
 
     await saveUserProfile(updated);
-    localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updated));
+    setActiveUserId(updated.id);
     setCurrentUser(updated);
 
     // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
