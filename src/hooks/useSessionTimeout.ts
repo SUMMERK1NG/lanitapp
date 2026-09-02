@@ -1,7 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-export const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inactividad
-export const WARNING_BEFORE_TIMEOUT = 2 * 60 * 1000; // 2 minutos antes del cierre
+// Leer el timeout desde variables de entorno, con fallback seguro a 5 minutos (300,000 ms)
+const envTimeout = Number(import.meta.env.VITE_INACTIVITY_TIMEOUT);
+export const INACTIVITY_TIMEOUT =
+  Number.isFinite(envTimeout) && envTimeout > 60000
+    ? envTimeout
+    : 5 * 60 * 1000; // Mínimo 1 minuto, fallback 5 minutos
+
+// La advertencia se dispara 2 minutos antes del timeout (o la mitad del tiempo si el timeout es muy corto)
+export const WARNING_BEFORE_TIMEOUT =
+  INACTIVITY_TIMEOUT > 120000 ? 2 * 60 * 1000 : Math.floor(INACTIVITY_TIMEOUT / 2);
 
 export interface UseSessionTimeoutOptions {
   isEnabled: boolean;

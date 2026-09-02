@@ -47,13 +47,16 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
     const globalAccounts = accounts.filter((a) => !a.user_id);
     const systemConfigBackup = {
       app_name: 'LANITAPP',
-      version: '3.5.0',
+      version: import.meta.env.VITE_APP_VERSION || '3.5.0',
       exported_at: new Date().toISOString(),
       export_scope: 'SYSTEM_CONFIG_AND_SCHEMA_ONLY',
       note: 'Este archivo contiene exclusivamente la arquitectura de catálogo, esquema de tablas y configuraciones globales del sistema (no incluye movimientos privados de usuarios).',
       environment: {
         supabase_connected: isSupabaseConfigured(),
         supabase_host: SUPABASE_URL ? new URL(SUPABASE_URL).hostname : 'Not Configured',
+        session_inactivity_timeout_ms: Number.isFinite(Number(import.meta.env.VITE_INACTIVITY_TIMEOUT))
+          ? Number(import.meta.env.VITE_INACTIVITY_TIMEOUT)
+          : 300000,
       },
       system_database_schema: {
         database_engine: 'PostgreSQL 15 (Supabase Cloud) + Dexie IndexedDB Cache',
