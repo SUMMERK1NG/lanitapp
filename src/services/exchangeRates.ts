@@ -5,22 +5,43 @@ const DOLAR_API_BASE_URL = import.meta.env.VITE_DOLAR_API_BASE_URL || 'https://v
 
 const CACHE_KEY = 'lanitapp_exchange_rates_cache';
 
-// Fallback rates if offline and no cache is present
-const DEFAULT_FALLBACK_RATES: ExchangeRatesData = {
-  bcvDollar: 65.40,
-  parallelDollar: 77.20,
-  bcvEuro: 70.80,
-  spreadPercentage: 18.04,
-  lastUpdated: new Date().toLocaleDateString('es-VE', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
+// Fallback configurable desde variables de entorno con valores por defecto seguros
+const ENV_FALLBACK_USD = Number(import.meta.env.VITE_FALLBACK_USD_RATE);
+const ENV_FALLBACK_PARALLEL = Number(import.meta.env.VITE_FALLBACK_PARALLEL_RATE);
+const ENV_FALLBACK_EUR = Number(import.meta.env.VITE_FALLBACK_EUR_RATE);
+
+/**
+ * Genera tasas de cambio de respaldo de forma dinámica:
+ * 1. Prioriza variables de entorno VITE_FALLBACK_*_RATE si están configuradas.
+ * 2. Si no están configuradas, usa una base conservadora documentada.
+ */
+export const getFallbackRates = (): ExchangeRatesData => {
+  const bcvDollar = Number.isFinite(ENV_FALLBACK_USD) && ENV_FALLBACK_USD > 0 ? ENV_FALLBACK_USD : 65.40;
+  const parallelDollar = Number.isFinite(ENV_FALLBACK_PARALLEL) && ENV_FALLBACK_PARALLEL > 0 ? ENV_FALLBACK_PARALLEL : 77.20;
+  const bcvEuro = Number.isFinite(ENV_FALLBACK_EUR) && ENV_FALLBACK_EUR > 0 ? ENV_FALLBACK_EUR : 70.80;
+  const spreadPercentage = bcvDollar > 0
+    ? Number((((parallelDollar - bcvDollar) / bcvDollar) * 100).toFixed(2))
+    : 0;
+
+  return {
+    bcvDollar,
+    parallelDollar,
+    bcvEuro,
+    spreadPercentage,
+    lastUpdated: new Date().toLocaleDateString('es-VE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  };
 };
 
+export const DEFAULT_FALLBACK_RATES: ExchangeRatesData = getFallbackRates();
+
 export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
+  const fallbackRates = getFallbackRates();
   try {
     // 1. Check cached data first
     const cached = localStorage.getItem(CACHE_KEY);
@@ -43,9 +64,9 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
       fetch(`${DOLAR_API_BASE_URL}/euros`, { headers: { Accept: 'application/json' } }),
     ]);
 
-    let bcvDollar = cachedData?.bcvDollar || DEFAULT_FALLBACK_RATES.bcvDollar;
-    let parallelDollar = cachedData?.parallelDollar || DEFAULT_FALLBACK_RATES.parallelDollar;
-    let bcvEuro = cachedData?.bcvEuro || DEFAULT_FALLBACK_RATES.bcvEuro;
+    let bcvDollar = cachedData?.bcvDollar || fallbackRates.bcvDollar;
+    let parallelDollar = cachedData?.parallelDollar || fallbackRates.parallelDollar;
+    let bcvEuro = cachedData?.bcvEuro || fallbackRates.bcvEuro;
     let updateTime = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
 
     if (dolaresRes.status === 'fulfilled' && dolaresRes.value.ok) {
@@ -99,9 +120,9 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
       try {
         return JSON.parse(cached);
       } catch {
-        return DEFAULT_FALLBACK_RATES;
+        return fallbackRates;
       }
     }
-    return DEFAULT_FALLBACK_RATES;
+    return fallbackRates;
   }
 }
