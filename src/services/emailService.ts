@@ -13,6 +13,9 @@ export interface BiweeklyEmailPayload {
   bcvRate: number;
 }
 
+// Remitente configurable con fallback al dominio sandbox de Resend para desarrollo
+const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <onboarding@resend.dev>';
+
 /**
  * Envío seguro de correos electrónicos a través de Supabase Edge Function 'send-email'.
  * La clave de Resend se mantiene 100% segura en el servidor/Edge sin exponerse al cliente.
@@ -21,7 +24,8 @@ export const sendEmail = async (
   to: string,
   subject: string,
   html: string,
-  text?: string
+  text?: string,
+  from?: string
 ): Promise<{ success: boolean; data?: any }> => {
   if (!isSupabaseConfigured() || !supabase) {
     throw new Error('Supabase no está configurado para el envío de correos.');
@@ -31,6 +35,7 @@ export const sendEmail = async (
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: {
         to,
+        from: from || EMAIL_FROM,
         subject,
         html,
         text,

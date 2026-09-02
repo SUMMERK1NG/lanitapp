@@ -39,7 +39,7 @@ serve(async (req) => {
     }
 
     // 2. Parsear el cuerpo de la solicitud
-    const { to, subject, html, text } = await req.json();
+    const { to, from, subject, html, text } = await req.json();
 
     if (!to || !subject || (!html && !text)) {
       return new Response(JSON.stringify({ error: "Faltan campos requeridos (to, subject, html/text)" }), { 
@@ -51,6 +51,9 @@ serve(async (req) => {
       });
     }
 
+    // Remitente dinámico enviado desde el frontend o tomado del entorno
+    const sender = from || RESEND_FROM;
+
     // 3. Enviar el correo a través de Resend desde el servidor Deno
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -59,7 +62,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: RESEND_FROM,
+        from: sender,
         to: Array.isArray(to) ? to : [to],
         subject: subject,
         html: html,
