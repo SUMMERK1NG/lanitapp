@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
-import { getActiveUserId } from './db.ts';
+import { db, getActiveUserId } from './db.ts';
 import { generateUuid } from '../utils/uuid.ts';
 
 export interface AuditResult {
@@ -49,7 +49,13 @@ export const TABLES_TO_AUDIT = [
 /**
  * Genera un payload mínimo de prueba para inserción y limpieza inmediata.
  */
-function getSafeTestPayload(table: string, userId: string, testId: string): Record<string, any> | null {
+function getSafeTestPayload(
+  table: string,
+  userId: string,
+  testId: string,
+  sampleExpenseCategoryId: string | null,
+  sampleIncomeCategoryId: string | null
+): Record<string, any> | null {
   const nowIso = new Date().toISOString();
   const todayDate = nowIso.split('T')[0];
 
@@ -66,6 +72,7 @@ function getSafeTestPayload(table: string, userId: string, testId: string): Reco
         created_at: nowIso,
       };
     case 'fixed_expenses':
+      if (!sampleExpenseCategoryId) return null;
       return {
         id: testId,
         user_id: userId,
@@ -73,12 +80,13 @@ function getSafeTestPayload(table: string, userId: string, testId: string): Reco
         amount: 1,
         currency: 'USD',
         default_fortnight: 15,
-        category_id: 'ac794f8c-dafa-447b-9760-f51e59feaff1',
+        category_id: sampleExpenseCategoryId,
         is_active: false,
         notes: 'Audit test row',
         created_at: nowIso,
       };
     case 'fixed_incomes':
+      if (!sampleIncomeCategoryId) return null;
       return {
         id: testId,
         user_id: userId,
@@ -86,12 +94,13 @@ function getSafeTestPayload(table: string, userId: string, testId: string): Reco
         amount: 1,
         currency: 'USD',
         default_fortnight: 15,
-        category_id: '7b49253e-71c2-4964-913a-6251c13368f3',
+        category_id: sampleIncomeCategoryId,
         is_active: false,
         notes: 'Audit test row',
         created_at: nowIso,
       };
     case 'transactions':
+      if (!sampleExpenseCategoryId) return null;
       return {
         id: testId,
         user_id: userId,
@@ -99,10 +108,11 @@ function getSafeTestPayload(table: string, userId: string, testId: string): Reco
         type: 'expense',
         description: '__LANITAPP_AUDIT_TEMP__',
         transaction_date: todayDate,
-        category_id: 'e512d7b8-f1b6-47d5-b5d3-a1eb6342bd94',
+        category_id: sampleExpenseCategoryId,
         created_at: nowIso,
       };
     case 'variable_expenses':
+      if (!sampleExpenseCategoryId) return null;
       return {
         id: testId,
         user_id: userId,
@@ -111,7 +121,7 @@ function getSafeTestPayload(table: string, userId: string, testId: string): Reco
         year: 2026,
         month: 8,
         fortnight: 'q1',
-        category_id: 'e512d7b8-f1b6-47d5-b5d3-a1eb6342bd94',
+        category_id: sampleExpenseCategoryId,
         currency: 'USD',
         created_at: nowIso,
       };
@@ -214,6 +224,26 @@ export const runFullAudit = async (): Promise<AuditReport> => {
     });
   }
 
+  // Resolver categorías dinámicas para pruebas de Foreign Key (sin UUIDs hardcodeados)
+  let sampleExpenseCategoryId: string | null = null;
+  let sampleIncomeCategoryId: string | null = null;
+  try {
+    const expenseCat = await db.categories.where('type').equals('expense').first();
+    sampleExpenseCategoryId = expenseCat?.id || null;
+    const incomeCat = await db.categories.where('type').equals('income').first();
+    sampleIncomeCategoryId = incomeCat?.id || null;
+  } catch {}
+
+  if (!sampleExpenseCategoryId || !sampleIncomeCategoryId) {
+    try {
+      const { data: remoteCats } = await supabase.from('categories').select('id, type').limit(10);
+      if (remoteCats && remoteCats.length > 0) {
+        sampleExpenseCategoryId = sampleExpenseCategoryId || remoteCats.find(c => c.type === 'expense')?.id || remoteCats[0].id;
+        sampleIncomeCategoryId = sampleIncomeCategoryId || remoteCats.find(c => c.type === 'income')?.id || remoteCats[0].id;
+      }
+    } catch {}
+  }
+
   // 3. Auditoría tabla por tabla
   for (const table of TABLES_TO_AUDIT) {
     const t0 = performance.now();
@@ -282,7 +312,7 @@ export const runFullAudit = async (): Promise<AuditReport> => {
 
     // --- TEST INSERT & DELETE (Escritura y limpieza inmediata) ---
     const testId = generateUuid();
-    const payload = getSafeTestPayload(table, activeUid, testId);
+    const payload = getSafeTestPayload(table, activeUid, testId, sampleExpenseCategoryId, sampleIncomeCategoryId);
 
     if (payload) {
       const tInsert = performance.now();

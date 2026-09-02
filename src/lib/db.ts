@@ -63,48 +63,104 @@ export async function fetchActiveUserId(): Promise<string | null> {
 
 export const DEFAULT_USER_PROFILES: UserProfile[] = [];
 
-// Mapeo de códigos legibles a UUIDs de Supabase
-export const CATEGORY_CODE_TO_UUID: Record<string, string> = {
-  'cat_salary': '7b49253e-71c2-4964-913a-6251c13368f3',
-  'cat_transport': '82d3d710-c994-49ed-946e-218f8843286f',
-  'cat_services': 'ac794f8c-dafa-447b-9760-f51e59feaff1',
-  'cat_health': 'c2da59c8-57f3-4df5-9db5-1d6cf0530d1c',
-  'cat_extras': 'c62ff42c-437d-4589-bb39-1ec558197a7b',
-  'cat_food': 'e512d7b8-f1b6-47d5-b5d3-a1eb6342bd94',
+// Caché en memoria para optimizar resoluciones repetitivas de códigos de categoría
+const categoryUuidCache = new Map<string, string>();
+
+/**
+ * Resuelve un código de categoría legible (ej: 'cat_salary') a su UUID real en la BD.
+ * Si el valor ya es un UUID válido, lo retorna tal cual (fallback de compatibilidad).
+ */
+export const resolveCategoryCodeToUuid = async (code: string): Promise<string> => {
+  if (!code) return '';
+
+  // Fallback: si ya es un formato UUID válido, retornarlo
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(code)) {
+    return code;
+  }
+
+  // 1. Revisar caché en memoria
+  if (categoryUuidCache.has(code)) {
+    return categoryUuidCache.get(code)!;
+  }
+
+  try {
+    // 2. Consultar en Dexie por el campo 'code'
+    const categoryByCode = await db.categories.where('code').equals(code).first();
+    if (categoryByCode && categoryByCode.id) {
+      categoryUuidCache.set(code, categoryByCode.id);
+      return categoryByCode.id;
+    }
+
+    // 3. Consultar en Dexie por clave 'id' directa
+    const categoryById = await db.categories.get(code);
+    if (categoryById && categoryById.id) {
+      categoryUuidCache.set(code, categoryById.id);
+      return categoryById.id;
+    }
+
+    // 4. Si no está en Dexie y hay conexión con Supabase, consultar la tabla categories
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, code')
+        .or(`code.eq.${code},id.eq.${code}`)
+        .maybeSingle();
+
+      if (!error && data?.id) {
+        categoryUuidCache.set(code, data.id);
+        return data.id;
+      }
+    }
+  } catch (error) {
+    console.error('Error resolviendo código de categoría a UUID:', error);
+  }
+
+  // Si no se encuentra UUID, retornar el código para evitar dejar el campo nulo
+  return code;
 };
 
-export const CATEGORY_UUID_TO_CODE: Record<string, string> = Object.fromEntries(
-  Object.entries(CATEGORY_CODE_TO_UUID).map(([code, uuid]) => [uuid, code])
-);
+/**
+ * Resuelve un UUID a su código legible para mostrar en UI o sincronización.
+ */
+export const resolveCategoryUuidToCode = async (uuid: string): Promise<string> => {
+  if (!uuid) return '';
+  try {
+    const category = await db.categories.get(uuid);
+    if (category?.code) return category.code;
 
-// Función helper para resolver código a UUID
-export const resolveCategoryCodeToUuid = (code: string): string => {
-  return CATEGORY_CODE_TO_UUID[code] || code; // Si ya es UUID, retornar tal cual
-};
+    if (isSupabaseConfigured() && supabase) {
+      const { data } = await supabase
+        .from('categories')
+        .select('code')
+        .eq('id', uuid)
+        .maybeSingle();
 
-// Función helper para resolver UUID a código
-export const resolveCategoryUuidToCode = (uuid: string): string => {
-  return CATEGORY_UUID_TO_CODE[uuid] || uuid; // Si no está en el mapa, retornar tal cual
+      if (data?.code) return data.code;
+    }
+  } catch (error) {
+    console.error('Error resolviendo UUID de categoría a código:', error);
+  }
+  return uuid;
 };
 
 export const DEFAULT_CATEGORIES: Category[] = [
   // Gastos
-  { id: 'cat_housing', name: 'Vivienda & Alquiler', type: 'expense', icon: 'Home', color: '#147DF0', sync_status: 'synced' },
-  { id: 'cat_food', name: 'Comida & Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#00C2C7', sync_status: 'synced' },
-  { id: 'cat_services', name: 'Servicios & Fibra', type: 'expense', icon: 'Wifi', color: '#3B82F6', sync_status: 'synced' },
-  { id: 'cat_transport', name: 'Transporte & Gasolina', type: 'expense', icon: 'Car', color: '#F59E0B', sync_status: 'synced' },
-  { id: 'cat_debt', name: 'Pago de Deudas & Cuotas', type: 'expense', icon: 'CreditCard', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_health', name: 'Salud & Farmacia', type: 'expense', icon: 'HeartPulse', color: '#10B981', sync_status: 'synced' },
-  { id: 'cat_entertainment', name: 'Ocio & Salidas', type: 'expense', icon: 'Film', color: '#8B5CF6', sync_status: 'synced' },
-  { id: 'cat_savings', name: 'Ahorro & Metas', type: 'expense', icon: 'PiggyBank', color: '#00C2C7', sync_status: 'synced' },
-  { id: 'cat_other_exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#9BA3AF', sync_status: 'synced' },
+  { id: 'cat_housing', code: 'cat_housing', name: 'Vivienda & Alquiler', type: 'expense', icon: 'Home', color: '#147DF0', sync_status: 'synced' },
+  { id: 'cat_food', code: 'cat_food', name: 'Comida & Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_services', code: 'cat_services', name: 'Servicios & Fibra', type: 'expense', icon: 'Wifi', color: '#3B82F6', sync_status: 'synced' },
+  { id: 'cat_transport', code: 'cat_transport', name: 'Transporte & Gasolina', type: 'expense', icon: 'Car', color: '#F59E0B', sync_status: 'synced' },
+  { id: 'cat_debt', code: 'cat_debt', name: 'Pago de Deudas & Cuotas', type: 'expense', icon: 'CreditCard', color: '#FF914D', sync_status: 'synced' },
+  { id: 'cat_health', code: 'cat_health', name: 'Salud & Farmacia', type: 'expense', icon: 'HeartPulse', color: '#10B981', sync_status: 'synced' },
+  { id: 'cat_entertainment', code: 'cat_entertainment', name: 'Ocio & Salidas', type: 'expense', icon: 'Film', color: '#8B5CF6', sync_status: 'synced' },
+  { id: 'cat_savings', code: 'cat_savings', name: 'Ahorro & Metas', type: 'expense', icon: 'PiggyBank', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_other_exp', code: 'cat_other_exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#9BA3AF', sync_status: 'synced' },
 
   // Ingresos
-  { id: 'cat_salary', name: 'Sueldo Base', type: 'income', icon: 'Briefcase', color: '#147DF0', sync_status: 'synced' },
-  { id: 'cat_bonus', name: 'Plus & Bonos', type: 'income', icon: 'TrendingUp', color: '#00C2C7', sync_status: 'synced' },
-  { id: 'cat_guard', name: 'Guardias / Turnos', type: 'income', icon: 'Clock', color: '#6366F1', sync_status: 'synced' },
-  { id: 'cat_tickets', name: 'Tickets Alimentación', type: 'income', icon: 'UtensilsCrossed', color: '#10B981', sync_status: 'synced' },
-  { id: 'cat_extras', name: 'Extras & Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
+  { id: 'cat_salary', code: 'cat_salary', name: 'Sueldo Base', type: 'income', icon: 'Briefcase', color: '#147DF0', sync_status: 'synced' },
+  { id: 'cat_bonus', code: 'cat_bonus', name: 'Plus & Bonos', type: 'income', icon: 'TrendingUp', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_guard', code: 'cat_guard', name: 'Guardias / Turnos', type: 'income', icon: 'Clock', color: '#6366F1', sync_status: 'synced' },
+  { id: 'cat_tickets', code: 'cat_tickets', name: 'Tickets Alimentación', type: 'income', icon: 'UtensilsCrossed', color: '#10B981', sync_status: 'synced' },
+  { id: 'cat_extras', code: 'cat_extras', name: 'Extras & Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
 ];
 
 export const DEFAULT_ACCOUNTS: Account[] = [];
@@ -156,6 +212,10 @@ export class LanitappDatabase extends Dexie {
 
     this.version(11).stores({
       planning_notes: 'id, user_id, year, month, sync_status',
+    });
+
+    this.version(12).stores({
+      categories: 'id, code, name, type, sync_status',
     });
 
     this.on('populate', async () => {
@@ -551,10 +611,13 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
 
     // 3. Volcar datos remotos marcados como 'synced' de manera segura (no destructiva)
     if (remoteCategories && remoteCategories.length > 0) {
+      remoteCategories.forEach((c: any) => {
+        if (c.code && c.id) categoryUuidCache.set(c.code, c.id);
+      });
       await db.categories.bulkPut(remoteCategories.map((c) => ({
         ...c,
         id: c.id,
-        code: CATEGORY_UUID_TO_CODE[c.id] || (c as any).code,
+        code: (c as any).code || c.id,
         sync_status: 'synced' as SyncStatus,
       })));
     }
@@ -673,7 +736,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
       const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_incomes').upsert({
         ...rest,
-        category_id: resolveCategoryCodeToUuid(item.category_id || 'cat_salary'),
+        category_id: await resolveCategoryCodeToUuid(item.category_id || 'cat_salary'),
         default_fortnight: fortnightNum,
         user_id: targetUid,
         amount: Number(item.amount),
@@ -716,7 +779,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
       const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
       const { error } = await supabase.from('fixed_expenses').upsert({
         ...rest,
-        category_id: resolveCategoryCodeToUuid(item.category_id || 'cat_services'),
+        category_id: await resolveCategoryCodeToUuid(item.category_id || 'cat_services'),
         default_fortnight: fortnightNum,
         user_id: targetUid,
         amount: Number(item.amount),
@@ -1349,7 +1412,7 @@ export async function saveFixedIncome(
     currency: income.currency || 'USD',
     payment_mode: income.payment_mode || 'usd_cash',
     default_fortnight: income.default_fortnight,
-    category_id: resolveCategoryCodeToUuid(income.category_id || 'cat_salary'),
+    category_id: await resolveCategoryCodeToUuid(income.category_id || 'cat_salary'),
     due_day: income.due_day,
     is_active: income.is_active !== undefined ? income.is_active : true,
     notes: notesWithTag,
@@ -1465,7 +1528,7 @@ export async function saveVariableIncome(
     year: income.year,
     month: income.month,
     fortnight: income.fortnight,
-    category_id: resolveCategoryCodeToUuid(income.category_id || 'cat_extras'),
+    category_id: await resolveCategoryCodeToUuid(income.category_id || 'cat_extras'),
     account_id: income.account_id || '',
     transaction_id: income.account_id ? txId : undefined,
     currency: income.currency || 'USD',
@@ -1590,7 +1653,7 @@ export async function saveVariableExpense(
     year: expense.year,
     month: expense.month,
     fortnight: expense.fortnight,
-    category_id: resolveCategoryCodeToUuid(expense.category_id || 'cat_other_exp'),
+    category_id: await resolveCategoryCodeToUuid(expense.category_id || 'cat_other_exp'),
     account_id: expense.account_id || undefined,
     currency: expense.currency || 'USD',
     notes: expense.notes || '',
@@ -1889,7 +1952,7 @@ export async function saveFixedExpense(
     payment_mode: expense.payment_mode || 'ves_bcv',
     default_fortnight: expense.default_fortnight,
     due_day: expense.due_day !== undefined ? Number(expense.due_day) : undefined,
-    category_id: resolveCategoryCodeToUuid(expense.category_id || 'cat_services'),
+    category_id: await resolveCategoryCodeToUuid(expense.category_id || 'cat_services'),
     is_active: expense.is_active !== undefined ? expense.is_active : true,
     assumed_by_third_party: expense.assumed_by_third_party || false,
     notes: expense.notes || '',
