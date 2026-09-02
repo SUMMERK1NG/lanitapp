@@ -7,6 +7,7 @@ import {
   Mail,
   CreditCard,
   ArrowRight,
+  Shield,
   ShieldCheck,
   AlertCircle,
   Sparkles,
@@ -43,7 +44,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [keepConnected, setKeepConnected] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('lanitapp_keep_connected') === 'true';
+      const val = localStorage.getItem('keepConnected') ?? localStorage.getItem('lanitapp_keep_connected');
+      return val === 'true';
     } catch {
       return false;
     }
@@ -80,6 +82,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       ? rawNumber.toUpperCase()
       : `${loginPrefix}-${rawNumber}`;
 
+    localStorage.setItem('keepConnected', keepConnected ? 'true' : 'false');
     localStorage.setItem('lanitapp_keep_connected', keepConnected ? 'true' : 'false');
     const res = await onSignIn(fullCedula, loginPassword);
     setIsSubmitting(false);
@@ -259,46 +262,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
             </div>
 
-            {/* Control Moderno: Mantenerme Conectado (Toggle Switch) */}
+            {/* Checkbox Mantenerme Conectado - Diseño Moderno */}
             <div
+              className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
+                keepConnected
+                  ? 'bg-gradient-to-r from-primary-custom/10 to-cyan-400/10 border-primary-custom/50 shadow-md shadow-primary-custom/10'
+                  : 'bg-card/50 border-app hover:border-primary-custom/30'
+              }`}
               onClick={() => {
                 const nextVal = !keepConnected;
                 setKeepConnected(nextVal);
+                localStorage.setItem('keepConnected', nextVal ? 'true' : 'false');
                 localStorage.setItem('lanitapp_keep_connected', nextVal ? 'true' : 'false');
               }}
-              className="flex items-center justify-between p-3 rounded-2xl bg-[#0B132B]/80 border border-white/10 hover:border-[#147DF0]/50 transition-all cursor-pointer group select-none shadow-sm"
-              title="Activa esta opción para no cerrar sesión tras 15 minutos de inactividad"
             >
-              <div className="flex items-center gap-2.5 pr-2">
+              <div className="flex items-center gap-3 flex-1">
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
                     keepConnected
-                      ? 'bg-[#147DF0]/20 text-[#00C2C7] ring-1 ring-[#147DF0]/40'
-                      : 'bg-white/5 text-slate-400 group-hover:text-slate-200'
+                      ? 'bg-primary-custom text-white shadow-md shadow-primary-custom/30'
+                      : 'bg-surface text-muted'
                   }`}
                 >
-                  <ShieldCheck className="w-4 h-4" />
+                  {keepConnected ? (
+                    <Shield className="w-5 h-5" />
+                  ) : (
+                    <Lock className="w-5 h-5" />
+                  )}
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-white block cursor-pointer">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-app">
                     Mantenerme conectado
-                  </label>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    No cerrar sesión por inactividad
+                  </p>
+                  <p className="text-[10px] text-muted mt-0.5">
+                    {keepConnected
+                      ? 'Sesión activa indefinidamente'
+                      : 'Se cerrará tras 5 min de inactividad'}
                   </p>
                 </div>
               </div>
 
+              {/* Toggle Switch */}
               <div
-                className={`w-11 h-6 rounded-full transition-all relative shrink-0 p-0.5 ${
+                className={`w-12 h-6 rounded-full transition-all relative shrink-0 ml-3 p-0.5 ${
                   keepConnected
-                    ? 'bg-gradient-to-r from-[#147DF0] to-[#00C2C7] shadow-md shadow-[#147DF0]/30'
-                    : 'bg-white/15 border border-white/10'
+                    ? 'bg-gradient-to-r from-primary-custom to-cyan-400 shadow-md shadow-primary-custom/30'
+                    : 'bg-card border border-app'
                 }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 transform ${
-                    keepConnected ? 'translate-x-5' : 'translate-x-0'
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                    keepConnected ? 'left-6' : 'left-0.5'
                   }`}
                 />
               </div>

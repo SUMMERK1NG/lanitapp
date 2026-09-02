@@ -1,91 +1,81 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-// 15 minutos de inactividad
-export const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
-// 2 minutos de advertencia antes del cierre
-export const WARNING_BEFORE_TIMEOUT_MS = 2 * 60 * 1000;
+export const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inactividad
+export const WARNING_BEFORE_TIMEOUT = 2 * 60 * 1000; // 2 minutos antes del cierre
 
 export interface UseSessionTimeoutOptions {
   isEnabled: boolean;
   onTimeout: () => void;
   onWarning: (remainingSeconds: number) => void;
+  onClearWarning: () => void;
 }
 
 export const useSessionTimeout = ({
   isEnabled,
   onTimeout,
   onWarning,
+  onClearWarning,
 }: UseSessionTimeoutOptions) => {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
-  const isWarningActiveRef = useRef<boolean>(false);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const clearTimers = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current as any);
-      timeoutRef.current = null;
-    }
-    if (warningRef.current) {
-      clearTimeout(warningRef.current as any);
-      warningRef.current = null;
-    }
-    isWarningActiveRef.current = false;
+  const clearAllTimers = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (warningRef.current) clearTimeout(warningRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
   }, []);
 
   const resetTimers = useCallback(() => {
-    if (!isEnabled) {
-      clearTimers();
-      return;
-    }
+    clearAllTimers();
+    onClearWarning();
 
-    lastActivityRef.current = Date.now();
-    clearTimers();
+    if (!isEnabled) return;
 
-    // 1. Configurar advertencia 2 minutos antes del timeout
+    // Advertencia a los 3 minutos (5 - 2 = 3 min de inactividad)
     warningRef.current = setTimeout(() => {
-      isWarningActiveRef.current = true;
-      const remainingSeconds = Math.floor(WARNING_BEFORE_TIMEOUT_MS / 1000);
-      onWarning(remainingSeconds);
-    }, INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_TIMEOUT_MS);
+      let secondsLeft = Math.floor(WARNING_BEFORE_TIMEOUT / 1000);
+      onWarning(secondsLeft);
 
-    // 2. Configurar cierre de sesión tras 15 minutos
+      // Countdown de 2 minutos (120 segundos)
+      countdownRef.current = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft <= 0) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+        } else {
+          onWarning(secondsLeft);
+        }
+      }, 1000);
+    }, INACTIVITY_TIMEOUT - WARNING_BEFORE_TIMEOUT);
+
+    // Cierre de sesión automático a los 5 minutos
     timeoutRef.current = setTimeout(() => {
-      clearTimers();
+      if (countdownRef.current) clearInterval(countdownRef.current);
       onTimeout();
-    }, INACTIVITY_TIMEOUT_MS);
-  }, [isEnabled, onTimeout, onWarning, clearTimers]);
+    }, INACTIVITY_TIMEOUT);
+  }, [isEnabled, onTimeout, onWarning, onClearWarning, clearAllTimers]);
 
   useEffect(() => {
     if (!isEnabled) {
-      clearTimers();
+      clearAllTimers();
+      onClearWarning();
       return;
     }
 
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove', 'click'];
 
     const handleActivity = () => {
-      // Si la ventana de advertencia ya está activa, no reseteamos silenciosamente con cualquier movimiento
-      if (!isWarningActiveRef.current) {
-        lastActivityRef.current = Date.now();
-        resetTimers();
-      }
+      resetTimers();
     };
 
-    events.forEach((event) => {
-      window.addEventListener(event, handleActivity, { passive: true });
-    });
-
-    // Iniciar timers
+    events.forEach((event) => window.addEventListener(event, handleActivity, { passive: true }));
     resetTimers();
 
     return () => {
-      events.forEach((event) => {
-        window.removeEventListener(event, handleActivity);
-      });
-      clearTimers();
+      events.forEach((event) => window.removeEventListener(event, handleActivity));
+      clearAllTimers();
     };
-  }, [isEnabled, resetTimers, clearTimers]);
+  }, [isEnabled, resetTimers, clearAllTimers, onClearWarning]);
 
-  return { resetTimers, clearTimers };
+  return { resetTimers, clearAllTimers };
 };

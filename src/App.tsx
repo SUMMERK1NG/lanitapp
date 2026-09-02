@@ -55,7 +55,7 @@ import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
 import { AuditPanel } from './components/AuditPanel.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
-import { TrendingUp, RefreshCw, AlertTriangle } from 'lucide-react';
+import { TrendingUp, RefreshCw, AlertTriangle, Clock, LogOut, CheckCircle2 } from 'lucide-react';
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 
 export function App() {
@@ -175,46 +175,40 @@ export function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Inactivity session timeout management (15 minutes inactivity -> auto logout unless keepConnected)
+  // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keepConnected)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
-  const [timeoutRemainingSeconds, setTimeoutRemainingSeconds] = useState<number>(120);
-  const keepConnected = typeof localStorage !== 'undefined' && localStorage.getItem('lanitapp_keep_connected') === 'true';
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
+  const keepConnected = typeof localStorage !== 'undefined' && (
+    localStorage.getItem('keepConnected') === 'true' ||
+    localStorage.getItem('lanitapp_keep_connected') === 'true'
+  );
 
   const handleSessionTimeout = useCallback(async () => {
     setShowTimeoutWarning(false);
+    setRemainingSeconds(0);
     await signOut();
-    alert('Tu sesión ha sido cerrada automáticamente por inactividad (15 min) para proteger tus finanzas. Inicia sesión nuevamente.');
   }, [signOut]);
 
   const handleTimeoutWarning = useCallback((seconds: number) => {
     setShowTimeoutWarning(true);
-    setTimeoutRemainingSeconds(seconds);
+    setRemainingSeconds(seconds);
+  }, []);
+
+  const handleClearWarning = useCallback(() => {
+    setShowTimeoutWarning(false);
+    setRemainingSeconds(0);
   }, []);
 
   const { resetTimers } = useSessionTimeout({
     isEnabled: Boolean(currentUser && !keepConnected),
     onTimeout: handleSessionTimeout,
     onWarning: handleTimeoutWarning,
+    onClearWarning: handleClearWarning,
   });
-
-  // Countdown timer while warning modal is open
-  useEffect(() => {
-    if (!showTimeoutWarning) return;
-    const interval = setInterval(() => {
-      setTimeoutRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [showTimeoutWarning]);
 
   const extendSession = useCallback(() => {
     setShowTimeoutWarning(false);
-    setTimeoutRemainingSeconds(120);
+    setRemainingSeconds(0);
     resetTimers();
   }, [resetTimers]);
 
@@ -824,42 +818,62 @@ export function App() {
         currentUser={currentUser}
       />
 
-      {/* Modal de Advertencia de Inactividad */}
+      {/* Modal de Advertencia de Timeout (5 min de inactividad, 2 min de advertencia) */}
       {showTimeoutWarning && currentUser && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-surface border border-amber-500/50 rounded-3xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6" />
+          <div className="w-full max-w-md bg-surface border border-amber-500/50 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-300">
+            {/* Header con ícono */}
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-7 h-7 text-amber-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="text-base font-bold text-app">
                   Sesión a punto de expirar
                 </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Por inactividad, tu sesión se cerrará en <strong className="text-amber-400 font-bold">{timeoutRemainingSeconds} segundos</strong>
+                <p className="text-xs text-muted mt-1">
+                  Por seguridad, tu sesión se cerrará automáticamente por inactividad.
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-muted leading-relaxed">
-              Por tu seguridad financiera, cerramos la sesión automáticamente tras 15 minutos sin actividad. ¿Deseas mantener tu sesión abierta?
-            </p>
+            {/* Timer grande */}
+            <div className="p-4 rounded-2xl bg-card border border-app text-center">
+              <div className="flex items-center justify-center gap-2 text-muted mb-1">
+                <Clock className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Tiempo restante</span>
+              </div>
+              <p className="text-4xl font-black text-amber-400 tabular-nums">
+                {Math.floor(remainingSeconds / 60)}:{(remainingSeconds % 60).toString().padStart(2, '0')}
+              </p>
+              <p className="text-[10px] text-muted mt-1">
+                {remainingSeconds > 60 ? 'minutos' : 'segundos'}
+              </p>
+            </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            {/* Opciones */}
+            <div className="space-y-2">
               <button
                 onClick={extendSession}
-                className="flex-1 py-3 rounded-2xl bg-primary-custom text-white text-xs font-black shadow-md hover:opacity-95 cursor-pointer transition-all active:scale-95"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary-custom to-cyan-400 text-white text-xs font-bold shadow-lg shadow-primary-custom/25 hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                Mantener sesión activa
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Mantener sesión activa</span>
               </button>
+
               <button
                 onClick={handleSessionTimeout}
-                className="flex-1 py-3 rounded-2xl bg-card hover:bg-surface-hover text-app text-xs font-bold border border-app cursor-pointer transition-all active:scale-95"
+                className="w-full py-3 rounded-2xl bg-card hover:bg-surface-hover border border-app text-app text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                Cerrar sesión
+                <LogOut className="w-4 h-4" />
+                <span>Cerrar sesión ahora</span>
               </button>
             </div>
+
+            {/* Nota informativa */}
+            <p className="text-[10px] text-muted text-center leading-relaxed">
+              💡 Tip: Marca &quot;Mantenerme conectado&quot; en el login para evitar este mensaje en futuras sesiones.
+            </p>
           </div>
         </div>
       )}
