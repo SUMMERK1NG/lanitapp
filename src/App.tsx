@@ -178,23 +178,48 @@ export function App() {
   // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keepConnected)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
-  const keepConnected = typeof localStorage !== 'undefined' && (
-    localStorage.getItem('keepConnected') === 'true' ||
-    localStorage.getItem('lanitapp_keep_connected') === 'true'
-  );
+  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem('keepConnected') === 'true' ||
+        localStorage.getItem('lanitapp_keep_connected') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  // Keep state synchronized if changed in other tabs or components
+  useEffect(() => {
+    const handleStorage = () => {
+      const val =
+        localStorage.getItem('keepConnected') === 'true' ||
+        localStorage.getItem('lanitapp_keep_connected') === 'true';
+      setKeepConnected(val);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  console.log('[App] keepConnected:', keepConnected);
+  console.log('[App] user:', currentUser ? 'Autenticado' : 'No autenticado');
+  console.log('[App] isEnabled para timeout:', Boolean(currentUser && !keepConnected));
 
   const handleSessionTimeout = useCallback(async () => {
+    console.log('[App] handleSessionTimeout llamado');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
     await signOut();
   }, [signOut]);
 
   const handleTimeoutWarning = useCallback((seconds: number) => {
+    console.log('[App] handleTimeoutWarning llamado - seconds:', seconds);
     setShowTimeoutWarning(true);
     setRemainingSeconds(seconds);
   }, []);
 
   const handleClearWarning = useCallback(() => {
+    console.log('[App] handleClearWarning llamado');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
   }, []);
@@ -207,6 +232,7 @@ export function App() {
   });
 
   const extendSession = useCallback(() => {
+    console.log('[App] extendSession llamado por el usuario');
     setShowTimeoutWarning(false);
     setRemainingSeconds(0);
     resetTimers();
@@ -875,6 +901,38 @@ export function App() {
               💡 Tip: Marca &quot;Mantenerme conectado&quot; en el login para evitar este mensaje en futuras sesiones.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* BOTONES DE TEST MANUAL DE TIMEOUT (SOLO PARA DEBUG) */}
+      {currentUser && (
+        <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-1.5 bg-black/85 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 shadow-2xl animate-in fade-in">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">DEBUG TIMEOUT</span>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${keepConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+              {keepConnected ? 'Conectado ON' : 'Timeout ACTIVO'}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              console.log('[TEST] Forzando advertencia de timeout (120s)');
+              handleTimeoutWarning(120);
+            }}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-xl cursor-pointer shadow-sm transition-all text-left flex items-center gap-1.5"
+          >
+            <span>⚠️</span>
+            <span>Probar Modal (2 min)</span>
+          </button>
+          <button
+            onClick={() => {
+              console.log('[TEST] Forzando timeout inmediatamente');
+              handleSessionTimeout();
+            }}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-xl cursor-pointer shadow-sm transition-all text-left flex items-center gap-1.5"
+          >
+            <span>🛑</span>
+            <span>Forzar Cierre Sesión</span>
+          </button>
         </div>
       )}
 
