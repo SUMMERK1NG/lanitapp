@@ -66,12 +66,7 @@ export function useAuth() {
               localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
               // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
               localStorage.setItem('user_avatar', avatarResolved);
-              if (userProfile.theme_mode) {
-                localStorage.setItem('lanitapp_theme_mode', userProfile.theme_mode);
-              }
-              if (userProfile.accent_color) {
-                localStorage.setItem('lanitapp_accent_color', userProfile.accent_color);
-              }
+              // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
               if (typeof document !== 'undefined') {
                 const root = document.documentElement;
                 root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
@@ -314,12 +309,7 @@ export function useAuth() {
           sync_status: 'synced',
         };
 
-        if (userProfile.theme_mode) {
-          localStorage.setItem('lanitapp_theme_mode', userProfile.theme_mode);
-        }
-        if (userProfile.accent_color) {
-          localStorage.setItem('lanitapp_accent_color', userProfile.accent_color);
-        }
+        // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
         if (typeof document !== 'undefined') {
           const root = document.documentElement;
           root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
@@ -565,12 +555,7 @@ export function useAuth() {
     localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(updated));
     setCurrentUser(updated);
 
-    if (updates.theme_mode) {
-      localStorage.setItem('lanitapp_theme_mode', updates.theme_mode);
-    }
-    if (updates.accent_color) {
-      localStorage.setItem('lanitapp_accent_color', updates.accent_color);
-    }
+    // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
 
     if (typeof document !== 'undefined') {
       const root = document.documentElement;

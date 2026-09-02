@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ThemeMode, AccentColor } from '../types/index.ts';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { getUserPreferences, updatePreference } from '../lib/profilePreferences.ts';
 
 export const THEME_MODE_OPTIONS: { id: ThemeMode; name: string; icon: string; desc: string; previewBg: string; borderSample: string }[] = [
   { id: 'navy', name: 'Azul Marino Profundo', icon: '🌊', desc: 'Fondo Navy #0B132B', previewBg: '#0B132B', borderSample: '#203657' },
@@ -25,25 +27,33 @@ export const ACCENT_COLOR_OPTIONS: { name: string; color: AccentColor; bgClass: 
 
 export function useTheme() {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('lanitapp_theme_mode') as ThemeMode) || 'navy';
+    if (typeof localStorage !== 'undefined') {
+      return (localStorage.getItem('lanitapp_theme_mode') as ThemeMode) || 'navy';
+    }
+    return 'navy';
   });
 
   const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
-    return (localStorage.getItem('lanitapp_accent_color') as AccentColor) || '#147DF0';
+    if (typeof localStorage !== 'undefined') {
+      return (localStorage.getItem('lanitapp_accent_color') as AccentColor) || '#147DF0';
+    }
+    return '#147DF0';
   });
 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const applyTheme = (mode: ThemeMode, color: AccentColor) => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
 
-    // Remove existing theme classes
+    // Remover clases previas
     root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
     root.classList.add(`theme-${mode}`);
 
-    // Set dynamic primary color variable
+    // Variables dinámicas de acento
     root.style.setProperty('--primary', color);
     root.style.setProperty('--primary-custom', color);
 
-    // Convert hex to rgb for opacity helpers if needed
     const hex = color.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
@@ -51,24 +61,99 @@ export function useTheme() {
     root.style.setProperty('--primary-rgb', `${r}, ${g}, ${b}`);
   };
 
+  // Cargar preferencias desde Supabase al montar
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPreferences = async () => {
+      try {
+        if (isSupabaseConfigured() && supabase) {
+          const { data: { user } } = await supabase.auth.getUser();
+
+          if (user && isMounted) {
+            const prefs = await getUserPreferences(user.id);
+            if (prefs && isMounted) {
+              if (prefs.theme_mode) {
+                setThemeModeState(prefs.theme_mode as ThemeMode);
+              }
+              if (prefs.accent_color) {
+                setAccentColorState(prefs.accent_color as AccentColor);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando preferencias de tema desde Supabase:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadPreferences();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Aplicar cambios al DOM cada vez que cambian themeMode o accentColor
   useEffect(() => {
     applyTheme(themeMode, accentColor);
   }, [themeMode, accentColor]);
 
-  const setThemeMode = (mode: ThemeMode) => {
+  // Actualizar tema con sincronización a Supabase y caché de respaldo
+  const setThemeMode = useCallback(async (mode: ThemeMode) => {
     setThemeModeState(mode);
-    localStorage.setItem('lanitapp_theme_mode', mode);
-  };
 
-  const setAccentColor = (color: AccentColor) => {
+    // Caché rápido local para respuesta visual inmediata
+    try {
+      localStorage.setItem('lanitapp_theme_mode', mode);
+    } catch {}
+
+    // Persistir en Supabase profiles
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await updatePreference(user.id, 'theme_mode', mode);
+        }
+      }
+    } catch (error) {
+      console.error('Error guardando tema en Supabase:', error);
+    }
+  }, []);
+
+  // Actualizar color de acento con sincronización a Supabase y caché de respaldo
+  const setAccentColor = useCallback(async (color: AccentColor) => {
     setAccentColorState(color);
-    localStorage.setItem('lanitapp_accent_color', color);
-  };
+
+    // Caché rápido local para respuesta visual inmediata
+    try {
+      localStorage.setItem('lanitapp_accent_color', color);
+    } catch {}
+
+    // Persistir en Supabase profiles
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await updatePreference(user.id, 'accent_color', color);
+        }
+      }
+    } catch (error) {
+      console.error('Error guardando color de acento en Supabase:', error);
+    }
+  }, []);
 
   return {
     themeMode,
     accentColor,
     setThemeMode,
     setAccentColor,
+    updateTheme: setThemeMode,
+    updateAccentColor: setAccentColor,
+    isLoading,
   };
 }

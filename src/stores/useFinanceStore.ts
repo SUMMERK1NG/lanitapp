@@ -492,7 +492,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       case 'profiles': {
         if (newRow?.id && newRow.id === userId) {
           if (newRow.theme_mode) {
-            localStorage.setItem('lanitapp_theme_mode', newRow.theme_mode);
             if (typeof document !== 'undefined') {
               const root = document.documentElement;
               root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
@@ -500,7 +499,6 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
             }
           }
           if (newRow.accent_color) {
-            localStorage.setItem('lanitapp_accent_color', newRow.accent_color);
             if (typeof document !== 'undefined') {
               document.documentElement.style.setProperty('--primary', newRow.accent_color);
               document.documentElement.style.setProperty('--primary-custom', newRow.accent_color);

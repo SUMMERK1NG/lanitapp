@@ -286,31 +286,26 @@ export function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keepConnected)
+  // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keep_session)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
   const [keepConnected, setKeepConnected] = useState<boolean>(() => {
     try {
-      return (
-        localStorage.getItem('keepConnected') === 'true' ||
-        localStorage.getItem('lanitapp_keep_connected') === 'true'
-      );
+      return localStorage.getItem('lanitapp_keep_connected') === 'true';
     } catch {
       return false;
     }
   });
 
-  // Keep state synchronized if changed in other tabs or components
+  // Sincronizar estado local cuando cargue el perfil de Supabase
   useEffect(() => {
-    const handleStorage = () => {
-      const val =
-        localStorage.getItem('keepConnected') === 'true' ||
-        localStorage.getItem('lanitapp_keep_connected') === 'true';
-      setKeepConnected(val);
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    if (currentUser?.keep_session !== undefined) {
+      setKeepConnected(currentUser.keep_session);
+    }
+  }, [currentUser?.keep_session]);
+
+  // Fuente de verdad: profiles.keep_session (fallback a keepConnected / false)
+  const isSessionKept = currentUser?.keep_session ?? keepConnected;
 
   const handleSessionTimeout = useCallback(async () => {
     setShowTimeoutWarning(false);
@@ -329,7 +324,7 @@ export function App() {
   }, []);
 
   const { resetTimers } = useSessionTimeout({
-    isEnabled: Boolean(currentUser && !keepConnected),
+    isEnabled: Boolean(currentUser && !isSessionKept),
     onTimeout: handleSessionTimeout,
     onWarning: handleTimeoutWarning,
     onClearWarning: handleClearWarning,
