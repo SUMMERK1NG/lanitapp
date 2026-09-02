@@ -27,15 +27,33 @@ export const getUserPreferences = async (userId: string): Promise<UserPreference
   }
 
   try {
-    const { data, error } = await supabase
+    let data: any = null;
+    const res = await supabase
       .from('profiles')
       .select('theme_mode, accent_color, last_active_view, keep_session, currency, dashboard_widgets')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      // Si la columna no existe aún (código 42703), no bloquear la aplicación
-      return null;
+    if (res.error) {
+      // Si la columna dashboard_widgets no existe aún en la tabla, reintentar con las columnas previas
+      const fallbackRes = await supabase
+        .from('profiles')
+        .select('theme_mode, accent_color, last_active_view, keep_session, currency')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (fallbackRes.error) {
+        const minimalRes = await supabase
+          .from('profiles')
+          .select('currency')
+          .eq('id', userId)
+          .maybeSingle();
+        data = minimalRes.data;
+      } else {
+        data = fallbackRes.data;
+      }
+    } else {
+      data = res.data;
     }
 
     if (!data) return null;

@@ -24,6 +24,8 @@ import {
   toSupabaseAccountPayload,
   getFortnightPeriodKey,
   getActiveUserId,
+  getLastSyncTimestamp,
+  setLastSyncTimestampInMemory,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
@@ -80,9 +82,16 @@ export interface FinanceStoreState {
   // Sync state
   syncStatus: RealtimeSyncStatus;
   lastSyncTime: string | null;
+  lastSyncTimestamp: string | null;
+  setLastSyncTimestamp: (timestamp: string | null) => void;
   isLoading: boolean;
   error: string | null;
   syncQueue: SyncQueueItem[];
+
+  // UI state
+  isSidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
 
   // Actions
   setSyncStatus: (status: RealtimeSyncStatus) => void;
@@ -219,10 +228,37 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   transactions: [],
 
   syncStatus: typeof navigator !== 'undefined' && navigator.onLine ? 'syncing' : 'offline',
-  lastSyncTime: null,
+  lastSyncTime: getLastSyncTimestamp(),
+  lastSyncTimestamp: getLastSyncTimestamp(),
+  setLastSyncTimestamp: (timestamp: string | null) => {
+    setLastSyncTimestampInMemory(timestamp);
+    set({ lastSyncTimestamp: timestamp, lastSyncTime: timestamp });
+  },
   isLoading: true,
   error: null,
   syncQueue: [],
+
+  // UI state
+  isSidebarCollapsed: (() => {
+    try {
+      return localStorage.getItem('lanitapp_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  })(),
+  toggleSidebar: () => {
+    const next = !get().isSidebarCollapsed;
+    try {
+      localStorage.setItem('lanitapp_sidebar_collapsed', String(next));
+    } catch {}
+    set({ isSidebarCollapsed: next });
+  },
+  setSidebarCollapsed: (collapsed: boolean) => {
+    try {
+      localStorage.setItem('lanitapp_sidebar_collapsed', String(collapsed));
+    } catch {}
+    set({ isSidebarCollapsed: collapsed });
+  },
 
   setSyncStatus: (status) => set({ syncStatus: status }),
   setError: (error) => set({ error }),
@@ -455,6 +491,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         transactions,
         syncStatus: 'connected',
         lastSyncTime: now,
+        lastSyncTimestamp: now,
         isLoading: false,
         error: null,
       });
@@ -742,7 +779,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         break;
     }
 
-    set({ lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), syncStatus: 'connected' });
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setLastSyncTimestampInMemory(now);
+    set({ lastSyncTime: now, lastSyncTimestamp: now, syncStatus: 'connected' });
   },
 
   /**

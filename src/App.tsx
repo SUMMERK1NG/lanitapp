@@ -12,6 +12,7 @@ import { useRealtimeSync } from './hooks/useRealtimeSync.ts';
 import { useExchangeRates } from './hooks/useExchangeRates.ts';
 import { useTheme } from './hooks/useTheme.ts';
 import { useAuth } from './hooks/useAuth.ts';
+import { useFinanceStore } from './stores/useFinanceStore.ts';
 import { supabase, isSupabaseConfigured } from './lib/supabase.ts';
 import type {
   Category,
@@ -87,25 +88,8 @@ export function App() {
       }
     }
   };
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('lanitapp_sidebar_collapsed') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('lanitapp_sidebar_collapsed', String(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  };
+  const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
+  const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
 
   // Authentication hook
   const {

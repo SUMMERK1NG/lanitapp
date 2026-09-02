@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { syncWithSupabase } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import type { SyncResult } from '../types/index.ts';
 
 export function useNetworkStatus() {
@@ -8,9 +9,9 @@ export function useNetworkStatus() {
   );
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
-    return localStorage.getItem('lanitapp_last_sync') || 'No sincronizado aún';
-  });
+
+  const lastSyncTime = useFinanceStore((state) => state.lastSyncTime) || 'No sincronizado aún';
+  const setLastSyncTimestamp = useFinanceStore((state) => state.setLastSyncTimestamp);
 
   const syncNow = useCallback(async () => {
     if (isSyncing) return;
@@ -19,14 +20,14 @@ export function useNetworkStatus() {
       const result = await syncWithSupabase();
       setLastSyncResult(result);
       if (result.lastSyncTime) {
-        setLastSyncTime(result.lastSyncTime);
+        setLastSyncTimestamp(result.lastSyncTime);
       }
     } catch (err) {
       console.error('Manual sync error:', err);
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing]);
+  }, [isSyncing, setLastSyncTimestamp]);
 
   useEffect(() => {
     const handleOnline = () => {

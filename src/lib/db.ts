@@ -45,6 +45,17 @@ export function getActiveUserId(): string {
   return _activeUserIdInMemory;
 }
 
+// Gestión en memoria del timestamp de última sincronización
+let _lastSyncTimestamp: string | null = null;
+
+export function getLastSyncTimestamp(): string | null {
+  return _lastSyncTimestamp;
+}
+
+export function setLastSyncTimestampInMemory(timestamp: string | null): void {
+  _lastSyncTimestamp = timestamp;
+}
+
 export async function fetchActiveUserId(): Promise<string | null> {
   if (_activeUserIdInMemory) return _activeUserIdInMemory;
   try {
@@ -574,7 +585,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
     }
 
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    localStorage.setItem('lanitapp_last_sync', now);
+    _lastSyncTimestamp = now;
   } catch (err) {
     console.error('Error in fetchAndConsolidateUserCloudData:', err);
   }

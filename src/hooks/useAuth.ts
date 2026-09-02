@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { saveUserProfile, setActiveUserId } from '../lib/db.ts';
+import { saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -522,7 +522,7 @@ export function useAuth() {
         await supabase.auth.signOut().catch((e) => console.warn('Supabase signout notice:', e));
       }
       setActiveUserId('');
-      localStorage.removeItem('lanitapp_last_sync');
+      setLastSyncTimestampInMemory(null);
       sessionStorage.clear();
       setCurrentUser(null);
     } finally {
