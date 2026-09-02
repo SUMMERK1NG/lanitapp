@@ -421,7 +421,9 @@ export function App() {
 
   // System Categories & Accounts
   const categories: Category[] = liveCategories.length > 0 ? liveCategories : DEFAULT_CATEGORIES;
-  const isUserMatch = (item: { user_id?: string }) => !activeUserId || !item.user_id || item.user_id === activeUserId;
+  // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
+  const isUserMatch = (item: { user_id?: string | null }) =>
+    Boolean(activeUserId && item.user_id && item.user_id === activeUserId);
 
   const accounts: Account[] = liveAccounts.filter(isUserMatch);
   const transactions: Transaction[] = liveTransactions.filter(isUserMatch);

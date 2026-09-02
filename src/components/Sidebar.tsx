@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingCount: _pendingCount,
   movementsCount = 0,
   rates,
-  isAdmin = true,
+  isAdmin = false,
   isCollapsed = false,
   onToggleCollapse: _onToggleCollapse,
   onSync,

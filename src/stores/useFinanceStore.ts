@@ -264,7 +264,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         db.transactions.toArray(),
       ]);
 
-      const matchesUser = (item: { user_id?: string }) => !userId || !item.user_id || item.user_id === userId;
+      // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
+      const matchesUser = (item: { user_id?: string | null }) =>
+        Boolean(userId && item.user_id && item.user_id === userId);
 
       const filteredAccounts = accounts.filter(matchesUser);
       const filteredFixedIncomes = fixedIncomes.filter(matchesUser);

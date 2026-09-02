@@ -57,7 +57,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  const isAdmin = propIsAdmin ?? (profile?.role === 'admin' || (typeof localStorage !== 'undefined' && localStorage.getItem('user_role') === 'admin'));
+  // Seguridad: El rol debe provenir estrictamente de Supabase Auth / Profiles.
+  // NO se permite validación de rol desde localStorage para prevenir escalada de privilegios.
+  const isAdmin = propIsAdmin ?? (profile?.role === 'admin');
 
   React.useEffect(() => {
     if (profile) {

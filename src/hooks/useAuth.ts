@@ -64,7 +64,7 @@ export function useAuth() {
 
               await saveUserProfile(userProfile);
               localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
-              localStorage.setItem('user_role', role);
+              // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
               localStorage.setItem('user_avatar', avatarResolved);
               if (userProfile.theme_mode) {
                 localStorage.setItem('lanitapp_theme_mode', userProfile.theme_mode);
@@ -125,7 +125,7 @@ export function useAuth() {
 
             await saveUserProfile(newProfile);
             localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(newProfile));
-            localStorage.setItem('user_role', role);
+            // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             setCurrentUser(newProfile);
             setLoading(false);
             return;
@@ -135,13 +135,11 @@ export function useAuth() {
 
       // No active session in Supabase: Clear any residual tokens
       localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
-      localStorage.removeItem('user_role');
       sessionStorage.clear();
       setCurrentUser(null);
     } catch (err: any) {
       console.error('Auth initialization error:', err);
       localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
-      localStorage.removeItem('user_role');
       setCurrentUser(null);
     } finally {
       setLoading(false);
@@ -186,13 +184,12 @@ export function useAuth() {
             };
             await saveUserProfile(userProfile);
             localStorage.setItem(ACTIVE_USER_STORAGE_KEY, JSON.stringify(userProfile));
-            localStorage.setItem('user_role', role);
+            // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             localStorage.setItem('user_avatar', avatarResolved);
             setCurrentUser(userProfile);
           }
         } else if (event === 'SIGNED_OUT') {
           localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
-          localStorage.removeItem('user_role');
           sessionStorage.clear();
           setCurrentUser(null);
         }

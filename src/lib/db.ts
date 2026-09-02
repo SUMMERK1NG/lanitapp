@@ -886,7 +886,8 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
               }
             }
           } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            if (newRow?.id && (!newRow.user_id || newRow.user_id === userId)) {
+            // SEGURIDAD: Validación estricta multi-tenant en eventos Realtime
+            if (newRow?.id && newRow.user_id === userId) {
               if (tableName === 'accounts') {
                 const normAcc = {
                   id: newRow.id,
