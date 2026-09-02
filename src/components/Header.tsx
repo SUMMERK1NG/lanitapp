@@ -8,6 +8,7 @@ import {
   Bell,
   PanelLeftClose,
   PanelLeftOpen,
+  Activity,
 } from 'lucide-react';
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
 import { computeSystemNotifications } from './NotificationCenterModal.tsx';
@@ -36,6 +37,7 @@ interface HeaderProps {
   onOpenConverter: () => void;
   onOpenProfile: () => void;
   onOpenNotifications?: () => void;
+  onOpenAudit?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenConverter,
   onOpenProfile,
   onOpenNotifications,
+  onOpenAudit,
 }) => {
   // Compute active notifications count
   const notifications = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
@@ -202,6 +205,17 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
           </div>
+
+          {/* Botón de Diagnóstico & Auditoría de Supabase (Solo Admin) */}
+          {activeProfile?.role === 'admin' && onOpenAudit && (
+            <button
+              onClick={onOpenAudit}
+              className="p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-primary-custom shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              title="Diagnóstico & Auditoría Supabase (Solo Admin)"
+            >
+              <Activity className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Indicador de Estado de Sincronización Realtime (4 Estados Visuales) */}
           {(() => {

@@ -46,6 +46,7 @@ interface SettingsViewProps {
   onChangeThemeMode: (mode: ThemeMode) => void;
   onChangeAccentColor: (color: AccentColor) => void;
   onSync: () => void;
+  onOpenAudit?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -61,6 +62,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   initialTab = 'themes',
   onChangeThemeMode,
   onChangeAccentColor,
+  onOpenAudit,
 }) => {
   const [activeTab, setActiveTab] = useState<'themes' | 'categories' | 'users' | 'backup'>(initialTab);
 
@@ -239,6 +241,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             isSyncing={isSyncing}
             lastSyncTime={lastSyncTime}
             currentUserId={currentUserId}
+            onOpenAudit={onOpenAudit}
           />
         </div>
       )}

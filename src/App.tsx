@@ -53,6 +53,7 @@ import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.ts
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
+import { AuditPanel } from './components/AuditPanel.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
 import { TrendingUp, RefreshCw } from 'lucide-react';
 
@@ -136,6 +137,7 @@ export function App() {
   const [transactionModalType, setTransactionModalType] = useState<TransactionType>('expense');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [preselectedDebtForPayment, setPreselectedDebtForPayment] = useState<string | undefined>(undefined);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -380,6 +382,7 @@ export function App() {
           onOpenConverter={() => setIsConverterOpen(true)}
           onOpenProfile={() => setIsProfileModalOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
+          onOpenAudit={() => setIsAuditModalOpen(true)}
         />
 
         {/* Toast Alert */}
@@ -635,6 +638,7 @@ export function App() {
                 onChangeThemeMode={handleChangeThemeMode}
                 onChangeAccentColor={handleChangeAccentColor}
                 onSync={syncNow}
+                onOpenAudit={() => setIsAuditModalOpen(true)}
               />
             </div>
           )}
@@ -732,6 +736,13 @@ export function App() {
         fixedExpenses={fixedExpenses}
         selectedYear={selectedYear}
         selectedMonth={selectedMonth}
+      />
+
+      {/* Supabase Audit & Diagnostics Panel (Admin Only) */}
+      <AuditPanel
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        currentUser={currentUser}
       />
 
       {/* Mobile-First Fixed Bottom Navigation Bar */}

@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   FileCode,
   Lock,
+  Activity,
 } from 'lucide-react';
 import type { Category, Account, ExchangeRatesData } from '../types/index.ts';
 import { forceCloudSyncAndPurgeResiduals } from '../lib/db.ts';
@@ -23,6 +24,7 @@ interface AdminBackupProps {
   lastSyncTime: string | null;
   currentUserId?: string;
   onSyncComplete?: (message: string) => void;
+  onOpenAudit?: () => void;
 }
 
 export const AdminBackup: React.FC<AdminBackupProps> = ({
@@ -34,6 +36,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
   lastSyncTime,
   currentUserId,
   onSyncComplete,
+  onOpenAudit,
 }) => {
   const [isForcingSync, setIsForcingSync] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -243,6 +246,17 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Ejecutando Sincronización Forzada...' : 'Sincronización Forzada Cloud & Limpiar Residuos'}</span>
           </button>
+
+          {onOpenAudit && (
+            <button
+              type="button"
+              onClick={onOpenAudit}
+              className="w-full mt-2.5 py-3 rounded-2xl bg-card hover:bg-surface-hover border border-primary-custom/40 text-primary-custom text-xs font-black shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Activity className="w-4 h-4" />
+              <span>Diagnóstico & Auditoría Completa de Tablas Supabase</span>
+            </button>
+          )}
         </div>
       </div>
 
