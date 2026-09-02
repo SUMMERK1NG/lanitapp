@@ -44,6 +44,7 @@ export interface UserProfile {
   accent_color: AccentColor;
   last_active_view?: string;
   keep_session?: boolean;
+  dashboard_widgets?: any;
   created_at?: string;
   last_sign_in_at?: string;
   last_login_at?: string;

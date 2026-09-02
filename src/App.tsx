@@ -599,6 +599,8 @@ export function App() {
               rates={rates}
               onNavigate={handleViewChange}
               userCreatedAt={currentUser?.created_at}
+              currentUserId={currentUser?.id}
+              initialWidgets={currentUser?.dashboard_widgets}
             />
           )}
 

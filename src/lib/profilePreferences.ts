@@ -6,6 +6,7 @@ export interface UserPreferences {
   last_active_view: string;
   keep_session: boolean;
   currency: string;
+  dashboard_widgets?: any;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -14,6 +15,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   last_active_view: 'dashboard',
   keep_session: false,
   currency: 'USD',
+  dashboard_widgets: null,
 };
 
 /**
@@ -27,7 +29,7 @@ export const getUserPreferences = async (userId: string): Promise<UserPreference
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('theme_mode, accent_color, last_active_view, keep_session, currency')
+      .select('theme_mode, accent_color, last_active_view, keep_session, currency, dashboard_widgets')
       .eq('id', userId)
       .single();
 
@@ -44,6 +46,7 @@ export const getUserPreferences = async (userId: string): Promise<UserPreference
       last_active_view: data.last_active_view || DEFAULT_PREFERENCES.last_active_view,
       keep_session: data.keep_session ?? DEFAULT_PREFERENCES.keep_session,
       currency: data.currency || DEFAULT_PREFERENCES.currency,
+      dashboard_widgets: data.dashboard_widgets ?? DEFAULT_PREFERENCES.dashboard_widgets,
     };
   } catch {
     return null;
@@ -56,7 +59,7 @@ export const getUserPreferences = async (userId: string): Promise<UserPreference
 export const updatePreference = async (
   userId: string,
   key: keyof UserPreferences,
-  value: string | boolean
+  value: any
 ): Promise<boolean> => {
   if (!isSupabaseConfigured() || !supabase || !userId) {
     return false;

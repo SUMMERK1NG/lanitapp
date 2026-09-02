@@ -49,6 +49,8 @@ import type {
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
+import { updatePreference, getUserPreferences } from '../lib/profilePreferences.ts';
+import { getActiveUserId } from '../lib/db.ts';
 
 interface DashboardModuleProps {
   transactions: Transaction[];
@@ -65,6 +67,8 @@ interface DashboardModuleProps {
   rates: ExchangeRatesData;
   onNavigate: (view: any) => void;
   userCreatedAt?: string;
+  currentUserId?: string;
+  initialWidgets?: DashboardWidgetConfig | null;
 }
 
 const MONTH_NAMES = [
@@ -117,6 +121,8 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   rates,
   onNavigate,
   userCreatedAt,
+  currentUserId,
+  initialWidgets,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -125,26 +131,58 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
 
-  // Load custom widget preferences
+  // Load custom widget preferences from Supabase profiles (with fallback to DEFAULT_WIDGETS)
   const [widgets, setWidgets] = useState<DashboardWidgetConfig>(() => {
-    try {
-      const saved = localStorage.getItem('lanitapp_dashboard_widgets');
-      if (saved) return { ...DEFAULT_WIDGETS, ...JSON.parse(saved) };
-    } catch {}
+    if (initialWidgets && typeof initialWidgets === 'object') {
+      return { ...DEFAULT_WIDGETS, ...initialWidgets };
+    }
     return DEFAULT_WIDGETS;
   });
 
-  const toggleWidget = (key: keyof DashboardWidgetConfig) => {
-    setWidgets((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      localStorage.setItem('lanitapp_dashboard_widgets', JSON.stringify(updated));
-      return updated;
-    });
+  // Sincronizar widgets cuando cambien los datos del perfil en Supabase
+  useEffect(() => {
+    if (initialWidgets && typeof initialWidgets === 'object') {
+      setWidgets((prev) => ({ ...prev, ...initialWidgets }));
+    }
+  }, [initialWidgets]);
+
+  // Si no se pasaron initialWidgets pero hay un usuario activo, cargar sus preferencias
+  useEffect(() => {
+    const effectiveUserId = currentUserId || getActiveUserId();
+    if (effectiveUserId) {
+      getUserPreferences(effectiveUserId).then((prefs) => {
+        if (prefs?.dashboard_widgets && typeof prefs.dashboard_widgets === 'object') {
+          setWidgets((prev) => ({ ...prev, ...prefs.dashboard_widgets }));
+        }
+      });
+    }
+  }, [currentUserId]);
+
+  const toggleWidget = async (key: keyof DashboardWidgetConfig) => {
+    const updated = { ...widgets, [key]: !widgets[key] };
+    setWidgets(updated); // Actualización visual inmediata
+
+    const effectiveUserId = currentUserId || getActiveUserId();
+    if (effectiveUserId) {
+      try {
+        await updatePreference(effectiveUserId, 'dashboard_widgets', updated);
+      } catch (err) {
+        console.error('Error guardando configuración de widgets en Supabase:', err);
+      }
+    }
   };
 
-  const resetWidgets = () => {
-    setWidgets(DEFAULT_WIDGETS);
-    localStorage.setItem('lanitapp_dashboard_widgets', JSON.stringify(DEFAULT_WIDGETS));
+  const resetWidgets = async () => {
+    setWidgets(DEFAULT_WIDGETS); // Actualización visual inmediata
+
+    const effectiveUserId = currentUserId || getActiveUserId();
+    if (effectiveUserId) {
+      try {
+        await updatePreference(effectiveUserId, 'dashboard_widgets', DEFAULT_WIDGETS);
+      } catch (err) {
+        console.error('Error restableciendo configuración de widgets en Supabase:', err);
+      }
+    }
   };
 
   const handleGoToCurrentMonth = () => {
