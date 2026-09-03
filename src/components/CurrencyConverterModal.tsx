@@ -10,6 +10,7 @@ import {
   Calculator as CalcIcon,
   ArrowRightLeft,
   Delete,
+  TrendingUp,
 } from 'lucide-react';
 import type { ExchangeRatesData } from '../types/index.ts';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
@@ -215,12 +216,12 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-app">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold text-lg">
-              🧮
+            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold shadow-sm">
+              <TrendingUp className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-base font-black text-app tracking-tight">
-                Centro de Divisas & Tasas
+                Centro de Tasas
               </h2>
               <p className="text-[11px] text-muted">Conversor instantáneo, calculadora y análisis histórico</p>
             </div>
