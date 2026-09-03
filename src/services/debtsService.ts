@@ -333,12 +333,13 @@ export const addDebtPayment = async (data: {
   const newStatus = newBalance <= 0.01 ? 'paid' : 'active';
   const newPendingInstallments = debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined;
 
+  const txId = ensureValidUuid();
   const txRecord: Transaction = {
-    id: 'tx_' + paymentRecord.id,
+    id: txId,
     user_id: userId,
     amount: Number(data.amount),
     type: 'expense',
-    description: `Abono: ${debt.creditor} (${fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
+    description: `Abono: ${debt.creditor || (debt as any).creditor_name || 'Deuda'} (${fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: 'cat_debt',
     account_id: (data as any).account_id || null,
     transaction_date: paymentDate,
@@ -359,20 +360,36 @@ export const addDebtPayment = async (data: {
   // Confirmación asíncrona con Supabase
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) {
+        logger.error('[debtsService addDebtPayment Error]: Usuario no autenticado en Supabase');
+        return paymentRecord;
+      }
+
+      // Asegurar que el user_id corresponda al usuario autenticado
+      paymentRecord.user_id = user.id;
+      txRecord.user_id = user.id;
+
       const { sync_status: s1, ...payRaw } = paymentRecord;
       const payPayload = toSupabaseDebtPaymentPayload(payRaw);
       const { sync_status: s2, ...txRaw } = txRecord;
       const txPayload = toSupabaseTransactionPayload(txRaw);
+
+      logger.dev('[DEBT PAYMENT] Enviando a Supabase:', {
+        payPayload,
+        txPayload,
+      });
+
       const [res1, res2, res3] = await Promise.all([
-        supabase.from('debt_payments').upsert(payPayload),
+        supabase.from('debt_payments').upsert(payPayload).select(),
         supabase.from('debts').update({
           current_balance: newBalance,
           remaining_amount: newBalance,
           pending_installments: newPendingInstallments,
           status: newStatus,
           updated_at: new Date().toISOString(),
-        }).eq('id', debt.id),
-        supabase.from('transactions').upsert(txPayload),
+        }).eq('id', debt.id).select(),
+        supabase.from('transactions').upsert(txPayload).select(),
       ]);
 
       if (!res1.error && !res2.error && !res3.error) {
@@ -380,8 +397,18 @@ export const addDebtPayment = async (data: {
         txRecord.sync_status = 'synced';
         await db.debt_payments.update(paymentRecord.id, { sync_status: 'synced' });
         await db.transactions.update(txRecord.id, { sync_status: 'synced' });
+        logger.dev('[DEBT PAYMENT SUCCESS]: Abono y transacción sincronizados con Supabase');
       } else {
-        logger.error('[debtsService addDebtPayment Error]:', res1.error || res2.error || res3.error);
+        const primaryError = res3.error || res1.error || res2.error;
+        logger.error('[debtsService addDebtPayment Error]:', {
+          message: primaryError?.message,
+          code: primaryError?.code,
+          details: primaryError?.details,
+          hint: primaryError?.hint,
+          payError: res1.error?.message,
+          debtUpdateError: res2.error?.message,
+          txError: res3.error?.message,
+        });
       }
     } catch (e) {
       logger.warn('[debtsService addDebtPayment Remote Notice]:', e);

@@ -15,6 +15,7 @@ import type {
   Transaction,
   FortnightType,
 } from '../types/index.ts';
+import { isValidUuid, ensureValidUuid } from '../utils/uuid.ts';
 
 // ---------------------------------------------------------------
 // Category ID Mapping: string IDs (Dexie) → UUID (Supabase)
@@ -260,17 +261,30 @@ export function toSupabaseVariableIncomePayload(
 
 /**
  * Convert Transaction to Supabase format.
- * - Resolves `category_id` from local string to UUID
+ * - Asegura que `id` sea un UUID válido estricto (evita prefijos locales como 'tx_')
+ * - Resuelve `category_id` a UUID válido o null (evita enviar strings como 'cat_debt' que causan error 400 22P02)
+ * - Asegura que `account_id` sea UUID válido o null
+ * - Filtra únicamente columnas existentes en la tabla PostgreSQL transactions
  */
 export function toSupabaseTransactionPayload(
   record: Omit<Transaction, 'sync_status'> & Record<string, any>
 ): Record<string, any> {
   const resolved = resolveCategoryId(record.category_id);
-  const accountId = record.account_id && String(record.account_id).trim() !== '' ? record.account_id : null;
+  const validCategory = resolved || (isValidUuid(record.category_id) ? record.category_id : null);
+  const validAccountId = record.account_id && isValidUuid(record.account_id) ? record.account_id : null;
+  const cleanId = ensureValidUuid(record.id);
+
   return {
-    ...record,
-    account_id: accountId,
-    category_id: resolved || record.category_id,
+    id: cleanId,
+    user_id: record.user_id,
+    amount: Number(record.amount),
+    type: record.type || 'expense',
+    description: record.description || 'Transacción',
+    category_id: validCategory,
+    account_id: validAccountId,
+    transaction_date: record.transaction_date || new Date().toISOString().split('T')[0],
+    created_at: record.created_at || new Date().toISOString(),
+    updated_at: record.updated_at || new Date().toISOString(),
   };
 }
 

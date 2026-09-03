@@ -2038,7 +2038,7 @@ export async function addDebtPayment(data: {
   const newPendingInstallments = debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined;
 
   const txRecord: Transaction = {
-    id: 'tx_' + paymentRecord.id,
+    id: ensureValidUuid(),
     user_id: userId,
     amount: Number(data.amount),
     type: 'expense',
@@ -2052,20 +2052,29 @@ export async function addDebtPayment(data: {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) {
+        logger.error('[Supabase Debt Payment Error]: Usuario no autenticado en Supabase');
+        return paymentRecord;
+      }
+
+      paymentRecord.user_id = user.id;
+      txRecord.user_id = user.id;
+
       const { sync_status: s1, ...payRaw } = paymentRecord;
       const payPayload = toSupabaseDebtPaymentPayload(payRaw);
       const { sync_status: s2, ...txRaw } = txRecord;
       const txPayload = toSupabaseTransactionPayload(txRaw);
       const [res1, res2, res3] = await Promise.all([
-        supabase.from('debt_payments').upsert(payPayload),
+        supabase.from('debt_payments').upsert(payPayload).select(),
         supabase.from('debts').update({
           current_balance: newBalance,
           remaining_amount: newBalance,
           pending_installments: newPendingInstallments,
           status: newStatus,
           updated_at: new Date().toISOString(),
-        }).eq('id', debt.id),
-        supabase.from('transactions').upsert(txPayload),
+        }).eq('id', debt.id).select(),
+        supabase.from('transactions').upsert(txPayload).select(),
       ]);
       if (!res1.error && !res2.error && !res3.error) {
         paymentRecord.sync_status = 'synced';

@@ -281,11 +281,17 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
       }
     }
 
+    if (!debtId || !totalToPay || totalToPay <= 0) {
+      logger.error('[PAYMENT VALIDATION ERROR]: Monto o deuda inválida');
+      alert('Por favor introduce un monto válido superior a 0.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await addDebtPayment({
         debt_id: debtId,
-        amount: totalToPay,
+        amount: Number(totalToPay),
         principal_amount: effectivePrincipal,
         interest_amount: effectiveInterest,
         unpaid_interest_capitalized: unpaidInterestCapitalized,
@@ -298,9 +304,11 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         parallel_rate: selectedDebt?.payment_type === 'bcv_usd' ? rates.parallelDollar : undefined,
         notes: autoNote,
       });
+      logger.dev('[PAYMENT SUCCESS] Abono procesado con éxito');
       onClose();
-    } catch (err) {
-      logger.error('Error recording payment:', err);
+    } catch (err: any) {
+      logger.error('[PAYMENT FAILED]:', err);
+      alert('Error al procesar el abono: ' + (err?.message || 'Intente de nuevo.'));
     } finally {
       setIsSubmitting(false);
     }
