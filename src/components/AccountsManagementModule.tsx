@@ -18,6 +18,7 @@ import {
 import type { Account, AccountType, Transaction, Category, ExchangeRatesData } from '../types/index.ts';
 import { saveAccount, deleteAccount, adjustAccountBalance, addTransaction } from '../lib/db.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 interface AccountsManagementModuleProps {
   accounts: Account[];
@@ -173,7 +174,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
       });
       setIsAccountModalOpen(false);
     } catch (err) {
-      console.error('Error saving account:', err);
+      logger.error('Error saving account:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -185,7 +186,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
       await deleteAccount(id);
       setDeletingId(null);
     } catch (err) {
-      console.error('Error deleting account:', err);
+      logger.error('Error deleting account:', err);
     }
   };
 
@@ -232,7 +233,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
       }
       setAdjustingAccount(null);
     } catch (err) {
-      console.error('Error adjusting account:', err);
+      logger.error('Error adjusting account:', err);
     } finally {
       setIsAdjustSubmitting(false);
     }

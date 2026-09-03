@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { logger } from '../utils/logger.ts';
 
 export interface BiweeklyEmailPayload {
   to: string;
@@ -43,14 +44,14 @@ export const sendEmail = async (
     });
 
     if (error) {
-      console.error('Error al invocar Edge Function send-email:', error);
+      logger.error('Error al invocar Edge Function send-email:', error);
       throw new Error(error.message || 'Error al enviar el correo a través de Supabase.');
     }
 
-    console.log('✅ Correo enviado exitosamente:', data);
+    logger.dev('✅ Correo enviado exitosamente:', data);
     return { success: true, data };
   } catch (err: any) {
-    console.error('❌ Error al enviar correo:', err);
+    logger.error('❌ Error al enviar correo:', err);
     throw err;
   }
 };

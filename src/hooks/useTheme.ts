@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ThemeMode, AccentColor } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { getUserPreferences, updatePreference } from '../lib/profilePreferences.ts';
+import { logger } from '../utils/logger.ts';
 
 export const THEME_MODE_OPTIONS: { id: ThemeMode; name: string; icon: string; desc: string; previewBg: string; borderSample: string }[] = [
   { id: 'navy', name: 'Azul Marino Profundo', icon: '🌊', desc: 'Fondo Navy #0B132B', previewBg: '#0B132B', borderSample: '#203657' },
@@ -83,7 +84,7 @@ export function useTheme() {
           }
         }
       } catch (error) {
-        console.error('Error cargando preferencias de tema desde Supabase:', error);
+        logger.error('Error cargando preferencias de tema desde Supabase:', error);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -121,7 +122,7 @@ export function useTheme() {
         }
       }
     } catch (error) {
-      console.error('Error guardando tema en Supabase:', error);
+      logger.error('Error guardando tema en Supabase:', error);
     }
   }, []);
 
@@ -143,7 +144,7 @@ export function useTheme() {
         }
       }
     } catch (error) {
-      console.error('Error guardando color de acento en Supabase:', error);
+      logger.error('Error guardando color de acento en Supabase:', error);
     }
   }, []);
 

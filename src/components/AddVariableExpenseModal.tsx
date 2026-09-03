@@ -10,6 +10,7 @@ import type {
 } from '../types/index.ts';
 import { saveVariableExpense } from '../lib/db.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 interface AddVariableExpenseModalProps {
   isOpen: boolean;
@@ -118,7 +119,7 @@ export const AddVariableExpenseModal: React.FC<AddVariableExpenseModalProps> = (
       if (onSaved) onSaved(saved);
       onClose();
     } catch (err) {
-      console.error('Error saving variable expense:', err);
+      logger.error('Error saving variable expense:', err);
     } finally {
       setIsSubmitting(false);
     }

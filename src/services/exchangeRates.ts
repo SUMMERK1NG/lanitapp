@@ -1,4 +1,5 @@
 import type { ExchangeRatesData } from '../types/index.ts';
+import { logger } from '../utils/logger.ts';
 
 // URL base configurable para la API de tasas de cambio con fallback seguro
 const DOLAR_API_BASE_URL = import.meta.env.VITE_DOLAR_API_BASE_URL || 'https://ve.dolarapi.com/v1';
@@ -50,7 +51,7 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
       try {
         cachedData = JSON.parse(cached);
       } catch (e) {
-        console.warn('Error reading exchange rates cache', e);
+        logger.warn('Error reading exchange rates cache', e);
       }
     }
 
@@ -114,7 +115,7 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
     localStorage.setItem(CACHE_KEY, JSON.stringify(result));
     return result;
   } catch (error) {
-    console.error('Error fetching exchange rates from DolarAPI:', error);
+    logger.error('Error fetching exchange rates from DolarAPI:', error);
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
       try {
@@ -125,4 +126,4 @@ export async function fetchExchangeRates(): Promise<ExchangeRatesData> {
     }
     return fallbackRates;
   }
-}
+};

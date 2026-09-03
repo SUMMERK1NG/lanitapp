@@ -22,6 +22,7 @@ import {
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db } from '../lib/db.ts';
+import { logger } from '../utils/logger.ts';
 
 interface UserManagementCardProps {
   currentUserId?: string;
@@ -79,7 +80,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         setUsers([]);
       }
     } catch (e: any) {
-      console.error('Fetch users error:', e.message);
+      logger.error('Fetch users error:', e.message);
       setUsers([]);
       showToast('error', `Error al cargar usuarios: ${e.message || 'Error de conexión'}`);
     } finally {
@@ -140,7 +141,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           role: editRole,
           updated_at: new Date().toISOString(),
         };
-        console.log('[Supabase Profiles Edit Payload]:', profileUpdatePayload);
+        logger.dev('[Supabase Profiles Edit Payload]:', profileUpdatePayload);
         const { error } = await supabase
           .from('profiles')
           .update(profileUpdatePayload)
@@ -241,7 +242,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           });
 
           if (rpcErr) {
-            console.warn('RPC set_user_password_by_admin not found, falling back to reset email:', rpcErr.message);
+            logger.warn('RPC set_user_password_by_admin not found, falling back to reset email:', rpcErr.message);
             if (passwordTargetUser.email) {
               await supabase.auth.resetPasswordForEmail(passwordTargetUser.email, {
                 redirectTo: `${window.location.origin}/reset-password`,
@@ -282,7 +283,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         });
 
         if (rpcErr) {
-          console.warn('RPC delete_user_by_admin not available, deleting from profiles table:', rpcErr.message);
+          logger.warn('RPC delete_user_by_admin not available, deleting from profiles table:', rpcErr.message);
           const { error: tableErr } = await supabase
             .from('profiles')
             .delete()

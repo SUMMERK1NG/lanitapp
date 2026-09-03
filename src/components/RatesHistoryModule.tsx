@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
+import { logger } from '../utils/logger.ts';
 
 export type RateTypeOption = 'bcv_usd' | 'parallel_usd' | 'bcv_eur';
 export type TimeframeOption = '7d' | '15d' | '30d' | 'all';
@@ -117,7 +118,7 @@ export const RatesHistoryModule: React.FC = () => {
           setHistoryData((prev) => ({ ...prev, [rateType]: parsed }));
         }
       } catch (e) {
-        console.warn('Error reading history cache', e);
+        logger.warn('Error reading history cache', e);
       }
     }
 
@@ -136,7 +137,7 @@ export const RatesHistoryModule: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error('Error fetching historical rates:', err);
+      logger.error('Error fetching historical rates:', err);
     } finally {
       setIsLoading(false);
     }

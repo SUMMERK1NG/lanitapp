@@ -14,6 +14,7 @@ import type { UserProfile, ThemeMode, AccentColor } from '../types/index.ts';
 import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
 import { saveUserProfile } from '../lib/db.ts';
 import { supabase } from '../lib/supabase.ts';
+import { logger } from '../utils/logger.ts';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -102,7 +103,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       }
       onClose();
     } catch (err) {
-      console.error('Error saving profile:', err);
+      logger.error('Error saving profile:', err);
     } finally {
       setIsSaving(false);
     }
@@ -117,7 +118,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       try {
         await onUpdateProfile({ avatar: emoji, avatar_url: emoji });
       } catch (err) {
-        console.warn('Profile instant update error:', err);
+        logger.warn('Profile instant update error:', err);
       }
     }
 
@@ -129,10 +130,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           .eq('id', profile.id);
 
         if (error) {
-          console.error('Error al guardar avatar automáticamente:', error);
+          logger.error('Error al guardar avatar automáticamente:', error);
         }
       } catch (err) {
-        console.error('Error al guardar avatar en Supabase:', err);
+        logger.error('Error al guardar avatar en Supabase:', err);
       }
     }
   };

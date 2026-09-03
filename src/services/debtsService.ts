@@ -3,6 +3,7 @@ import { db, getActiveUserId } from '../lib/db.ts';
 import type { Debt, DebtPayment, FortnightType, Transaction } from '../types/index.ts';
 import { ensureValidUuid } from '../utils/uuid.ts';
 import { toSupabaseDebtPaymentPayload, toSupabaseTransactionPayload } from '../lib/supabasePayloads.ts';
+import { logger } from '../utils/logger.ts';
 
 /**
  * Sanitiza y mapea el objeto Debt para coincidir exactamente con el esquema de PostgreSQL en Supabase
@@ -139,7 +140,7 @@ export const subscribeToDebtsChanges = (userId: string, onUpdate: () => void) =>
         filter: `user_id=eq.${userId}`,
       },
       async (payload) => {
-        console.log('[Supabase Realtime Debts Triggered]:', payload);
+        logger.dev('[Supabase Realtime Debts Triggered]:', payload);
         const newRow: any = payload.new;
         const oldRow: any = payload.old;
 
@@ -151,7 +152,7 @@ export const subscribeToDebtsChanges = (userId: string, onUpdate: () => void) =>
             await db.debts.put(normalized);
           }
         } catch (e) {
-          console.warn('[debtsService Realtime Cache Error]:', e);
+          logger.warn('[debtsService Realtime Cache Error]:', e);
         }
 
         onUpdate();
@@ -188,10 +189,10 @@ export const fetchDebts = async (userId: string): Promise<Debt[]> => {
         }
         return debts;
       } else if (error) {
-        console.error('[debtsService fetchDebts Error]:', error.message, error.details);
+        logger.error('[debtsService fetchDebts Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('[debtsService fetchDebts Network Notice]:', e);
+      logger.warn('[debtsService fetchDebts Network Notice]:', e);
     }
   }
 
@@ -227,10 +228,10 @@ export const saveDebt = async (
         await db.debts.put(confirmedDebt);
         return confirmedDebt;
       } else if (error) {
-        console.error('[debtsService saveDebt Remote Error]:', error.message, error.details);
+        logger.error('[debtsService saveDebt Remote Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('[debtsService saveDebt Network Notice]:', e);
+      logger.warn('[debtsService saveDebt Network Notice]:', e);
     }
   }
 
@@ -254,7 +255,7 @@ export const deleteDebt = async (id: string): Promise<void> => {
         supabase.from('debt_payments').delete().eq('debt_id', cleanId),
       ]);
     } catch (e) {
-      console.warn('[debtsService deleteDebt Remote Notice]:', e);
+      logger.warn('[debtsService deleteDebt Remote Notice]:', e);
     }
   }
 };
@@ -380,10 +381,10 @@ export const addDebtPayment = async (data: {
         await db.debt_payments.update(paymentRecord.id, { sync_status: 'synced' });
         await db.transactions.update(txRecord.id, { sync_status: 'synced' });
       } else {
-        console.error('[debtsService addDebtPayment Error]:', res1.error || res2.error || res3.error);
+        logger.error('[debtsService addDebtPayment Error]:', res1.error || res2.error || res3.error);
       }
     } catch (e) {
-      console.warn('[debtsService addDebtPayment Remote Notice]:', e);
+      logger.warn('[debtsService addDebtPayment Remote Notice]:', e);
     }
   }
 

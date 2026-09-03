@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchExchangeRates } from '../services/exchangeRates.ts';
 import type { ExchangeRatesData } from '../types/index.ts';
+import { logger } from '../utils/logger.ts';
 
 export function useExchangeRates() {
   const [rates, setRates] = useState<ExchangeRatesData>({
@@ -19,7 +20,7 @@ export function useExchangeRates() {
       const data = await fetchExchangeRates();
       setRates(data);
     } catch (e) {
-      console.warn('Error refreshing exchange rates:', e);
+      logger.warn('Error refreshing exchange rates:', e);
     } finally {
       setIsRefreshing(false);
       setLoading(false);

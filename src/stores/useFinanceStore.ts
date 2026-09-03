@@ -29,6 +29,7 @@ import {
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
+import { logger } from '../utils/logger.ts';
 import {
   sanitizeDebtPayload,
   normalizeDebtRow,
@@ -200,12 +201,12 @@ async function safeQuery<T = any>(
   try {
     const res = await queryFn();
     if (res.error) {
-      console.warn(`[Supabase Table Notice '${tableName}'] :`, res.error.message || res.error.details || res.error);
+      logger.warn(`[Supabase Table Notice '${tableName}'] :`, res.error.message || res.error.details || res.error);
       return [];
     }
     return (res.data as T[]) || [];
   } catch (err: any) {
-    console.warn(`[Supabase Table Query Exception '${tableName}'] :`, err?.message || err);
+    logger.warn(`[Supabase Table Query Exception '${tableName}'] :`, err?.message || err);
     return [];
   }
 }
@@ -334,7 +335,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      console.warn('Error loading from local cache:', err);
+      logger.warn('Error loading from local cache:', err);
       set({ isLoading: false });
     }
   },
@@ -357,7 +358,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       // 1. Vaciar cola pendiente previa
       await get().flushSyncQueue(userId);
 
-      console.log(`[Supabase Fetch Initial]: Consultando tablas oficiales para usuario ${userId}...`);
+      logger.dev(`[Supabase Fetch Initial]: Consultando tablas oficiales para usuario ${userId}...`);
 
       // 2. Fetch en paralelo de las 14 tablas oficiales
       const client = supabase;
@@ -496,7 +497,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         error: null,
       });
     } catch (err: any) {
-      console.error('[FinanceStore Fetch Initial Error]:', err);
+      logger.error('[FinanceStore Fetch Initial Error]:', err);
       await get().loadFromLocalCache(userId);
       set({ syncStatus: 'error', error: err.message, isLoading: false });
     }
@@ -507,7 +508,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
    */
   handleRealtimePayload: async (table: string, payload: any, userId: string) => {
     const { eventType, new: newRow, old: oldRow } = payload;
-    console.log(`[Realtime Merge on ${table} - ${eventType}]:`, newRow || oldRow);
+    logger.dev(`[Realtime Merge on ${table} - ${eventType}]:`, newRow || oldRow);
 
     if (newRow?.user_id && newRow.user_id !== userId) return;
 
@@ -798,17 +799,17 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     for (const item of queue) {
       try {
         if (item.action === 'upsert') {
-          console.log(`[Supabase Queue Flush]: Upserting on '${item.table}' ->`, item.payload);
+          logger.dev(`[Supabase Queue Flush]: Upserting on '${item.table}' ->`, item.payload);
           const { error } = await supabase.from(item.table).upsert(item.payload);
           if (error) {
-            console.error(`[Queue Flush Error on ${item.table}]:`, error.message, error.details);
+            logger.error(`[Queue Flush Error on ${item.table}]:`, error.message, error.details);
             remaining.push(item);
           }
         } else if (item.action === 'delete') {
-          console.log(`[Supabase Queue Flush]: Deleting from '${item.table}' id ${item.payload.id}`);
+          logger.dev(`[Supabase Queue Flush]: Deleting from '${item.table}' id ${item.payload.id}`);
           const { error } = await supabase.from(item.table).delete().eq('id', item.payload.id);
           if (error) {
-            console.error(`[Queue Delete Error on ${item.table}]:`, error.message, error.details);
+            logger.error(`[Queue Delete Error on ${item.table}]:`, error.message, error.details);
             remaining.push(item);
           }
         }
@@ -852,7 +853,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.accounts.put(record);
 
     const payload = toSupabaseAccountPayload(record, userId);
-    console.log('[Supabase Accounts Payload]:', payload);
+    logger.dev('[Supabase Accounts Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -861,13 +862,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           record.sync_status = 'synced';
           await db.accounts.update(id, { sync_status: 'synced' });
         } else {
-          console.error('[Supabase Accounts Error]:', error.message, error.details);
+          logger.error('[Supabase Accounts Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
           }));
         }
       } catch (e) {
-        console.warn('Account upsert network catch:', e);
+        logger.warn('Account upsert network catch:', e);
         set((state) => ({
           syncQueue: [...state.syncQueue, { id, table: 'accounts', action: 'upsert', payload, timestamp: new Date().toISOString() }],
         }));
@@ -886,11 +887,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id && a.id !== cleanId) }));
     await db.accounts.delete(id);
 
-    console.log(`[Supabase Accounts Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Accounts Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('accounts').delete().eq('id', cleanId);
-        if (error) console.error('[Supabase Accounts Delete Error]:', error.message);
+        if (error) logger.error('[Supabase Accounts Delete Error]:', error.message);
       } catch {
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'accounts', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
@@ -919,7 +920,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.accounts.put(updated);
 
     const payload = toSupabaseAccountPayload(updated, userId);
-    console.log('[Supabase Accounts Adjust Payload]:', payload);
+    logger.dev('[Supabase Accounts Adjust Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -948,7 +949,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           supabaseUserId = user.id;
         }
       } catch (e) {
-        console.warn('Could not get Supabase auth user:', e);
+        logger.warn('Could not get Supabase auth user:', e);
       }
     }
 
@@ -984,7 +985,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
     payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
     payload.notes = notesWithTag;
-    console.log('[Supabase Fixed Incomes Payload]:', payload);
+    logger.dev('[Supabase Fixed Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1001,7 +1002,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
               return record;
             }
           }
-          console.error('[Supabase Fixed Incomes Error]:', error.message, error.details);
+          logger.error('[Supabase Fixed Incomes Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id, table: 'fixed_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
           }));
@@ -1021,11 +1022,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ fixedIncomes: s.fixedIncomes.filter((i) => i.id !== id && i.id !== cleanId) }));
     await db.fixed_incomes.delete(id);
 
-    console.log(`[Supabase Fixed Incomes Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Fixed Incomes Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('fixed_incomes').delete().eq('id', cleanId);
-        if (error) console.error('[Supabase Fixed Incomes Delete Error]:', error.message);
+        if (error) logger.error('[Supabase Fixed Incomes Delete Error]:', error.message);
       } catch {
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'fixed_incomes', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
@@ -1044,7 +1045,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           supabaseUserId = user.id;
         }
       } catch (e) {
-        console.warn('Could not get Supabase auth user:', e);
+        logger.warn('Could not get Supabase auth user:', e);
       }
     }
 
@@ -1103,7 +1104,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           const { sync_status, ...txPayload } = tx;
           await supabase.from('transactions').upsert(txPayload);
         } catch (e) {
-          console.warn('Sync var income tx store err:', e);
+          logger.warn('Sync var income tx store err:', e);
         }
       }
     } else if (existing?.transaction_id) {
@@ -1115,7 +1116,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         try {
           await supabase.from('transactions').delete().eq('id', existing.transaction_id);
         } catch (e) {
-          console.warn('Delete var income tx store err:', e);
+          logger.warn('Delete var income tx store err:', e);
         }
       }
     }
@@ -1131,7 +1132,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       created_at: record.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    console.log('[Supabase Variable Incomes Payload]:', payload);
+    logger.dev('[Supabase Variable Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1139,7 +1140,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         if (!error) {
           await db.variable_incomes.update(id, { sync_status: 'synced' });
         } else {
-          console.error('[Supabase Variable Incomes Error]:', error.message, error.details);
+          logger.error('[Supabase Variable Incomes Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id, table: 'variable_incomes', action: 'upsert', payload, timestamp: new Date().toISOString() }],
           }));
@@ -1166,7 +1167,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         try {
           await supabase.from('transactions').delete().eq('id', existing.transaction_id);
         } catch (e) {
-          console.warn('Delete linked tx store err:', e);
+          logger.warn('Delete linked tx store err:', e);
         }
       }
     }
@@ -1174,11 +1175,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== id && v.id !== cleanId) }));
     await db.variable_incomes.delete(id);
 
-    console.log(`[Supabase Variable Incomes Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Variable Incomes Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('variable_incomes').delete().eq('id', cleanId);
-        if (error) console.error('[Supabase Variable Incomes Delete Error]:', error.message);
+        if (error) logger.error('[Supabase Variable Incomes Delete Error]:', error.message);
       } catch {
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'variable_incomes', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
@@ -1221,7 +1222,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status, default_quincena, ...payload } = record as any;
     payload.default_fortnight = quincenaValue;
     payload.quincena = quincenaValue;
-    console.log('[Supabase Fixed Expenses Payload]:', payload);
+    logger.dev('[Supabase Fixed Expenses Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1229,7 +1230,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         if (!error) {
           await db.fixed_expenses.update(id, { sync_status: 'synced' });
         } else {
-          console.error('[Supabase Fixed Expenses Error]:', error.message, error.details);
+          logger.error('[Supabase Fixed Expenses Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id, table: 'fixed_expenses', action: 'upsert', payload, timestamp: new Date().toISOString() }],
           }));
@@ -1249,11 +1250,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== id && e.id !== cleanId) }));
     await db.fixed_expenses.delete(id);
 
-    console.log(`[Supabase Fixed Expenses Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Fixed Expenses Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('fixed_expenses').delete().eq('id', cleanId);
-        if (error) console.error('[Supabase Fixed Expenses Delete Error]:', error.message);
+        if (error) logger.error('[Supabase Fixed Expenses Delete Error]:', error.message);
       } catch {
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'fixed_expenses', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
@@ -1318,7 +1319,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           const { sync_status, ...txPayload } = tx;
           await supabase.from('transactions').upsert(txPayload);
         } catch (e) {
-          console.warn('Sync var expense tx store err:', e);
+          logger.warn('Sync var expense tx store err:', e);
         }
       }
     }
@@ -1331,7 +1332,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           await db.variable_expenses.update(id, { sync_status: 'synced' });
         }
       } catch (e) {
-        console.warn('Direct variable expense upsert notice in store:', e);
+        logger.warn('Direct variable expense upsert notice in store:', e);
       }
     }
 
@@ -1347,7 +1348,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       try {
         await supabase.from('variable_expenses').delete().eq('id', cleanId);
       } catch (e) {
-        console.warn('Delete var expense remote notice:', e);
+        logger.warn('Delete var expense remote notice:', e);
       }
     }
   },
@@ -1365,7 +1366,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.debts.put(localRecord);
 
-    console.log('[Supabase Debts Payload]:', sanitizedPayload);
+    logger.dev('[Supabase Debts Payload]:', sanitizedPayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1383,7 +1384,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           await db.debts.put(confirmedDebt);
           return confirmedDebt;
         } else if (error) {
-          console.error('[Supabase Debts Error]:', error.message, error.details);
+          logger.error('[Supabase Debts Error]:', error.message, error.details);
           set((state) => ({
             syncQueue: [...state.syncQueue, { id: localRecord.id, table: 'debts', action: 'upsert', payload: sanitizedPayload, timestamp: new Date().toISOString() }],
           }));
@@ -1418,11 +1419,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ debts: s.debts.filter((d) => d.id !== id && d.id !== cleanId) }));
     await db.debts.delete(id);
 
-    console.log(`[Supabase Debts Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Debts Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('debts').delete().eq('id', cleanId);
-        if (error) console.error('[Supabase Debts Delete Error]:', error.message);
+        if (error) logger.error('[Supabase Debts Delete Error]:', error.message);
       } catch {
         set((state) => ({
           syncQueue: [...state.syncQueue, { id: cleanId, table: 'debts', action: 'delete', payload: { id: cleanId, user_id: userId }, timestamp: new Date().toISOString() }],
@@ -1481,8 +1482,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...payPayload } = paymentRecord;
     const debtPayload = sanitizeDebtPayload(updatedDebt, userId);
 
-    console.log('[Supabase Debt Payments Payload]:', payPayload);
-    console.log('[Supabase Debts Update Payload]:', debtPayload);
+    logger.dev('[Supabase Debt Payments Payload]:', payPayload);
+    logger.dev('[Supabase Debts Update Payload]:', debtPayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1564,7 +1565,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     // Filtrar 'sync_status' (solo local) para enviar a Supabase
     const { sync_status, ...payload } = record;
-    console.log('[Supabase Savings Goals Payload]:', payload);
+    logger.dev('[Supabase Savings Goals Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1584,7 +1585,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== id && g.id !== cleanId) }));
     await db.savings_goals.delete(id);
 
-    console.log(`[Supabase Savings Goals Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Savings Goals Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('savings_goals').delete().eq('id', cleanId);
@@ -1635,8 +1636,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...scPayload } = record;
     const { sync_status: s2, ...goalPayload } = updatedGoal;
 
-    console.log('[Supabase Saving Contributions Payload]:', scPayload);
-    console.log('[Supabase Savings Goals Update Payload]:', goalPayload);
+    logger.dev('[Supabase Saving Contributions Payload]:', scPayload);
+    logger.dev('[Supabase Savings Goals Update Payload]:', goalPayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1708,8 +1709,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const { sync_status: s1, ...txPayload } = txRecord;
     const { sync_status: s2, ...statePayload } = stateRecord;
 
-    console.log('[Supabase Transactions Paid Payload]:', txPayload);
-    console.log('[Supabase Fortnight Item States Paid Payload]:', statePayload);
+    logger.dev('[Supabase Transactions Paid Payload]:', txPayload);
+    logger.dev('[Supabase Fortnight Item States Paid Payload]:', statePayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1747,7 +1748,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       if (txId) await db.transactions.delete(txId);
       await db.fortnight_item_states.delete(existingState.id);
 
-      console.log(`[Supabase Fortnight States Delete]: id ${existingState.id}, txId ${txId}`);
+      logger.dev(`[Supabase Fortnight States Delete]: id ${existingState.id}, txId ${txId}`);
       if (navigator.onLine && isSupabaseConfigured() && supabase) {
         try {
           await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
@@ -1793,7 +1794,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.fortnight_item_states.put(stateRecord);
 
     const { sync_status, ...payload } = stateRecord;
-    console.log('[Supabase Fortnight Expense Skipped Payload]:', payload);
+    logger.dev('[Supabase Fortnight Expense Skipped Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1818,7 +1819,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== existingState.id) }));
       await db.fortnight_item_states.delete(existingState.id);
 
-      console.log(`[Supabase Fortnight Expense Unmark Skipped]: id ${existingState.id}`);
+      logger.dev(`[Supabase Fortnight Expense Unmark Skipped]: id ${existingState.id}`);
       if (navigator.onLine && isSupabaseConfigured() && supabase) {
         try {
           await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
@@ -1860,7 +1861,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.fortnight_item_states.put(stateRecord);
 
     const { sync_status, ...payload } = stateRecord;
-    console.log('[Supabase Fortnight Debt Skipped Payload]:', payload);
+    logger.dev('[Supabase Fortnight Debt Skipped Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1885,7 +1886,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== existingState.id) }));
       await db.fortnight_item_states.delete(existingState.id);
 
-      console.log(`[Supabase Fortnight Debt Unmark Skipped]: id ${existingState.id}`);
+      logger.dev(`[Supabase Fortnight Debt Unmark Skipped]: id ${existingState.id}`);
       if (navigator.onLine && isSupabaseConfigured() && supabase) {
         try {
           await supabase.from('fortnight_item_states').delete().eq('id', existingState.id);
@@ -1916,7 +1917,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.transactions.put(record);
 
     const { sync_status, ...payload } = record;
-    console.log('[Supabase Transactions Payload]:', payload);
+    logger.dev('[Supabase Transactions Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
@@ -1936,7 +1937,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id && t.id !== cleanId) }));
     await db.transactions.delete(id);
 
-    console.log(`[Supabase Transactions Delete]: id ${cleanId}`);
+    logger.dev(`[Supabase Transactions Delete]: id ${cleanId}`);
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         await supabase.from('transactions').delete().eq('id', cleanId);

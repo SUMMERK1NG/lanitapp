@@ -24,6 +24,7 @@ import { saveDebt } from '../services/debtsService.ts';
 import { DEFAULT_CATEGORIES } from '../lib/db.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 // Lista estándar de modalidades de pago unificadas
 export const PAYMENT_MODES_LIST: {
@@ -394,7 +395,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       if (onSaved) onSaved(savedDebt);
       onClose();
     } catch (err) {
-      console.error('Error saving debt:', err);
+      logger.error('Error saving debt:', err);
     } finally {
       setIsSubmitting(false);
     }

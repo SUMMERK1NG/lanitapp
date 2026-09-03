@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { sendEmail } from './emailService.ts';
 import { useFinanceStore } from '../stores/useFinanceStore.ts';
+import { logger } from '../utils/logger.ts';
 
 export interface DeficitAlert {
   quincena: 'Q1' | 'Q2';
@@ -219,7 +220,7 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
 
     // Total balance en cuentas bancarias/efectivo
     const totalBalance = accounts.reduce(
-      (sum, a) => sum + (Number(a.balance ?? a.initial_balance) || 0),
+      (sum, a) => sum + (Number((a as any).balance ?? a.initial_balance) || 0),
       0
     );
 
@@ -285,12 +286,12 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
         sent_at: new Date().toISOString(),
       });
     } catch (dbErr) {
-      console.warn('Notice: alert_logs table not configured or insert error:', dbErr);
+      logger.warn('Notice: alert_logs table not configured or insert error:', dbErr);
     }
 
     return true;
   } catch (error) {
-    console.error('Error al verificar y notificar déficit:', error);
+    logger.error('Error al verificar y notificar déficit:', error);
     return false;
   }
 };

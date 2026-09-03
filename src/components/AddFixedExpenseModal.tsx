@@ -3,6 +3,7 @@ import { X, Receipt, ChevronDown } from 'lucide-react';
 import type { FixedExpense, Category, ExchangeRatesData, FixedExpensePaymentMode } from '../types/index.ts';
 import { saveFixedExpense } from '../lib/db.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 interface AddFixedExpenseModalProps {
   isOpen: boolean;
@@ -108,7 +109,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
       if (onSaved) onSaved(saved);
       onClose();
     } catch (err) {
-      console.error('Error saving fixed expense:', err);
+      logger.error('Error saving fixed expense:', err);
     } finally {
       setIsSubmitting(false);
     }

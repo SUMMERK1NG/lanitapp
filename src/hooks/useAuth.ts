@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
+import { logger } from '../utils/logger.ts';
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -18,7 +19,7 @@ export function useAuth() {
         const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
 
         if (sessionErr) {
-          console.warn('Session check error:', sessionErr.message);
+          logger.warn('Session check error:', sessionErr.message);
           setActiveUserId('');
           setCurrentUser(null);
           setLoading(false);
@@ -105,13 +106,13 @@ export function useAuth() {
                 role,
                 updated_at: new Date().toISOString(),
               };
-              console.log('[Supabase Profiles Init Payload]:', profilePayload);
+              logger.dev('[Supabase Profiles Init Payload]:', profilePayload);
               const { error: profInitErr } = await supabase.from('profiles').upsert(profilePayload);
               if (profInitErr) {
-                console.error('[Supabase Profiles Init Error]:', profInitErr.message, profInitErr.details);
+                logger.error('[Supabase Profiles Init Error]:', profInitErr.message);
               }
             } catch (e) {
-              console.warn('Profile upsert notice:', e);
+              logger.warn('Profile upsert notice:', e);
             }
 
             await saveUserProfile(newProfile);
@@ -129,7 +130,7 @@ export function useAuth() {
       sessionStorage.clear();
       setCurrentUser(null);
     } catch (err: any) {
-      console.error('Auth initialization error:', err);
+      logger.error('Auth initialization error:', err);
       setActiveUserId('');
       setCurrentUser(null);
     } finally {
@@ -325,7 +326,7 @@ export function useAuth() {
               })
               .eq('id', authData.user.id);
           } catch (e) {
-            console.warn('Could not update last_sign_in_at:', e);
+            logger.warn('Could not update last_sign_in_at:', e);
           }
         }
 
@@ -438,10 +439,10 @@ export function useAuth() {
           updated_at: new Date().toISOString(),
         };
 
-        console.log('[Supabase Profiles SignUp Payload]:', profilePayload);
+        logger.dev('[Supabase Profiles SignUp Payload]:', profilePayload);
         const { error: profErr } = await supabase.from('profiles').upsert(profilePayload);
         if (profErr) {
-          console.error('[Supabase Profiles SignUp Error]:', profErr.message, profErr.details);
+          logger.error('[Supabase Profiles SignUp Error]:', profErr.message);
         }
 
         await saveUserProfile(userProfile);
@@ -519,7 +520,7 @@ export function useAuth() {
     setLoading(true);
     try {
       if (isSupabaseConfigured() && supabase) {
-        await supabase.auth.signOut().catch((e) => console.warn('Supabase signout notice:', e));
+        await supabase.auth.signOut().catch((e) => logger.warn('Supabase signout notice:', e));
       }
       setActiveUserId('');
       setLastSyncTimestampInMemory(null);
@@ -581,14 +582,14 @@ export function useAuth() {
         if (updates.last_active_view !== undefined) updatePayload.last_active_view = updates.last_active_view;
         if (updates.keep_session !== undefined) updatePayload.keep_session = updates.keep_session;
 
-        console.log('[Supabase Profiles Update Payload]:', updatePayload);
+        logger.dev('[Supabase Profiles Update Payload]:', updatePayload);
         const { error } = await supabase
           .from('profiles')
           .update(updatePayload)
           .eq('id', currentUser.id);
 
         if (error) {
-          console.warn('[Supabase Profiles Update Notice]:', error.message);
+          logger.warn('[Supabase Profiles Update Notice]:', error.message);
           if (error.code === '42703' || error.message?.toLowerCase().includes('column')) {
             const { theme_mode, accent_color, ...safeFallback } = updatePayload;
             if (Object.keys(safeFallback).length > 1) {
@@ -597,7 +598,7 @@ export function useAuth() {
           }
         }
       } catch (e) {
-        console.warn('Sync profile err:', e);
+        logger.warn('Sync profile err:', e);
       }
     }
   };

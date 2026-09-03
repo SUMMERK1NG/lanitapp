@@ -52,6 +52,7 @@ import { MonthPicker } from './MonthPicker.tsx';
 import { Skeleton } from './ui/Skeleton.tsx';
 import { updatePreference, getUserPreferences } from '../lib/profilePreferences.ts';
 import { getActiveUserId } from '../lib/db.ts';
+import { logger } from '../utils/logger.ts';
 
 interface DashboardModuleProps {
   transactions: Transaction[];
@@ -170,7 +171,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       try {
         await updatePreference(effectiveUserId, 'dashboard_widgets', updated);
       } catch (err) {
-        console.error('Error guardando configuración de widgets en Supabase:', err);
+        logger.error('Error guardando configuración de widgets en Supabase:', err);
       }
     }
   };
@@ -183,7 +184,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       try {
         await updatePreference(effectiveUserId, 'dashboard_widgets', DEFAULT_WIDGETS);
       } catch (err) {
-        console.error('Error restableciendo configuración de widgets en Supabase:', err);
+        logger.error('Error restableciendo configuración de widgets en Supabase:', err);
       }
     }
   };

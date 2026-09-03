@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
 import { db, getActiveUserId } from './db.ts';
 import { generateUuid } from '../utils/uuid.ts';
+import { logger } from '../utils/logger.ts';
 
 export interface AuditResult {
   table: string;
@@ -417,15 +418,15 @@ export const runFullAudit = async (): Promise<AuditReport> => {
  * Imprime un reporte formateado y legible en la consola del navegador.
  */
 export const displayAuditReport = (report: AuditReport): void => {
-  console.group('🔍 [LANITAPP] REPORTE COMPLETO DE AUDITORÍA SUPABASE');
-  console.log(`⏱️ Tiempo total de ejecución: ${report.summary.durationTotalMs}ms`);
-  console.log(`📊 Resumen:`);
-  console.log(`   • Total Operaciones Evaluadas: ${report.summary.total}`);
-  console.log(`   • ✅ Exitosos: ${report.summary.passed}`);
-  console.log(`   • ❌ Fallidos: ${report.summary.failed}`);
-  console.log(`   • ⚠️ Advertencias: ${report.summary.warnings}`);
+  logger.group('🔍 [LANITAPP] REPORTE COMPLETO DE AUDITORÍA SUPABASE');
+  logger.dev(`⏱️ Tiempo total de ejecución: ${report.summary.durationTotalMs}ms`);
+  logger.dev(`📊 Resumen:`);
+  logger.dev(`   • Total Operaciones Evaluadas: ${report.summary.total}`);
+  logger.dev(`   • ✅ Exitosos: ${report.summary.passed}`);
+  logger.dev(`   • ❌ Fallidos: ${report.summary.failed}`);
+  logger.dev(`   • ⚠️ Advertencias: ${report.summary.warnings}`);
 
-  console.table(
+  logger.table(
     report.results.map((r) => ({
       Tabla: r.table,
       Operación: r.operation,
@@ -437,12 +438,12 @@ export const displayAuditReport = (report: AuditReport): void => {
   );
 
   if (report.recommendations.length > 0) {
-    console.group('💡 Recomendaciones del Sistema:');
-    report.recommendations.forEach((rec, idx) => console.log(`${idx + 1}. ${rec}`));
-    console.groupEnd();
+    logger.group('💡 Recomendaciones del Sistema:');
+    report.recommendations.forEach((rec, idx) => logger.dev(`${idx + 1}. ${rec}`));
+    logger.groupEnd();
   }
 
-  console.groupEnd();
+  logger.groupEnd();
 };
 
 /**

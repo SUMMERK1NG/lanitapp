@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { useFinanceStore, type RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { logger } from '../utils/logger.ts';
 
 export const SYNCED_TABLES = [
   'profiles',
@@ -91,7 +92,7 @@ export function useRealtimeSync(userId: string | null) {
 
     // 2. Fetch inicial completo desde Supabase
     fetchInitialData(userId).catch((err) => {
-      console.warn('[RealtimeSync Initial Fetch Notice]:', err);
+      logger.warn('[RealtimeSync Initial Fetch Notice]:', err);
       if (isMounted) setSyncStatus('error');
     });
 
@@ -105,7 +106,7 @@ export function useRealtimeSync(userId: string | null) {
         { event: '*', schema: 'public', table },
         (payload) => {
           if (!isMounted) return;
-          console.log(`[useRealtimeSync ${table} Event]:`, payload);
+          logger.dev(`[useRealtimeSync ${table} Event]:`, payload);
           handleRealtimePayload(table, payload, userId);
         }
       );

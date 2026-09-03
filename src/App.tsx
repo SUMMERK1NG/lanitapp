@@ -84,6 +84,7 @@ const AuditPanel = lazy(() =>
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 import { getUserPreferences, updatePreference } from './lib/profilePreferences.ts';
 import { checkAndNotifyDeficit } from './services/deficitAlertService.ts';
+import { logger } from './utils/logger.ts';
 
 const AVAILABLE_VIEWS: ActiveViewType[] = [
   'dashboard',
@@ -128,7 +129,7 @@ export function App() {
         updateProfile({ last_active_view: newView });
         await updatePreference(currentUser.id, 'last_active_view', newView);
       } catch (error) {
-        console.error('Error guardando última vista en Supabase:', error);
+        logger.error('Error guardando última vista en Supabase:', error);
       }
     }
   };
@@ -193,14 +194,14 @@ export function App() {
             .eq('id', currentUser.id);
 
           if (error) {
-            console.warn('[Supabase Theme Save Notice]:', error.message);
+            logger.warn('[Supabase Theme Save Notice]:', error.message);
           } else {
-            console.log('✅ Tema guardado exitosamente en Supabase:', { theme: newTheme, color: newColor });
+            logger.dev('✅ Tema guardado exitosamente en Supabase:', { theme: newTheme, color: newColor });
           }
         }
       }
     } catch (err) {
-      console.error('Error inesperado al guardar tema:', err);
+      logger.error('Error inesperado al guardar tema:', err);
     }
   };
 
@@ -408,7 +409,7 @@ export function App() {
 
     // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud
     migrateLocalDataToCloud(activeUserId)
-      .catch((e) => console.error('Cloud migration error:', e))
+      .catch((e) => logger.error('Cloud migration error:', e))
       .finally(() => {
         if (isMounted) setIsCloudLoading(false);
       });

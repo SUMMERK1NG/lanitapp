@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { logger } from '../utils/logger.ts';
 
 // Retrieve environment variables
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -42,7 +43,7 @@ if (isSupabaseConfigured()) {
       },
     });
   } catch (error) {
-    console.error('Failed to initialize Supabase client:', error);
+    logger.error('Failed to initialize Supabase client:', error);
   }
 }
 

@@ -37,6 +37,7 @@ import {
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 const iconMap: Record<string, any> = {
   film: LucideIcons.Film,
@@ -494,7 +495,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         await deleteVariableIncome(companion.id);
       }
     } catch (err) {
-      console.error('Error reversing salary allocation:', err);
+      logger.error('Error reversing salary allocation:', err);
     }
   };
 
@@ -517,7 +518,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
       setNewAccountBalance(0);
       setIsVarAccountDropdownOpen(false);
     } catch (err) {
-      console.error('Error creating account:', err);
+      logger.error('Error creating account:', err);
     } finally {
       setIsCreatingAccount(false);
     }

@@ -61,6 +61,7 @@ import {
 import { AddPaymentModal } from './AddPaymentModal.tsx';
 import { AddDebtModal } from './AddDebtModal.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 interface FortnightPlannerProps {
   selectedYear: number;
@@ -598,7 +599,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setDeficitWarningData({ isOpen: false, amount: 0 });
     } catch (err) {
-      console.error('Error marking expense as paid:', err);
+      logger.error('Error marking expense as paid:', err);
     }
   };
 
@@ -611,7 +612,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         fortnight: selectedFortnight,
       });
     } catch (err) {
-      console.error('Error unmarking expense paid:', err);
+      logger.error('Error unmarking expense paid:', err);
     }
   };
 
@@ -637,7 +638,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setSkipModalData({ isOpen: false });
     } catch (err) {
-      console.error('Error skipping expense:', err);
+      logger.error('Error skipping expense:', err);
     }
   };
 
@@ -650,7 +651,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         fortnight: selectedFortnight,
       });
     } catch (err) {
-      console.error('Error unskipping expense:', err);
+      logger.error('Error unskipping expense:', err);
     }
   };
 
@@ -677,7 +678,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setSkipModalData({ isOpen: false });
     } catch (err) {
-      console.error('Error skipping debt installment:', err);
+      logger.error('Error skipping debt installment:', err);
     }
   };
 
@@ -690,7 +691,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         fortnight: selectedFortnight,
       });
     } catch (err) {
-      console.error('Error unskipping debt installment:', err);
+      logger.error('Error unskipping debt installment:', err);
     }
   };
 
@@ -717,7 +718,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         `🎉 ¡Felicidades! Has cubierto tu cuota de ahorro de $${goal.amount_per_period.toFixed(2)} USD para "${goal.name}". ¡Sigue construyendo tu futuro con disciplina!`
       );
     } catch (err) {
-      console.error('Error contributing to savings goal:', err);
+      logger.error('Error contributing to savings goal:', err);
     }
   };
 
@@ -744,7 +745,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setSkipModalData({ isOpen: false });
     } catch (err) {
-      console.error('Error skipping savings goal:', err);
+      logger.error('Error skipping savings goal:', err);
     }
   };
 
@@ -752,7 +753,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     try {
       await unmarkSavingContribution(contribId);
     } catch (err) {
-      console.error('Error unmarking saving contribution:', err);
+      logger.error('Error unmarking saving contribution:', err);
     }
   };
 
@@ -804,7 +805,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         `🎉 ¡Gran decisión! Has aportado $${surplusSavingsAmount.toFixed(2)} USD a tu meta "${goal?.name || 'Ahorro'}". ¡Tu patrimonio sigue creciendo!`
       );
     } catch (err) {
-      console.error('Error saving surplus contribution:', err);
+      logger.error('Error saving surplus contribution:', err);
     } finally {
       setIsProcessingAction(false);
     }
@@ -832,7 +833,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setIsBalanceSurplusModalOpen(false);
     } catch (err) {
-      console.error('Error adding surplus transaction to balance:', err);
+      logger.error('Error adding surplus transaction to balance:', err);
     } finally {
       setIsProcessingAction(false);
     }
@@ -863,7 +864,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setIsCoverDeficitModalOpen(false);
     } catch (err) {
-      console.error('Error covering deficit from account:', err);
+      logger.error('Error covering deficit from account:', err);
     } finally {
       setIsProcessingAction(false);
     }
@@ -907,7 +908,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
 
       setIsAdvanceSalaryModalOpen(false);
     } catch (err) {
-      console.error('Error advancing salary from other fortnight:', err);
+      logger.error('Error advancing salary from other fortnight:', err);
     } finally {
       setIsProcessingAction(false);
     }
@@ -943,7 +944,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         await deleteVariableIncome(companion.id);
       }
     } catch (err) {
-      console.error('Error reversing salary allocation in planner:', err);
+      logger.error('Error reversing salary allocation in planner:', err);
     }
   };
 
@@ -964,7 +965,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         }
       }
     } catch (err) {
-      console.error('Error batch postponing expenses:', err);
+      logger.error('Error batch postponing expenses:', err);
     }
   };
 
@@ -983,7 +984,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       });
       setIsDeficitLoanModalOpen(false);
     } catch (err) {
-      console.error('Error recording deficit loan income:', err);
+      logger.error('Error recording deficit loan income:', err);
     }
   };
 

@@ -33,6 +33,7 @@ import {
   toSupabaseVariableIncomePayload,
   toSupabaseTransactionPayload,
 } from './supabasePayloads.ts';
+import { logger } from '../utils/logger.ts';
 
 // Gestión en memoria del ID del usuario autenticado (desacoplado de localStorage por seguridad)
 let _activeUserIdInMemory: string = '';
@@ -67,7 +68,7 @@ export async function fetchActiveUserId(): Promise<string | null> {
       }
     }
   } catch (err) {
-    console.warn('Error al obtener usuario activo desde Supabase:', err);
+    logger.warn('Error al obtener usuario activo desde Supabase:', err);
   }
   return null;
 }
@@ -123,7 +124,7 @@ export const resolveCategoryCodeToUuid = async (code: string): Promise<string> =
       }
     }
   } catch (error) {
-    console.error('Error resolviendo código de categoría a UUID:', error);
+    logger.error('Error resolviendo código de categoría a UUID:', error);
   }
 
   // Si no se encuentra UUID, retornar el código para evitar dejar el campo nulo
@@ -149,7 +150,7 @@ export const resolveCategoryUuidToCode = async (uuid: string): Promise<string> =
       if (data?.code) return data.code;
     }
   } catch (error) {
-    console.error('Error resolviendo UUID de categoría a código:', error);
+    logger.error('Error resolviendo UUID de categoría a código:', error);
   }
   return uuid;
 };
@@ -245,11 +246,11 @@ export async function initializeDatabase(): Promise<void> {
       await db.categories.bulkPut(DEFAULT_CATEGORIES);
     }
   } catch (err) {
-    console.error('Database init error:', err);
+    logger.error('Database init error:', err);
   }
 }
 
-initializeDatabase().catch((err) => console.error('Database init error:', err));
+initializeDatabase().catch((err) => logger.error('Database init error:', err));
 
 // -------------------------------------------------------------
 // Payload Sanitizers & Supabase Direct Handlers
@@ -288,7 +289,7 @@ export async function refreshAccountsFromSupabase(userId?: string): Promise<void
   try {
     const { data, error } = await supabase.from('accounts').select('*').eq('user_id', currentUserId);
     if (error) {
-      console.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
+      logger.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
       return;
     }
     if (data) {
@@ -311,7 +312,7 @@ export async function refreshAccountsFromSupabase(userId?: string): Promise<void
       }
     }
   } catch (err) {
-    console.error('Error refreshing accounts from Supabase:', err);
+    logger.error('Error refreshing accounts from Supabase:', err);
   }
 }
 
@@ -331,7 +332,7 @@ export async function upsertAccountToSupabase(payload: Record<string, any>): Pro
     return true;
   }
 
-  console.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
+  logger.error('[Supabase Accounts Error]:', error.message, error.details, error.hint);
   return false;
 }
 
@@ -353,7 +354,7 @@ export async function migrateLocalDataToCloud(userId: string): Promise<void> {
     // 2. Recargar estado completo directo desde Supabase (prioridad nube)
     await fetchAndConsolidateUserCloudData(userId);
   } catch (err) {
-    console.error('Error synchronizing local data to cloud:', err);
+    logger.error('Error synchronizing local data to cloud:', err);
   }
 }
 
@@ -431,37 +432,37 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
 
     // Diagnóstico de respuestas de Supabase
     if (resAccounts.error) {
-      console.error('[Supabase Accounts Error]:', resAccounts.error.message, resAccounts.error.details, resAccounts.error.hint);
+      logger.error('[Supabase Accounts Error]:', resAccounts.error.message, resAccounts.error.details, resAccounts.error.hint);
     }
     if (resCategories.error) {
-      console.warn('[Supabase Categories Notice]:', resCategories.error.message);
+      logger.warn('[Supabase Categories Notice]:', resCategories.error.message);
     }
     if (resIncomes.error) {
-      console.warn('[Supabase Fixed Incomes Notice]:', resIncomes.error.message);
+      logger.warn('[Supabase Fixed Incomes Notice]:', resIncomes.error.message);
     }
     if (resVarIncomes.error) {
-      console.warn('[Supabase Variable Incomes Notice]:', resVarIncomes.error.message);
+      logger.warn('[Supabase Variable Incomes Notice]:', resVarIncomes.error.message);
     }
     if (resExpenses.error) {
-      console.warn('[Supabase Fixed Expenses Notice]:', resExpenses.error.message);
+      logger.warn('[Supabase Fixed Expenses Notice]:', resExpenses.error.message);
     }
     if (resDebts.error) {
-      console.warn('[Supabase Debts Notice]:', resDebts.error.message);
+      logger.warn('[Supabase Debts Notice]:', resDebts.error.message);
     }
     if (resPayments.error) {
-      console.warn('[Supabase Payments Notice]:', resPayments.error.message);
+      logger.warn('[Supabase Payments Notice]:', resPayments.error.message);
     }
     if (resSavings.error) {
-      console.warn('[Supabase Savings Notice]:', resSavings.error.message);
+      logger.warn('[Supabase Savings Notice]:', resSavings.error.message);
     }
     if (resContribs.error) {
-      console.warn('[Supabase Contribs Notice]:', resContribs.error.message);
+      logger.warn('[Supabase Contribs Notice]:', resContribs.error.message);
     }
     if (resStates.error) {
-      console.warn('[Supabase States Notice]:', resStates.error.message);
+      logger.warn('[Supabase States Notice]:', resStates.error.message);
     }
     if (resTxs.error) {
-      console.warn('[Supabase Transactions Notice]:', resTxs.error.message);
+      logger.warn('[Supabase Transactions Notice]:', resTxs.error.message);
     }
 
     let remoteIncomes = resIncomes.data;
@@ -587,7 +588,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     _lastSyncTimestamp = now;
   } catch (err) {
-    console.error('Error in fetchAndConsolidateUserCloudData:', err);
+    logger.error('Error in fetchAndConsolidateUserCloudData:', err);
   }
 }
 
@@ -624,7 +625,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.transactions.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Tx Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Tx Error]:', error.message, error.details);
       }
     }
 
@@ -644,7 +645,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.fixed_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Income Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Income Error]:', error.message, error.details);
       }
     }
 
@@ -667,7 +668,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.variable_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Var Income Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Var Income Error]:', error.message, error.details);
       }
     }
 
@@ -687,7 +688,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.fixed_expenses.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Expense Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Expense Error]:', error.message, error.details);
       }
     }
 
@@ -744,7 +745,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.debts.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Debt Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Debt Error]:', error.message, error.details);
       }
     }
 
@@ -758,7 +759,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.debt_payments.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Payment Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Payment Error]:', error.message, error.details);
       }
     }
 
@@ -771,7 +772,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.savings_goals.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Savings Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Savings Error]:', error.message, error.details);
       }
     }
 
@@ -785,7 +786,7 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.saving_contributions.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending Contrib Error]:', error.message, error.details);
+        logger.error('[Supabase Pending Contrib Error]:', error.message, error.details);
       }
     }
 
@@ -799,11 +800,11 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
         await db.fortnight_item_states.update(item.id, { sync_status: 'synced' });
         pushed++;
       } else {
-        console.error('[Supabase Pending State Error]:', error.message, error.details);
+        logger.error('[Supabase Pending State Error]:', error.message, error.details);
       }
     }
   } catch (err) {
-    console.warn('Notice pushing pending records:', err);
+    logger.warn('Notice pushing pending records:', err);
   }
 
   return pushed;
@@ -845,7 +846,7 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
       'postgres_changes',
       { event: '*', schema: 'public', table: tableName },
       async (payload) => {
-        console.log(`[Realtime Change Detected on ${tableName}]:`, payload);
+        logger.dev(`[Realtime Change Detected on ${tableName}]:`, payload);
         const newRow: any = payload.new;
         const oldRow: any = payload.old;
         try {
@@ -926,14 +927,14 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
 
           if (onUpdate) onUpdate();
         } catch (e) {
-          console.warn(`Realtime update handling error on ${tableName}:`, e);
+          logger.warn(`Realtime update handling error on ${tableName}:`, e);
         }
       }
     );
   });
 
   channel.subscribe((status) => {
-    console.log(`[Supabase Realtime Channel Status for ${userId}]:`, status);
+    logger.dev(`[Supabase Realtime Channel Status for ${userId}]:`, status);
   });
 
   return () => {
@@ -979,7 +980,7 @@ export async function syncWithSupabase(): Promise<SyncResult> {
       lastSyncTime: now,
     };
   } catch (error: any) {
-    console.error('Error in syncWithSupabase:', error);
+    logger.error('Error in syncWithSupabase:', error);
     return {
       success: false,
       syncedCount: 0,
@@ -1073,10 +1074,10 @@ export async function saveSavingsGoal(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Savings Goal Error]:', error.message, error.details);
+        logger.error('[Supabase Savings Goal Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('Direct saving goal upsert notice:', e);
+      logger.warn('Direct saving goal upsert notice:', e);
     }
   }
 
@@ -1095,7 +1096,7 @@ export async function deleteSavingsGoal(id: string): Promise<void> {
         supabase.from('saving_contributions').delete().eq('goal_id', id),
       ]);
     } catch (e) {
-      console.warn('Delete remote saving goal err:', e);
+      logger.warn('Delete remote saving goal err:', e);
     }
   }
 }
@@ -1213,7 +1214,7 @@ export async function addSavingContribution(data: {
         if (txIncomeRecord) txIncomeRecord.sync_status = 'synced';
       }
     } catch (e) {
-      console.warn('Direct saving contribution upsert notice:', e);
+      logger.warn('Direct saving contribution upsert notice:', e);
     }
   }
 
@@ -1269,10 +1270,10 @@ export async function skipSavingContributionPeriod(data: {
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Skip Saving Error]:', error.message);
+        logger.error('[Supabase Skip Saving Error]:', error.message);
       }
     } catch (e) {
-      console.warn('Direct skip saving upsert notice:', e);
+      logger.warn('Direct skip saving upsert notice:', e);
     }
   }
 
@@ -1339,11 +1340,11 @@ export async function saveFixedIncome(
           const { error: errRetry } = await supabase.from('fixed_incomes').upsert(payload);
           if (!errRetry) record.sync_status = 'synced';
         } else {
-          console.error('[Supabase Fixed Income Error]:', error.message, error.details);
+          logger.error('[Supabase Fixed Income Error]:', error.message, error.details);
         }
       }
     } catch (e) {
-      console.warn('Direct fixed income upsert notice:', e);
+      logger.warn('Direct fixed income upsert notice:', e);
     }
   }
 
@@ -1356,9 +1357,9 @@ export async function deleteFixedIncome(id: string): Promise<void> {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { error } = await supabase.from('fixed_incomes').delete().eq('id', id);
-      if (error) console.error('[Supabase Fixed Income Delete Error]:', error.message);
+      if (error) logger.error('[Supabase Fixed Income Delete Error]:', error.message);
     } catch (e) {
-      console.warn('Delete remote fixed income err:', e);
+      logger.warn('Delete remote fixed income err:', e);
     }
   }
 }
@@ -1388,7 +1389,7 @@ export async function toggleMonthlyFixedIncomeOverride(
       const { error } = await supabase.from('monthly_fixed_income_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
-      console.warn('Override upsert notice:', e);
+      logger.warn('Override upsert notice:', e);
     }
   }
 
@@ -1454,10 +1455,10 @@ export async function saveVariableIncome(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Variable Income Error]:', error.message, error.details);
+        logger.error('[Supabase Variable Income Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('Direct variable income upsert notice:', e);
+      logger.warn('Direct variable income upsert notice:', e);
     }
   }
 
@@ -1482,7 +1483,7 @@ export async function saveVariableIncome(
         const txPayload = toSupabaseTransactionPayload(txRaw);
         await supabase.from('transactions').upsert(txPayload);
       } catch (e) {
-        console.warn('Direct transaction upsert notice:', e);
+        logger.warn('Direct transaction upsert notice:', e);
       }
     }
   } else if (existing?.transaction_id) {
@@ -1491,7 +1492,7 @@ export async function saveVariableIncome(
       try {
         await supabase.from('transactions').delete().eq('id', existing.transaction_id);
       } catch (e) {
-        console.warn('Delete remote tx notice:', e);
+        logger.warn('Delete remote tx notice:', e);
       }
     }
   }
@@ -1508,7 +1509,7 @@ export async function deleteVariableIncome(id: string): Promise<void> {
       try {
         await supabase.from('transactions').delete().eq('id', existing.transaction_id);
       } catch (e) {
-        console.warn('Delete linked tx err:', e);
+        logger.warn('Delete linked tx err:', e);
       }
     }
   }
@@ -1518,7 +1519,7 @@ export async function deleteVariableIncome(id: string): Promise<void> {
     try {
       await supabase.from('variable_incomes').delete().eq('id', id);
     } catch (e) {
-      console.warn('Delete remote var income err:', e);
+      logger.warn('Delete remote var income err:', e);
     }
   }
 }
@@ -1568,10 +1569,10 @@ export async function saveVariableExpense(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.warn('[Supabase Variable Expense Notice]:', error.message);
+        logger.warn('[Supabase Variable Expense Notice]:', error.message);
       }
     } catch (e) {
-      console.warn('Direct variable expense upsert notice:', e);
+      logger.warn('Direct variable expense upsert notice:', e);
     }
   }
 
@@ -1596,7 +1597,7 @@ export async function saveVariableExpense(
         const txPayload = toSupabaseTransactionPayload(txRaw);
         await supabase.from('transactions').upsert(txPayload);
       } catch (e) {
-        console.warn('Direct transaction upsert notice:', e);
+        logger.warn('Direct transaction upsert notice:', e);
       }
     }
   }
@@ -1611,7 +1612,7 @@ export async function deleteVariableExpense(id: string): Promise<void> {
     try {
       await supabase.from('variable_expenses').delete().eq('id', id);
     } catch (e) {
-      console.warn('Delete remote var expense err:', e);
+      logger.warn('Delete remote var expense err:', e);
     }
   }
 }
@@ -1637,7 +1638,7 @@ export async function saveCategory(category: Partial<Category> & { name: string;
       const { error } = await supabase.from('categories').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
-      console.warn('Category upsert notice:', e);
+      logger.warn('Category upsert notice:', e);
     }
   }
 
@@ -1651,7 +1652,7 @@ export async function deleteCategory(id: string): Promise<void> {
     try {
       await supabase.from('categories').delete().eq('id', id);
     } catch (e) {
-      console.warn('Delete remote category err:', e);
+      logger.warn('Delete remote category err:', e);
     }
   }
 }
@@ -1702,13 +1703,13 @@ export async function deleteAccount(id: string): Promise<void> {
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      console.log('[Supabase Accounts Delete Payload]:', { id, cleanId });
+      logger.dev('[Supabase Accounts Delete Payload]:', { id, cleanId });
       const { error: err1 } = await supabase.from('accounts').delete().eq('id', id);
       if (err1 && cleanId !== id) {
         await supabase.from('accounts').delete().eq('id', cleanId);
       }
     } catch (e) {
-      console.warn('Delete remote account err:', e);
+      logger.warn('Delete remote account err:', e);
     }
   }
 
@@ -1770,12 +1771,12 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
         currency: record.currency || 'USD',
         updated_at: new Date().toISOString(),
       };
-      console.log('[Supabase Profiles Payload (db.ts)]:', profilePayload);
+      logger.dev('[Supabase Profiles Payload (db.ts)]:', profilePayload);
       const { error } = await supabase.from('profiles').upsert(profilePayload);
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.warn('[Supabase Profiles Upsert Warning]:', error.message);
+        logger.warn('[Supabase Profiles Upsert Warning]:', error.message);
         // Fallback for minimal schema
         const fallbackPayload = {
           id,
@@ -1789,7 +1790,7 @@ export async function saveUserProfile(profile: Partial<UserProfile> & { name: st
         await supabase.from('profiles').upsert(fallbackPayload);
       }
     } catch (e) {
-      console.warn('Profile direct upsert notice:', e);
+      logger.warn('Profile direct upsert notice:', e);
     }
   }
 
@@ -1827,7 +1828,7 @@ export async function toggleMonthlyFixedOverride(
       const { error } = await supabase.from('monthly_fixed_overrides').upsert(payload);
       if (!error) record.sync_status = 'synced';
     } catch (e) {
-      console.warn('Override upsert notice:', e);
+      logger.warn('Override upsert notice:', e);
     }
   }
 
@@ -1867,10 +1868,10 @@ export async function saveFixedExpense(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Fixed Expense Error]:', error.message, error.details);
+        logger.error('[Supabase Fixed Expense Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('Direct fixed expense upsert notice:', e);
+      logger.warn('Direct fixed expense upsert notice:', e);
     }
   }
 
@@ -1883,9 +1884,9 @@ export async function deleteFixedExpense(id: string): Promise<void> {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { error } = await supabase.from('fixed_expenses').delete().eq('id', id);
-      if (error) console.error('[Supabase Fixed Expense Delete Error]:', error.message);
+      if (error) logger.error('[Supabase Fixed Expense Delete Error]:', error.message);
     } catch (e) {
-      console.warn('Delete remote fixed expense err:', e);
+      logger.warn('Delete remote fixed expense err:', e);
     }
   }
 }
@@ -1952,10 +1953,10 @@ export async function saveDebt(
       if (!error) {
         record.sync_status = 'synced';
       } else {
-        console.error('[Supabase Debt Error]:', error.message, error.details);
+        logger.error('[Supabase Debt Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('Direct debt upsert notice:', e);
+      logger.warn('Direct debt upsert notice:', e);
     }
   }
 
@@ -1974,7 +1975,7 @@ export async function deleteDebt(id: string): Promise<void> {
         supabase.from('debt_payments').delete().eq('debt_id', id),
       ]);
     } catch (e) {
-      console.warn('Delete remote debt err:', e);
+      logger.warn('Delete remote debt err:', e);
     }
   }
 }
@@ -2070,10 +2071,10 @@ export async function addDebtPayment(data: {
         paymentRecord.sync_status = 'synced';
         txRecord.sync_status = 'synced';
       } else {
-        console.error('[Supabase Debt Payment Error]:', res1.error || res2.error || res3.error);
+        logger.error('[Supabase Debt Payment Error]:', res1.error || res2.error || res3.error);
       }
     } catch (e) {
-      console.warn('Direct debt payment upsert notice:', e);
+      logger.warn('Direct debt payment upsert notice:', e);
     }
   }
 
@@ -2114,10 +2115,10 @@ export async function addTransaction(
       if (!error) {
         newTransaction.sync_status = 'synced';
       } else {
-        console.error('[Supabase Transaction Error]:', error.message, error.details);
+        logger.error('[Supabase Transaction Error]:', error.message, error.details);
       }
     } catch (e) {
-      console.warn('Direct transaction upsert notice:', e);
+      logger.warn('Direct transaction upsert notice:', e);
     }
   }
 
@@ -2130,9 +2131,9 @@ export async function deleteTransaction(id: string): Promise<void> {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) console.error('[Supabase Transaction Delete Error]:', error.message);
+      if (error) logger.error('[Supabase Transaction Delete Error]:', error.message);
     } catch (e) {
-      console.warn('Delete remote tx err:', e);
+      logger.warn('Delete remote tx err:', e);
     }
   }
 }
@@ -2168,7 +2169,7 @@ export async function clearCurrentUserData(userId?: string): Promise<void> {
         supabase.from('fortnight_item_states').delete().eq('user_id', targetUid),
       ]);
     } catch (e) {
-      console.warn('Clear remote user data err:', e);
+      logger.warn('Clear remote user data err:', e);
     }
   }
 }
@@ -2260,10 +2261,10 @@ export async function setFortnightExpensePaid(params: {
         txRecord.sync_status = 'synced';
         stateRecord.sync_status = 'synced';
       } else {
-        console.error('[Supabase Fortnight Paid Error]:', res1.error || res2.error);
+        logger.error('[Supabase Fortnight Paid Error]:', res1.error || res2.error);
       }
     } catch (e) {
-      console.warn('Direct fortnight paid upsert notice:', e);
+      logger.warn('Direct fortnight paid upsert notice:', e);
     }
   }
 
@@ -2291,7 +2292,7 @@ export async function unmarkFortnightExpensePaid(params: {
         supabase.from('fortnight_item_states').delete().eq('id', stateId),
       ]);
     } catch (e) {
-      console.warn('Delete remote fortnight paid state err:', e);
+      logger.warn('Delete remote fortnight paid state err:', e);
     }
   }
 }
@@ -2333,7 +2334,7 @@ export async function setFortnightExpenseSkipped(params: {
       ]);
       stateRecord.sync_status = 'synced';
     } catch (e) {
-      console.warn('Direct skip expense upsert notice:', e);
+      logger.warn('Direct skip expense upsert notice:', e);
     }
   }
 
@@ -2355,7 +2356,7 @@ export async function unmarkFortnightExpenseSkipped(params: {
     try {
       await supabase.from('fortnight_item_states').delete().eq('id', stateId);
     } catch (e) {
-      console.warn('Delete remote skip expense err:', e);
+      logger.warn('Delete remote skip expense err:', e);
     }
   }
 }
@@ -2392,10 +2393,10 @@ export async function setFortnightDebtSkipped(params: {
       if (!error) {
         stateRecord.sync_status = 'synced';
       } else {
-        console.error('[Supabase Skip Debt Error]:', error.message);
+        logger.error('[Supabase Skip Debt Error]:', error.message);
       }
     } catch (e) {
-      console.warn('Direct skip debt upsert notice:', e);
+      logger.warn('Direct skip debt upsert notice:', e);
     }
   }
 
@@ -2417,7 +2418,7 @@ export async function unmarkFortnightDebtSkipped(params: {
     try {
       await supabase.from('fortnight_item_states').delete().eq('id', stateId);
     } catch (e) {
-      console.warn('Delete remote skip debt err:', e);
+      logger.warn('Delete remote skip debt err:', e);
     }
   }
 }
@@ -2459,7 +2460,7 @@ export async function setSavingContributionSkipped(data: {
       const payload = toSupabaseSavingContributionPayload(rawPayload);
       await supabase.from('saving_contributions').upsert(payload);
     } catch (e) {
-      console.warn('Supabase skip saving contribution notice:', e);
+      logger.warn('Supabase skip saving contribution notice:', e);
     }
   }
 }
@@ -2486,7 +2487,7 @@ export async function unmarkSavingContribution(contributionId: string): Promise<
     try {
       await supabase.from('saving_contributions').delete().eq('id', contributionId);
     } catch (e) {
-      console.warn('Supabase delete contribution notice:', e);
+      logger.warn('Supabase delete contribution notice:', e);
     }
   }
 }

@@ -4,6 +4,7 @@ import type { Debt, FortnightType, ExchangeRatesData } from '../types/index.ts';
 import { addDebtPayment } from '../services/debtsService.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 interface AddPaymentModalProps {
   isOpen: boolean;
@@ -299,7 +300,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
       });
       onClose();
     } catch (err) {
-      console.error('Error recording payment:', err);
+      logger.error('Error recording payment:', err);
     } finally {
       setIsSubmitting(false);
     }

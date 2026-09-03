@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { syncWithSupabase } from '../lib/db.ts';
 import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import type { SyncResult } from '../types/index.ts';
+import { logger } from '../utils/logger.ts';
 
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -23,7 +24,7 @@ export function useNetworkStatus() {
         setLastSyncTimestamp(result.lastSyncTime);
       }
     } catch (err) {
-      console.error('Manual sync error:', err);
+      logger.error('Manual sync error:', err);
     } finally {
       setIsSyncing(false);
     }
