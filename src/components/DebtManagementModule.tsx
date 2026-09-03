@@ -118,7 +118,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
             <h3 className="text-base font-bold text-app">Control de Deudas & Créditos</h3>
           </div>
           <p className="text-xs text-muted mt-0.5">
-            Gestiona compromisos Cashea, CrediTotal, préstamos personales y abonos
+            Seguimiento de cuotas, compromisos y pagos
           </p>
         </div>
 

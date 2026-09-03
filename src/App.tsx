@@ -496,7 +496,7 @@ export function App() {
     fixed_expenses: 'Gastos Fijos',
     debts: 'Control de Deudas',
     savings: 'Planes de Ahorro',
-    accounts: 'Capital & Cuentas',
+    accounts: 'Capital',
     transactions: 'Historial de Movimientos',
     rates: 'Tasas BCV & Divisas',
     settings: 'Configuración',

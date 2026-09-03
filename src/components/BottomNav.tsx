@@ -50,7 +50,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const moreMenuItems = [
     {
       id: 'accounts',
-      title: 'Capital & Cuentas',
+      title: 'Capital',
       description: 'Fondos en efectivo, bancos y billeteras',
       icon: Wallet,
       color: '#00C2C7',

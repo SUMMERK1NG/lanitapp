@@ -82,6 +82,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-app">Configuración y Preferencias</h2>
+            <p className="text-xs text-muted mt-0.5">Ajustes visuales, usuarios y respaldo</p>
           </div>
         </div>
 
@@ -96,7 +97,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Palette className="w-3.5 h-3.5" />
-            <span>Personalización & Temas</span>
+            <span>Personalización</span>
           </button>
 
           <button
@@ -132,7 +133,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Database className="w-3.5 h-3.5" />
-            <span>Sincronización & Backup</span>
+            <span>Respaldo</span>
           </button>
         </div>
       </div>

@@ -104,11 +104,16 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     <div className="space-y-4">
       {/* Header and Filter Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-surface border border-app shadow-md">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-            <Layers className="w-4 h-4" />
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+              <Layers className="w-4 h-4" />
+            </div>
+            <h3 className="text-base font-bold text-app">Gestor de Categorías</h3>
           </div>
-          <h3 className="text-base font-bold text-app">Gestor de Categorías</h3>
+          <p className="text-xs text-muted mt-0.5">
+            Clasificación de ingresos y gastos
+          </p>
         </div>
 
         <div className="flex items-center gap-2">

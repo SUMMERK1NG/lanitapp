@@ -2093,7 +2093,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
                 {accounts.length === 0 ? (
                   <div className="p-3 rounded-2xl bg-card border border-amber-500/30 text-center space-y-1">
                     <p className="text-xs font-bold text-amber-400">No hay cuentas registradas</p>
-                    <p className="text-[10px] text-muted">Registra una cuenta bancaria o fondo en Capital & Cuentas para usar esta opción.</p>
+                    <p className="text-[10px] text-muted">Registra una cuenta bancaria o fondo en Capital para usar esta opción.</p>
                   </div>
                 ) : (
                   <select

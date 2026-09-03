@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'fixed_expenses' as const, label: 'Gastos Fijos', icon: Receipt },
     { id: 'debts' as const, label: 'Control de Deudas', icon: CreditCard },
     { id: 'savings' as const, label: 'Planes de Ahorro', icon: PiggyBank },
-    { id: 'accounts' as const, label: 'Capital & Cuentas', icon: Wallet },
+    { id: 'accounts' as const, label: 'Capital', icon: Wallet },
     { id: 'transactions' as const, label: 'Historial de Movimientos', icon: History },
     { id: 'rates' as const, label: 'Tasas BCV & Divisas', icon: TrendingUp },
   ];
