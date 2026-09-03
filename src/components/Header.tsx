@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   RefreshCw,
   Calculator,
@@ -11,7 +11,7 @@ import {
   Activity,
 } from 'lucide-react';
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
-import { computeSystemNotifications } from './NotificationCenterModal.tsx';
+import { computeSystemNotifications, getDismissedAlertIds } from './NotificationCenterModal.tsx';
 import type { RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
 
 interface HeaderProps {
@@ -62,8 +62,24 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenAudit,
 }) => {
-  // Compute active notifications count
-  const notifications = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
+  // Sincronizar dinámicamente alertas descartadas para el contador de la campana
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedAlertIds());
+
+  useEffect(() => {
+    const handleUpdate = () => setDismissedIds(getDismissedAlertIds());
+    window.addEventListener('lanitapp_alerts_dismissed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('lanitapp_alerts_dismissed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
+  const notifications = useMemo(() => {
+    const all = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
+    return all.filter((n) => !dismissedIds.has(n.id));
+  }, [debts, fixedExpenses, selectedYear, selectedMonth, dismissedIds]);
+
   const unreadCount = notifications.length;
 
   // Resolve user avatar exclusivamente desde el perfil de Supabase

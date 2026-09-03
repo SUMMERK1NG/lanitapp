@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Bell,
   X,
@@ -7,27 +7,34 @@ import {
   Receipt,
   Sparkles,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
-import type { Debt, FixedExpense } from '../types/index.ts';
+import type { Debt, FixedExpense, FixedIncome, VariableIncome, VariableExpense } from '../types/index.ts';
+
+export interface SystemNotification {
+  id: string;
+  type: 'deficit' | 'fortnight' | 'debt' | 'fixed_expense' | 'savings' | 'info';
+  title: string;
+  description: string;
+  dateStr: string;
+  priority: 'high' | 'normal';
+  amount?: number;
+  month?: number;
+  year?: number;
+}
 
 interface NotificationCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
   debts?: Debt[];
   fixedExpenses?: FixedExpense[];
+  fixedIncomes?: FixedIncome[];
+  variableIncomes?: VariableIncome[];
+  variableExpenses?: VariableExpense[];
   selectedYear?: number;
   selectedMonth?: number;
-}
-
-export interface SystemNotification {
-  id: string;
-  type: 'fortnight' | 'debt' | 'fixed_expense' | 'savings' | 'info';
-  title: string;
-  description: string;
-  dateStr: string;
-  priority: 'high' | 'normal';
-  month?: number;
-  year?: number;
+  onNavigate?: (view: any) => void;
+  onOpenAddDebt?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -35,11 +42,45 @@ const MONTH_NAMES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+/**
+ * Genera un ID determinista y estable para cada notificación
+ */
+export const generateAlertId = (type: string, key: string, period?: string): string => {
+  return `notif_${type}_${key}${period ? `_${period}` : ''}`;
+};
+
+/**
+ * Carga el conjunto de IDs descartados desde localStorage
+ */
+export const getDismissedAlertIds = (): Set<string> => {
+  try {
+    const saved = localStorage.getItem('lanitapp_dismissed_notifs');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+/**
+ * Guarda los IDs descartados en localStorage y notifica globalmente
+ */
+export const saveDismissedAlertIds = (ids: Set<string>): void => {
+  try {
+    localStorage.setItem('lanitapp_dismissed_notifs', JSON.stringify(Array.from(ids)));
+    window.dispatchEvent(new Event('lanitapp_alerts_dismissed'));
+  } catch {
+    // ignore
+  }
+};
+
 export function computeSystemNotifications(
   debts: Debt[] = [],
   fixedExpenses: FixedExpense[] = [],
   targetYear?: number,
-  targetMonth?: number
+  targetMonth?: number,
+  fixedIncomes: FixedIncome[] = [],
+  variableIncomes: VariableIncome[] = [],
+  variableExpenses: VariableExpense[] = []
 ): SystemNotification[] {
   const notifications: SystemNotification[] = [];
   const now = new Date();
@@ -49,11 +90,53 @@ export function computeSystemNotifications(
   const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const currentFortnight = currentDay <= 15 ? 'q1' : 'q2';
 
-  // 1. Aviso de Quincena Activa
+  // 1. Alerta Inteligente de Déficit Quincenal
+  if (fixedIncomes.length > 0 || fixedExpenses.length > 0) {
+    const fnIncomes =
+      fixedIncomes
+        .filter((f) => f.is_active !== false && (f.default_fortnight === 'both' || f.default_fortnight === currentFortnight))
+        .reduce((sum, f) => sum + (f.default_fortnight === 'both' ? f.amount : f.amount), 0) +
+      variableIncomes
+        .filter((v) => v.year === currentYear && v.month === currentMonth && (v.fortnight === currentFortnight || (v as any).quincena === (currentFortnight === 'q1' ? 15 : 30)))
+        .reduce((sum, v) => sum + v.amount, 0);
+
+    const fnExpenses =
+      fixedExpenses
+        .filter((e) => e.is_active !== false && (e.default_fortnight === 'both' || e.default_fortnight === currentFortnight))
+        .reduce((sum, e) => sum + e.amount, 0) +
+      variableExpenses
+        .filter((v) => v.year === currentYear && v.month === currentMonth && (v.fortnight === currentFortnight || (v as any).quincena === (currentFortnight === 'q1' ? 15 : 30)))
+        .reduce((sum, v) => sum + v.amount, 0) +
+      debts
+        .filter((d) => d.status !== 'paid' && (d.fortnight_due === currentFortnight || d.fortnight_due === 'both' || !d.fortnight_due))
+        .reduce((sum, d) => {
+          const rem = d.current_balance !== undefined ? d.current_balance : d.total_amount || 0;
+          if (rem <= 0) return sum;
+          const inst = d.installment_amount || (d.pending_installments ? rem / d.pending_installments : rem);
+          return sum + Number(inst || 0);
+        }, 0);
+
+    const deficit = fnExpenses - fnIncomes;
+    if (deficit > 0) {
+      notifications.push({
+        id: generateAlertId('deficit', `${currentYear}_${currentMonth}_${currentFortnight}`),
+        type: 'deficit',
+        title: `Déficit en ${currentFortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'} (-$${deficit.toFixed(2)})`,
+        description: `Tus compromisos ($${fnExpenses.toFixed(2)}) superan los ingresos proyectados ($${fnIncomes.toFixed(2)}) por $${deficit.toFixed(2)}.`,
+        dateStr: currentFortnight === 'q1' ? `15 ${MONTH_NAMES[currentMonth]}` : `${lastDayOfMonth} ${MONTH_NAMES[currentMonth]}`,
+        priority: 'high',
+        amount: deficit,
+        year: currentYear,
+        month: currentMonth,
+      });
+    }
+  }
+
+  // 2. Aviso de Quincena Activa
   if (currentDay <= 15) {
     const daysLeft = 15 - currentDay;
     notifications.push({
-      id: `notif_q1_${currentYear}_${currentMonth}`,
+      id: generateAlertId('fortnight', 'q1', `${currentYear}_${currentMonth}`),
       type: 'fortnight',
       title:
         daysLeft === 0
@@ -70,7 +153,7 @@ export function computeSystemNotifications(
   } else {
     const daysLeft = lastDayOfMonth - currentDay;
     notifications.push({
-      id: `notif_q2_${currentYear}_${currentMonth}`,
+      id: generateAlertId('fortnight', 'q2', `${currentYear}_${currentMonth}`),
       type: 'fortnight',
       title:
         daysLeft === 0
@@ -86,7 +169,7 @@ export function computeSystemNotifications(
     });
   }
 
-  // 2. Alertas de Cuotas de Deudas Reales
+  // 3. Alertas de Cuotas de Deudas Reales
   debts.forEach((debt) => {
     if (debt.status === 'paid') return;
     const remaining = debt.current_balance !== undefined ? debt.current_balance : debt.total_amount || 0;
@@ -97,18 +180,19 @@ export function computeSystemNotifications(
     const fnLabel = fnDue === 'q1' ? 'Quincena 15' : 'Quincena 30';
 
     notifications.push({
-      id: `notif_debt_${debt.id}`,
+      id: generateAlertId('debt', String(debt.id), `${currentYear}_${currentMonth}`),
       type: 'debt',
       title: `Cuota pendiente: ${debt.creditor || debt.creditor_name || 'Deuda'} ($${Number(installment).toFixed(2)})`,
       description: `Asignada en ${fnLabel} de ${MONTH_NAMES[currentMonth]}. Saldo total por pagar: $${Number(remaining).toFixed(2)}.`,
       dateStr: `${fnLabel}`,
       priority: 'high',
+      amount: Number(installment),
       year: currentYear,
       month: currentMonth,
     });
   });
 
-  // 3. Alertas de Gastos Fijos Activos de la Quincena
+  // 4. Alertas de Gastos Fijos Activos de la Quincena
   fixedExpenses.forEach((exp) => {
     if (exp.is_active === false) return;
     const fn = exp.default_fortnight;
@@ -122,12 +206,13 @@ export function computeSystemNotifications(
         : 'Quincena 15';
 
       notifications.push({
-        id: `notif_exp_${exp.id}_${currentMonth}_${currentFortnight}`,
+        id: generateAlertId('fixed_expense', String(exp.id), `${currentYear}_${currentMonth}_${currentFortnight}`),
         type: 'fixed_expense',
         title: `Gasto fijo: ${exp.name} ($${Number(exp.amount).toFixed(2)})`,
         description: `Planificado para ${fnLabel} de ${MONTH_NAMES[currentMonth]}.`,
         dateStr: fnLabel,
         priority: 'normal',
+        amount: Number(exp.amount),
         year: currentYear,
         month: currentMonth,
       });
@@ -142,27 +227,39 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   onClose,
   debts = [],
   fixedExpenses = [],
+  fixedIncomes = [],
+  variableIncomes = [],
+  variableExpenses = [],
   selectedYear,
   selectedMonth,
+  onNavigate,
+  onOpenAddDebt,
 }) => {
   const today = new Date();
   const activeYear = selectedYear ?? today.getFullYear();
   const activeMonth = selectedMonth ?? today.getMonth();
 
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('lanitapp_dismissed_notifs');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedAlertIds());
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'deficit' | 'debt' | 'fortnight' | 'fixed_expense'>('all');
 
-  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'debt' | 'fortnight' | 'fixed_expense'>('all');
+  // Sincronizar descartadas cada vez que se abre el modal
+  useEffect(() => {
+    if (isOpen) {
+      setDismissedIds(getDismissedAlertIds());
+    }
+  }, [isOpen]);
 
   const rawNotifications = useMemo(() => {
-    return computeSystemNotifications(debts, fixedExpenses, activeYear, activeMonth);
-  }, [debts, fixedExpenses, activeYear, activeMonth]);
+    return computeSystemNotifications(
+      debts,
+      fixedExpenses,
+      activeYear,
+      activeMonth,
+      fixedIncomes,
+      variableIncomes,
+      variableExpenses
+    );
+  }, [debts, fixedExpenses, activeYear, activeMonth, fixedIncomes, variableIncomes, variableExpenses]);
 
   const visibleNotifications = useMemo(() => {
     return rawNotifications.filter((n) => {
@@ -176,23 +273,14 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     const newSet = new Set(dismissedIds);
     rawNotifications.forEach((n) => newSet.add(n.id));
     setDismissedIds(newSet);
-    try {
-      localStorage.setItem('lanitapp_dismissed_notifs', JSON.stringify(Array.from(newSet)));
-    } catch {
-      // ignore
-    }
+    saveDismissedAlertIds(newSet);
   };
 
   const handleDismissSingle = (id: string) => {
-    setDismissedIds((prev) => {
-      const next = new Set(prev).add(id);
-      try {
-        localStorage.setItem('lanitapp_dismissed_notifs', JSON.stringify(Array.from(next)));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
+    const next = new Set(dismissedIds);
+    next.add(id);
+    setDismissedIds(next);
+    saveDismissedAlertIds(next);
   };
 
   if (!isOpen) return null;
@@ -233,7 +321,8 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-2 shrink-0">
           {[
             { id: 'all' as const, label: 'Todas' },
-            { id: 'debt' as const, label: 'Deudas & Cuotas' },
+            { id: 'deficit' as const, label: '⚠️ Déficits' },
+            { id: 'debt' as const, label: 'Deudas' },
             { id: 'fortnight' as const, label: 'Quincenas' },
             { id: 'fixed_expense' as const, label: 'Gastos Fijos' },
           ].map((tab) => (
@@ -270,7 +359,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
               <div
                 key={notif.id}
                 className={`p-3.5 rounded-2xl border transition-all shadow-sm ${
-                  notif.priority === 'high'
+                  notif.type === 'deficit'
+                    ? 'bg-red-500/10 border-red-500/30'
+                    : notif.priority === 'high'
                     ? 'bg-[#FF914D]/10 border-[#FF914D]/30'
                     : 'bg-card border-app'
                 }`}
@@ -278,13 +369,16 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 <div className="flex items-start gap-3">
                   <div
                     className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                      notif.type === 'fortnight'
+                      notif.type === 'deficit'
+                        ? 'bg-red-500/20 text-red-400'
+                        : notif.type === 'fortnight'
                         ? 'bg-primary-custom/20 text-primary-custom'
                         : notif.type === 'debt'
                         ? 'bg-[#FF914D]/20 text-[#FF914D]'
                         : 'bg-[#00C2C7]/20 text-[#00C2C7]'
                     }`}
                   >
+                    {notif.type === 'deficit' && <AlertTriangle className="w-4 h-4" />}
                     {notif.type === 'fortnight' && <Calendar className="w-4 h-4" />}
                     {notif.type === 'debt' && <CreditCard className="w-4 h-4" />}
                     {notif.type === 'fixed_expense' && <Receipt className="w-4 h-4" />}
@@ -298,6 +392,43 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                       </span>
                     </div>
                     <p className="text-[11px] text-muted mt-0.5 leading-snug">{notif.description}</p>
+
+                    {/* Acciones Rápidas para Alertas de Déficit */}
+                    {notif.type === 'deficit' && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2.5 border-t border-red-500/20">
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onNavigate?.('fortnight');
+                          }}
+                          className="flex-1 min-w-[90px] px-2.5 py-1.5 rounded-lg bg-primary-custom/20 text-primary-custom hover:bg-primary-custom/30 text-[11px] font-bold transition-all cursor-pointer text-center"
+                        >
+                          Usar Balance
+                        </button>
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onNavigate?.('fortnight');
+                          }}
+                          className="flex-1 min-w-[90px] px-2.5 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 text-[11px] font-bold transition-all cursor-pointer text-center"
+                        >
+                          Posponer Gastos
+                        </button>
+                        <button
+                          onClick={() => {
+                            onClose();
+                            if (onOpenAddDebt) {
+                              onOpenAddDebt();
+                            } else {
+                              onNavigate?.('debts');
+                            }
+                          }}
+                          className="flex-1 min-w-[90px] px-2.5 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-[11px] font-bold transition-all cursor-pointer text-center"
+                        >
+                          Pedir Préstamo
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <button

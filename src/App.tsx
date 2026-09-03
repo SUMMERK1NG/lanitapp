@@ -83,6 +83,7 @@ const AuditPanel = lazy(() =>
 );
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 import { getUserPreferences, updatePreference } from './lib/profilePreferences.ts';
+import { checkAndNotifyDeficit } from './services/deficitAlertService.ts';
 
 const AVAILABLE_VIEWS: ActiveViewType[] = [
   'dashboard',
@@ -459,6 +460,16 @@ export function App() {
   if (!isAdmin && activeView === 'settings') {
     setActiveView('dashboard');
   }
+
+  // Verificación proactiva de déficit quincenal y notificación por email
+  useEffect(() => {
+    if (currentUser?.id && !isStoreLoading) {
+      const timer = setTimeout(() => {
+        checkAndNotifyDeficit();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentUser?.id, isStoreLoading]);
 
   // Pending sync count
   const pendingCount = useMemo(() => {
@@ -965,8 +976,13 @@ export function App() {
         onClose={() => setIsNotificationsOpen(false)}
         debts={debts}
         fixedExpenses={fixedExpenses}
+        fixedIncomes={fixedIncomes}
+        variableIncomes={variableIncomes}
+        variableExpenses={variableExpenses}
         selectedYear={selectedYear}
         selectedMonth={selectedMonth}
+        onNavigate={handleViewChange}
+        onOpenAddDebt={() => handleViewChange('debts')}
       />
 
       {/* Supabase Audit & Diagnostics Panel (Admin Only) */}
