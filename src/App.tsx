@@ -490,7 +490,7 @@ export function App() {
   };
 
   const viewTitles: Record<ActiveViewType, string> = {
-    dashboard: 'Dashboard General',
+    dashboard: 'Lanita Global',
     fortnight: 'Planificación',
     incomes: 'Gestión de Ingresos',
     fixed_expenses: 'Gastos Fijos',

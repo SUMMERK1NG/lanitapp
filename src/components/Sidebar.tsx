@@ -62,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenProfile,
 }) => {
   const baseMenuItems = [
-    { id: 'dashboard' as const, label: 'Dashboard General', icon: LayoutDashboard },
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'fortnight' as const, label: 'Planificación', icon: Calendar },
     { id: 'incomes' as const, label: 'Gestión de Ingresos', icon: Briefcase },
     { id: 'fixed_expenses' as const, label: 'Gastos Fijos', icon: Receipt },

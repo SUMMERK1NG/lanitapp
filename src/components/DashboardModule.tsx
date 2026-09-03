@@ -493,7 +493,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-app tracking-tight">
-              Dashboard General
+              Resumen Global
             </h2>
             <p className="text-xs text-muted">
               Visión integral de ingresos, egresos, flujo de caja y capital
