@@ -121,7 +121,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Gestor de Categorías ({categories.length})</span>
+            <span className="truncate">Categorías</span>
           </button>
 
           <button
