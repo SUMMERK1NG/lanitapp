@@ -133,6 +133,10 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
     try {
       if (isSupabaseConfigured() && supabase) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          throw new Error('Usuario administrador no autenticado en Supabase');
+        }
         const profileUpdatePayload = {
           email: editEmail.trim().toLowerCase(),
           cedula: fullCedula,
@@ -141,7 +145,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           role: editRole,
           updated_at: new Date().toISOString(),
         };
-        logger.dev('[Supabase Profiles Edit Payload]:', profileUpdatePayload);
+        logger.dev('[UPDATE] Admin:', user.id, 'Editando usuario:', editingUser.id, 'Tabla: profiles');
         const { error } = await supabase
           .from('profiles')
           .update(profileUpdatePayload)

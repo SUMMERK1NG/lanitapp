@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.ts';
+import { logger } from '../utils/logger.ts';
 
 export interface UserPreferences {
   theme_mode: string;
@@ -84,19 +85,30 @@ export const updatePreference = async (
   }
 
   try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      logger.error('[UPDATE ERROR] No hay usuario autenticado para actualizar preferencia:', key);
+      return false;
+    }
+
+    const targetId = user.id || userId;
+    logger.dev('[UPDATE] Usuario:', targetId, 'Tabla: profiles', 'Datos:', { [key]: value });
+
     const { error } = await supabase
       .from('profiles')
       .update({
         [key]: value,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', targetId);
 
     if (error) {
+      logger.error('[UPDATE ERROR] Falló updatePreference en profiles:', error.message);
       return false;
     }
     return true;
-  } catch {
+  } catch (err) {
+    logger.error('[UPDATE ERROR] Excepción en updatePreference:', err);
     return false;
   }
 };
@@ -113,19 +125,32 @@ export const updatePreferences = async (
   }
 
   try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      logger.error('[UPDATE ERROR] No hay usuario autenticado para actualizar preferencias');
+      return false;
+    }
+
+    const { id: _forbiddenId, created_at: _forbiddenCreated, ...cleanUpdates } = updates as any;
+    const targetId = user.id || userId;
+
+    logger.dev('[UPDATE] Usuario:', targetId, 'Tabla: profiles', 'Datos:', cleanUpdates);
+
     const { error } = await supabase
       .from('profiles')
       .update({
-        ...updates,
+        ...cleanUpdates,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', targetId);
 
     if (error) {
+      logger.error('[UPDATE ERROR] Falló updatePreferences en profiles:', error.message);
       return false;
     }
     return true;
-  } catch {
+  } catch (err) {
+    logger.error('[UPDATE ERROR] Excepción en updatePreferences:', err);
     return false;
   }
 };

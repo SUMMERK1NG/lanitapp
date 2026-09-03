@@ -180,25 +180,9 @@ export function App() {
         root.style.setProperty('--primary', newColor);
       }
 
-      // 2. Persistir en Supabase y localmente
+      // 2. Persistir en Supabase y localmente a través de updateProfile
       if (currentUser?.id) {
         await updateProfile({ theme_mode: newTheme, accent_color: newColor });
-        if (isSupabaseConfigured() && supabase && navigator.onLine) {
-          const { error } = await supabase
-            .from('profiles')
-            .update({
-              theme_mode: newTheme,
-              accent_color: newColor,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', currentUser.id);
-
-          if (error) {
-            logger.warn('[Supabase Theme Save Notice]:', error.message);
-          } else {
-            logger.dev('✅ Tema guardado exitosamente en Supabase:', { theme: newTheme, color: newColor });
-          }
-        }
       }
     } catch (err) {
       logger.error('Error inesperado al guardar tema:', err);

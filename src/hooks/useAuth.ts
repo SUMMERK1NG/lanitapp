@@ -313,20 +313,34 @@ export function useAuth() {
           root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
         }
 
-        // Update profiles in Supabase
+        // Update profiles in Supabase (únicamente columnas existentes y válidas, sin ID ni campos de auth)
         if (supabase) {
           try {
-            await supabase
-              .from('profiles')
-              .update({
-                last_sign_in_at: nowIso,
-                last_login_at: nowIso,
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (session?.user) {
+              const loginUpdatePayload = {
                 keep_session: keepSessionVal,
                 updated_at: nowIso,
-              })
-              .eq('id', authData.user.id);
+              };
+
+              logger.dev('[LOGIN UPDATE] Actualizando sesión en profiles para:', session.user.id);
+              const { error: updateError } = await supabase
+                .from('profiles')
+                .update(loginUpdatePayload)
+                .eq('id', session.user.id)
+                .select();
+
+              if (updateError) {
+                logger.warn('[PROFILE UPDATE WARNING]:', updateError.message);
+                if (updateError.code === '23505') {
+                  logger.warn('Perfil ya existe, continuando login...');
+                }
+              }
+            } else if (sessionError) {
+              logger.warn('No se obtuvo sesión activa al intentar actualizar profiles:', sessionError.message);
+            }
           } catch (e) {
-            logger.warn('Could not update last_sign_in_at:', e);
+            logger.warn('Could not update profile on login:', e);
           }
         }
 
@@ -582,11 +596,23 @@ export function useAuth() {
         if (updates.last_active_view !== undefined) updatePayload.last_active_view = updates.last_active_view;
         if (updates.keep_session !== undefined) updatePayload.keep_session = updates.keep_session;
 
-        logger.dev('[Supabase Profiles Update Payload]:', updatePayload);
+        delete (updatePayload as any).id;
+        delete (updatePayload as any).created_at;
+
+        const { data: authData, error: authErr } = await supabase.auth.getUser();
+        if (authErr || !authData?.user) {
+          logger.error('[UPDATE ERROR] No hay sesión activa al actualizar profiles');
+          return;
+        }
+
+        const targetId = authData.user.id || currentUser.id;
+        logger.dev('[UPDATE] Usuario:', targetId, 'Tabla: profiles', 'Datos:', updatePayload);
+
         const { error } = await supabase
           .from('profiles')
           .update(updatePayload)
-          .eq('id', currentUser.id);
+          .eq('id', targetId)
+          .select();
 
         if (error) {
           logger.warn('[Supabase Profiles Update Notice]:', error.message);

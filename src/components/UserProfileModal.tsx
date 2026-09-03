@@ -124,13 +124,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     if (supabase && profile?.id) {
       try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ avatar: emoji, avatar_url: emoji })
-          .eq('id', profile.id);
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (!authError && user) {
+          logger.dev('[UPDATE] Usuario:', user.id, 'Tabla: profiles (avatar)');
+          const { error } = await supabase
+            .from('profiles')
+            .update({
+              avatar: emoji,
+              avatar_url: emoji,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', user.id);
 
-        if (error) {
-          logger.error('Error al guardar avatar automáticamente:', error);
+          if (error) {
+            logger.error('Error al guardar avatar automáticamente:', error);
+          }
         }
       } catch (err) {
         logger.error('Error al guardar avatar en Supabase:', err);
