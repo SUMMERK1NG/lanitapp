@@ -38,6 +38,25 @@ const AVATAR_PRESETS = [
   '💸', '🛡️', '🎩', '🥇', '📊', '🦅'
 ];
 
+export const SHEEP_AVATARS = [
+  { id: 'sheep_king', name: 'Rey Lanita', src: '/avatars/sheep/sheep_king.png' },
+  { id: 'sheep_cool', name: 'Lanita Cool', src: '/avatars/sheep/sheep_cool.png' },
+  { id: 'sheep_wizard', name: 'Mago Estelar', src: '/avatars/sheep/sheep_wizard.png' },
+  { id: 'sheep_baker', name: 'Chef Panadero', src: '/avatars/sheep/sheep_baker.png' },
+  { id: 'sheep_steampunk', name: 'Ingeniero Steampunk', src: '/avatars/sheep/sheep_steampunk.png' },
+  { id: 'sheep_plain', name: 'Lanita Clásica', src: '/avatars/sheep/sheep_plain.png' },
+  { id: 'sheep_gamer_blue', name: 'Gamer Casual', src: '/avatars/sheep/sheep_gamer_blue.png' },
+  { id: 'sheep_gamer_pro', name: 'Pro Gamer', src: '/avatars/sheep/sheep_gamer_pro.png' },
+  { id: 'sheep_black_chef', name: 'Pizzero Nocturno', src: '/avatars/sheep/sheep_black_chef.png' },
+  { id: 'sheep_black_nerd', name: 'Científico Geek', src: '/avatars/sheep/sheep_black_nerd.png' },
+  { id: 'sheep_black_dj', name: 'DJ Beatmaster', src: '/avatars/sheep/sheep_black_dj.png' },
+  { id: 'sheep_black_baker', name: 'Panadero Nocturno', src: '/avatars/sheep/sheep_black_baker.png' },
+  { id: 'sheep_black_mage', name: 'Nigromante', src: '/avatars/sheep/sheep_black_mage.png' },
+  { id: 'sheep_cyberpunk', name: 'Hacker Cyberpunk', src: '/avatars/sheep/sheep_cyberpunk.png' },
+  { id: 'sheep_astronaut', name: 'Astronauta', src: '/avatars/sheep/sheep_astronaut.png' },
+  { id: 'sheep_pirate', name: 'Pirata Mecánico', src: '/avatars/sheep/sheep_pirate.png' },
+];
+
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   isOpen,
   onClose,
@@ -55,6 +74,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [name, setName] = useState<string>(profile?.name || 'Usuario');
   const [avatar, setAvatar] = useState<string>(() => {
     return profile?.avatar_url || profile?.avatar || '👨‍💻';
+  });
+  const [avatarCategory, setAvatarCategory] = useState<'sheep' | 'emojis'>(() => {
+    const cur = profile?.avatar_url || profile?.avatar || '';
+    return cur.startsWith('/') || cur.startsWith('http') ? 'sheep' : 'sheep';
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -230,37 +253,90 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
           </div>
 
-          {/* Avatar Selector - Emoji Presets Only */}
-          <div className="space-y-2">
+          {/* Avatar Selector */}
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-muted">
                 Avatar Oficial
               </label>
-              <div className="w-9 h-9 rounded-xl bg-card border-2 border-primary-custom flex items-center justify-center text-xl shadow-md">
-                <span className="select-none leading-none">{avatar}</span>
+              <div className="w-10 h-10 rounded-xl bg-card border-2 border-primary-custom flex items-center justify-center text-xl shadow-md overflow-hidden">
+                {avatar.startsWith('/') || avatar.startsWith('http') ? (
+                  <img src={avatar} alt="Avatar seleccionado" className="w-full h-full object-contain p-0.5" />
+                ) : (
+                  <span className="select-none leading-none">{avatar}</span>
+                )}
               </div>
             </div>
 
-            {/* Presets Grid */}
-            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 p-2 bg-card rounded-2xl border border-app max-h-36 overflow-y-auto">
-              {AVATAR_PRESETS.map((emoji) => {
-                const isSelected = avatar === emoji;
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleSelectAvatarPreset(emoji)}
-                    className={`h-10 rounded-xl flex items-center justify-center text-xl transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary-custom/25 border-2 border-primary-custom scale-105 shadow-sm ring-1 ring-primary-custom'
-                        : 'hover:bg-surface-hover border border-transparent'
-                    }`}
-                  >
-                    <span className="select-none leading-none">{emoji}</span>
-                  </button>
-                );
-              })}
+            {/* Selector de categoría de avatar */}
+            <div className="flex items-center gap-1.5 p-1 bg-card rounded-xl border border-app text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setAvatarCategory('sheep')}
+                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  avatarCategory === 'sheep'
+                    ? 'bg-primary-custom text-white shadow-sm'
+                    : 'text-muted hover:text-app'
+                }`}
+              >
+                <span>🐑 Lanitas ({SHEEP_AVATARS.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvatarCategory('emojis')}
+                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  avatarCategory === 'emojis'
+                    ? 'bg-primary-custom text-white shadow-sm'
+                    : 'text-muted hover:text-app'
+                }`}
+              >
+                <span>✨ Emojis ({AVATAR_PRESETS.length})</span>
+              </button>
             </div>
+
+            {/* Presets Grid */}
+            {avatarCategory === 'sheep' ? (
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-2 bg-card rounded-2xl border border-app max-h-48 overflow-y-auto no-scrollbar">
+                {SHEEP_AVATARS.map((s) => {
+                  const isSelected = avatar === s.src;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleSelectAvatarPreset(s.src)}
+                      title={s.name}
+                      className={`h-12 rounded-xl flex items-center justify-center p-1 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary-custom/25 border-2 border-primary-custom scale-105 shadow-sm ring-1 ring-primary-custom'
+                          : 'hover:bg-surface-hover border border-transparent'
+                      }`}
+                    >
+                      <img src={s.src} alt={s.name} className="w-full h-full object-contain" />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 p-2 bg-card rounded-2xl border border-app max-h-48 overflow-y-auto no-scrollbar">
+                {AVATAR_PRESETS.map((emoji) => {
+                  const isSelected = avatar === emoji;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => handleSelectAvatarPreset(emoji)}
+                      className={`h-10 rounded-xl flex items-center justify-center text-xl transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary-custom/25 border-2 border-primary-custom scale-105 shadow-sm ring-1 ring-primary-custom'
+                          : 'hover:bg-surface-hover border border-transparent'
+                      }`}
+                    >
+                      <span className="select-none leading-none">{emoji}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Theme Mode Selector */}

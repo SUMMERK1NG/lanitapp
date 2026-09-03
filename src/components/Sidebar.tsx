@@ -175,8 +175,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="flex items-center gap-2.5 min-w-0 flex-1 text-left p-1 rounded-xl hover:bg-surface transition-colors cursor-pointer group"
               title="Ver / Editar Mi Perfil"
             >
-              <div className="w-8 h-8 rounded-xl bg-surface border border-app flex items-center justify-center text-base shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                {activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻'}
+              <div className="w-8 h-8 rounded-xl bg-surface border border-app flex items-center justify-center text-base shrink-0 shadow-inner group-hover:scale-105 transition-transform overflow-hidden">
+                {(() => {
+                  const av = activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻';
+                  if (av.startsWith('/') || av.startsWith('http')) {
+                    return <img src={av} alt="Avatar" className="w-full h-full object-contain p-0.5" />;
+                  }
+                  return <span>{av}</span>;
+                })()}
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-xs font-bold text-app block truncate group-hover:text-primary-custom transition-colors">
@@ -209,10 +215,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col items-center gap-2">
             <button
               onClick={onOpenProfile}
-              className="w-9 h-9 rounded-xl bg-card hover:bg-surface border border-app flex items-center justify-center text-base transition-transform hover:scale-105 cursor-pointer"
+              className="w-9 h-9 rounded-xl bg-card hover:bg-surface border border-app flex items-center justify-center text-base transition-transform hover:scale-105 cursor-pointer overflow-hidden p-0.5"
               title={`${activeProfile?.name || 'Usuario'} (${isAdmin ? 'ADMIN' : 'USUARIO'})`}
             >
-              {activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻'}
+              {(() => {
+                const av = activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻';
+                if (av.startsWith('/') || av.startsWith('http')) {
+                  return <img src={av} alt="Avatar" className="w-full h-full object-contain" />;
+                }
+                return <span>{av}</span>;
+              })()}
             </button>
 
             {onSignOut && (

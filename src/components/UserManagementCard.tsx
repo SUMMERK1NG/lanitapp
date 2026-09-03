@@ -424,8 +424,16 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
                     {/* Nombre */}
                     <td className="px-4 py-3 font-semibold text-app whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">{p.avatar_url || p.avatar || '👤'}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-surface border border-app flex items-center justify-center overflow-hidden shrink-0">
+                          {(() => {
+                            const av = p.avatar_url || p.avatar || '👤';
+                            if (av.startsWith('/') || av.startsWith('http')) {
+                              return <img src={av} alt="Avatar" className="w-full h-full object-contain p-0.5" />;
+                            }
+                            return <span className="text-sm select-none">{av}</span>;
+                          })()}
+                        </div>
                         <span>{p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'}</span>
                       </div>
                     </td>
