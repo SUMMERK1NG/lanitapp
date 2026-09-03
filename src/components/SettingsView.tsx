@@ -86,54 +86,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex p-1 bg-card rounded-2xl border border-app overflow-x-auto no-scrollbar gap-1">
+        {/* Navigation Tabs (Centrada y balanceada sin espacios vacíos) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 p-1.5 bg-card rounded-2xl border border-app gap-1.5">
           <button
             onClick={() => setActiveTab('themes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'themes'
                 ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
+                : 'text-muted hover:text-app hover:bg-surface/50'
             }`}
           >
-            <Palette className="w-3.5 h-3.5" />
-            <span>Personalización</span>
+            <Palette className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Personalización</span>
           </button>
 
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'users'
                 ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
+                : 'text-muted hover:text-app hover:bg-surface/50'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Gestión de Usuarios</span>
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Gestión de Usuarios</span>
           </button>
 
           <button
             onClick={() => setActiveTab('categories')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'categories'
                 ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
+                : 'text-muted hover:text-app hover:bg-surface/50'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Gestor de Categorías ({categories.length})</span>
+            <Layers className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Gestor de Categorías ({categories.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'backup'
                 ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app'
+                : 'text-muted hover:text-app hover:bg-surface/50'
             }`}
           >
-            <Database className="w-3.5 h-3.5" />
-            <span>Respaldo</span>
+            <Database className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Respaldo</span>
           </button>
         </div>
       </div>

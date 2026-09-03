@@ -7,7 +7,6 @@ import {
   History,
   TrendingUp,
   Settings,
-  RefreshCw,
   Calculator,
   Briefcase,
   PiggyBank,
@@ -47,15 +46,15 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onChangeView,
-  isOnline,
-  isSyncing,
+  isOnline: _isOnline,
+  isSyncing: _isSyncing,
   pendingCount: _pendingCount,
   movementsCount = 0,
   rates,
   isAdmin = false,
   isCollapsed = false,
   onToggleCollapse: _onToggleCollapse,
-  onSync,
+  onSync: _onSync,
   onOpenConverter,
   onSignOut,
 }) => {
@@ -202,48 +201,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Sync & Logout Toolbar */}
-        <div
-          className={`flex items-center ${
-            isCollapsed ? 'flex-col gap-2' : 'justify-between px-2'
-          } text-xs`}
-        >
-          <div className="flex items-center gap-1.5">
-            {isOnline ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            ) : (
-              <span className="w-2 h-2 rounded-full bg-[#FF914D]" />
-            )}
-            {!isCollapsed && (
-              <span className="text-[11px] text-muted font-medium truncate">
-                {isOnline ? (isSyncing ? 'Sincronizando...' : 'Conectado') : 'Modo Offline'}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1">
+        {/* Logout Action */}
+        {onSignOut && (
+          <div className="pt-1">
             <button
-              onClick={onSync}
-              disabled={isSyncing || !isOnline}
-              className="p-1.5 rounded-xl hover:bg-card text-muted hover:text-app transition-all disabled:opacity-40 cursor-pointer"
-              title="Forzar sincronización"
+              onClick={onSignOut}
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
+              } rounded-xl text-xs font-semibold text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer`}
+              title="Cerrar sesión"
             >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#00C2C7]' : ''}`}
-              />
+              {!isCollapsed && <span>Cerrar sesión</span>}
+              <LogOut className="w-4 h-4 text-muted hover:text-rose-400 shrink-0" />
             </button>
-
-            {onSignOut && (
-              <button
-                onClick={onSignOut}
-                className="p-1.5 rounded-xl hover:bg-[#ef4444]/20 text-muted hover:text-[#ef4444] transition-all cursor-pointer"
-                title="Cerrar sesión"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
-        </div>
+        )}
       </div>
     </aside>
   );
