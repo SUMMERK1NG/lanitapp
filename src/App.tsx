@@ -552,6 +552,8 @@ export function App() {
           onSync={syncNow}
           onOpenConverter={() => setIsConverterOpen(true)}
           onSignOut={signOut}
+          activeProfile={currentUser}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
         />
       </div>
 

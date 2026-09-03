@@ -7,13 +7,12 @@ import {
   History,
   TrendingUp,
   Settings,
-  Calculator,
   Briefcase,
   PiggyBank,
   Wallet,
   LogOut,
 } from 'lucide-react';
-import type { ExchangeRatesData } from '../types/index.ts';
+import type { ExchangeRatesData, UserProfile } from '../types/index.ts';
 
 export type ActiveViewType =
   | 'dashboard'
@@ -41,6 +40,8 @@ interface SidebarProps {
   onSync: () => void;
   onOpenConverter: () => void;
   onSignOut?: () => void;
+  activeProfile?: UserProfile;
+  onOpenProfile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,13 +51,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isSyncing: _isSyncing,
   pendingCount: _pendingCount,
   movementsCount = 0,
-  rates,
+  rates: _rates,
   isAdmin = false,
   isCollapsed = false,
   onToggleCollapse: _onToggleCollapse,
   onSync: _onSync,
-  onOpenConverter,
+  onOpenConverter: _onOpenConverter,
   onSignOut,
+  activeProfile,
+  onOpenProfile,
 }) => {
   const baseMenuItems = [
     { id: 'dashboard' as const, label: 'Dashboard General', icon: LayoutDashboard },
@@ -162,58 +165,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Live Rates, System & Logout Widget */}
-      <div className={`space-y-2.5 pt-3 border-t border-app ${isCollapsed ? 'px-0' : ''}`}>
-        {/* Quick Exchange Widget (Expanded or Collapsed) */}
+      {/* Bottom User Profile & Logout Section */}
+      <div className={`pt-3 border-t border-app ${isCollapsed ? 'px-0' : ''}`}>
         {!isCollapsed ? (
-          <div className="p-3 rounded-2xl bg-card border border-app space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted font-bold uppercase tracking-wider">
-                Tasas en Vivo
-              </span>
+          <div className="flex items-center justify-between p-1.5 rounded-2xl bg-card border border-app hover:border-slate-600 transition-all">
+            {/* Clickable user profile button */}
+            <button
+              onClick={onOpenProfile}
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left p-1 rounded-xl hover:bg-surface transition-colors cursor-pointer group"
+              title="Ver / Editar Mi Perfil"
+            >
+              <div className="w-8 h-8 rounded-xl bg-surface border border-app flex items-center justify-center text-base shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                {activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-app block truncate group-hover:text-primary-custom transition-colors">
+                  {activeProfile?.name || 'Usuario'}
+                </span>
+                <span
+                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full inline-block ${
+                    isAdmin
+                      ? 'bg-[#FF914D]/20 text-[#FF914D] border border-[#FF914D]/40'
+                      : 'bg-[#00C2C7]/20 text-[#00C2C7] border border-[#00C2C7]/40'
+                  }`}
+                >
+                  {isAdmin ? 'ADMIN' : 'USUARIO'}
+                </span>
+              </div>
+            </button>
+
+            {/* Direct Logout Icon */}
+            {onSignOut && (
               <button
-                onClick={onOpenConverter}
-                className="text-[10px] text-[#00C2C7] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                onClick={onSignOut}
+                className="p-2 rounded-xl text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer shrink-0 ml-1"
+                title="Cerrar sesión"
               >
-                <Calculator className="w-3 h-3" /> Convertir
+                <LogOut className="w-4 h-4" />
               </button>
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted">Dólar BCV:</span>
-              <span className="font-bold text-app">Bs. {rates.bcvDollar.toFixed(2)}</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted">Promedio:</span>
-              <span className="font-bold text-[#FF914D]">Bs. {rates.parallelDollar.toFixed(2)}</span>
-            </div>
+            )}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1">
+          <div className="flex flex-col items-center gap-2">
             <button
-              onClick={onOpenConverter}
-              className="p-2 rounded-xl bg-card hover:bg-surface-hover text-[#00C2C7] border border-app transition-all cursor-pointer"
-              title="Calculadora / Conversor de Divisas"
+              onClick={onOpenProfile}
+              className="w-9 h-9 rounded-xl bg-card hover:bg-surface border border-app flex items-center justify-center text-base transition-transform hover:scale-105 cursor-pointer"
+              title={`${activeProfile?.name || 'Usuario'} (${isAdmin ? 'ADMIN' : 'USUARIO'})`}
             >
-              <Calculator className="w-4 h-4" />
+              {activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻'}
             </button>
-          </div>
-        )}
 
-        {/* Logout Action */}
-        {onSignOut && (
-          <div className="pt-1">
-            <button
-              onClick={onSignOut}
-              className={`w-full flex items-center ${
-                isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
-              } rounded-xl text-xs font-semibold text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer`}
-              title="Cerrar sesión"
-            >
-              {!isCollapsed && <span>Cerrar sesión</span>}
-              <LogOut className="w-4 h-4 text-muted hover:text-rose-400 shrink-0" />
-            </button>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="p-2 rounded-xl text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
       </div>

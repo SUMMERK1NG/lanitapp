@@ -332,9 +332,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           </div>
 
-          {/* Accesos Rápidos de Administrador */}
+          {/* Accesos Rápidos de Administrador (Solo en móvil para no saturar en desktop donde ya está el menú Configuración) */}
           {isAdmin && (
-            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2.5">
+            <div className="lg:hidden p-3.5 rounded-2xl bg-card border border-app space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-app uppercase tracking-wider flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
@@ -407,7 +407,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={handleSignOutClick}
-                className="w-full py-2.5 rounded-xl bg-[#ef4444]/15 hover:bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/30 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="lg:hidden w-full py-2.5 rounded-xl bg-[#ef4444]/15 hover:bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/30 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Cerrar Sesión en LANITAPP</span>
