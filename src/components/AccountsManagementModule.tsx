@@ -281,16 +281,11 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
     <div className="space-y-4">
       {/* 1. Header with Consistent App Layout */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold text-app">Capital & Cuentas</h3>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+            <Wallet className="w-4 h-4" />
           </div>
-          <p className="text-xs text-muted mt-0.5">
-            Control en tiempo real de efectivo, bancos, pago móvil y fondos en divisas
-          </p>
+          <h3 className="text-base font-bold text-app">Capital & Cuentas</h3>
         </div>
 
         <div className="flex items-center gap-2">

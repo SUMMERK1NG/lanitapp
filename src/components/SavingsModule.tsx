@@ -333,16 +333,11 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     <div className="space-y-4">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-surface border border-app shadow-md">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
-              <PiggyBank className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold text-app">Planes de Ahorro & Metas Financieras</h3>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
+            <PiggyBank className="w-4 h-4" />
           </div>
-          <p className="text-xs text-muted mt-0.5">
-            Aparta sistemáticamente en cada quincena o mes para tus proyectos y fondos de emergencia
-          </p>
+          <h3 className="text-base font-bold text-app">Planes de Ahorro & Metas Financieras</h3>
         </div>
 
         <button

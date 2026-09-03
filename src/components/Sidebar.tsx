@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const adminMenuItems = [
-    { id: 'settings' as const, label: 'Configuración & Backup', icon: Settings },
+    { id: 'settings' as const, label: 'Configuración', icon: Settings },
   ];
 
   const menuItems = isAdmin ? [...baseMenuItems, ...adminMenuItems] : baseMenuItems;
@@ -110,9 +110,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 )}
               </div>
-              <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
-                Control de Gastos
-              </span>
             </div>
           )}
         </div>

@@ -109,14 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <div className="w-8 h-8 flex items-center justify-center shrink-0">
-            <img
-              src="/icon.png"
-              alt="LANITAPP"
-              className="h-full w-full object-contain drop-shadow-sm"
-            />
-          </div>
-          <h2 className="hidden sm:block text-sm sm:text-base font-black tracking-tight text-app leading-tight">
+          <h2 className="text-sm sm:text-base font-black tracking-tight text-app leading-tight">
             {activeViewTitle}
           </h2>
         </div>

@@ -499,7 +499,7 @@ export function App() {
     accounts: 'Capital & Cuentas',
     transactions: 'Historial de Movimientos',
     rates: 'Tasas BCV & Divisas',
-    settings: 'Configuración & Backup',
+    settings: 'Configuración',
   };
 
   // Auth & Cloud Data Initial Loading Screen (Frases Motivacionales & Control Financiero)
