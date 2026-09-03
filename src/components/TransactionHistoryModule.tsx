@@ -736,17 +736,20 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
           onClick={() => setIsPrintModalOpen(false)}
         >
           <div
-            className="w-full max-w-2xl bg-surface border border-app rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden cursor-default"
+            className="w-full max-w-4xl bg-surface border border-app rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Fijo */}
-            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
+            {/* Header Fijo (Oculto en Impresión) */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0 no-print">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-primary-custom" />
-                <h3 className="text-base font-black text-app">
-                  Reporte de Auditoría de Movimientos ({MONTH_NAMES[selectedMonth]} {selectedYear})
-                </h3>
+                <div>
+                  <h3 className="text-base font-black text-app">
+                    Reporte de Auditoría de Movimientos ({MONTH_NAMES[selectedMonth]} {selectedYear})
+                  </h3>
+                  <p className="text-xs text-muted">Vista previa adaptada a los filtros activos para exportar en PDF o imprimir</p>
+                </div>
               </div>
               <button
                 onClick={() => setIsPrintModalOpen(false)}
@@ -757,54 +760,169 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
             </div>
 
             {/* Cuerpo con Scrollbar Interno */}
-            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
-
-            {/* Printable Report Sheet */}
-            <div className="p-5 rounded-2xl bg-card border border-app text-app space-y-4 text-xs">
-              <div className="flex items-center justify-between border-b border-app pb-3">
-                <div>
-                  <h1 className="text-lg font-black text-primary-custom">LANITAPP AUDITORÍA</h1>
-                  <p className="text-[11px] text-muted">Historial de Movimientos e Ingresos/Egresos</p>
-                </div>
-                <div className="text-right">
-                  <span className="font-bold block">{MONTH_NAMES[selectedMonth]} {selectedYear}</span>
-                  <span className="text-[10px] text-muted">Total registros: {filteredMovements.length}</span>
-                </div>
-              </div>
-
-              {/* KPI Summary */}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted font-bold block">Total Ingresos</span>
-                  <span className="text-sm font-black text-[#00C2C7]">+${formatCurrencyVE(totalFilteredIncome)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted font-bold block">Total Egresos</span>
-                  <span className="text-sm font-black text-[#FF914D]">-${formatCurrencyVE(totalFilteredExpense)}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted font-bold block">Balance Neto</span>
-                  <span className="text-sm font-black text-app">${formatCurrencyVE(netFilteredBalance)}</span>
-                </div>
-              </div>
-
-              {/* Table List */}
-              <div className="max-h-64 overflow-y-auto divide-y divide-app border border-app rounded-xl">
-                {filteredMovements.map((m) => (
-                  <div key={m.id} className="p-2 flex justify-between items-center text-[11px]">
-                    <div>
-                      <span className="font-bold text-app block">{m.description}</span>
-                      <span className="text-[10px] text-muted">{m.date} • {m.categoryName}</span>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4 bg-card/60">
+              {/* Printable Report Sheet */}
+              <div
+                id="printable-history-report"
+                className="printable-report-sheet p-6 sm:p-8 bg-white text-slate-900 border border-slate-200 rounded-2xl space-y-6 shadow-sm text-xs print:p-0 print:border-none print:shadow-none print:rounded-none"
+              >
+                {/* 1. Header Oficial de Auditoría */}
+                <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4 print-avoid-break">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow">
+                      L
                     </div>
-                    <span className={`font-black ${m.type === 'income' ? 'text-[#00C2C7]' : 'text-[#FF914D]'}`}>
-                      {m.type === 'income' ? `+$${formatCurrencyVE(m.amountUSD)}` : `-$${formatCurrencyVE(m.amountUSD)}`}
+                    <div>
+                      <h1 className="text-2xl font-black tracking-tight text-slate-900">LANITAPP</h1>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
+                        Reporte de Auditoría & Historial de Movimientos
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-extrabold text-xs border border-blue-200">
+                      {MONTH_NAMES[selectedMonth]} {selectedYear}
+                    </span>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Emitido: {new Date().toLocaleDateString('es-VE')} {new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-700">
+                      Tasa Oficial BCV: Bs. {formatCurrencyVE(bcvUsd)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Filtros Activos Aplicados */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1.5 print-avoid-break">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                    Criterios de Filtrado Aplicados:
+                  </span>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                      <strong>Periodo:</strong> {MONTH_NAMES[selectedMonth]} {selectedYear}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                      <strong>Quincena:</strong> {fortnightFilter === 'all' ? 'Ambas (Mes Completo)' : fortnightFilter === 'q1' ? '1ra Quincena (1-15)' : '2da Quincena (16-30)'}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                      <strong>Tipo:</strong> {typeFilter === 'all' ? 'Todos los movimientos' : typeFilter === 'income' ? 'Solo Ingresos' : 'Solo Egresos'}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 font-medium text-slate-700">
+                      <strong>Categoría:</strong> {categoryFilter === 'all' ? 'Todas las categorías' : categoryFilter}
+                    </span>
+                    {searchQuery.trim() && (
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 font-bold text-blue-800">
+                        <strong>Búsqueda:</strong> "{searchQuery.trim()}"
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. KPI Summary del Conjunto Filtrado */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center print-avoid-break">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Operaciones</span>
+                    <span className="text-base font-black text-slate-900">{filteredMovements.length}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                    <span className="text-[10px] text-emerald-800 font-bold uppercase block">Ingresos Filtrados</span>
+                    <span className="text-base font-black text-emerald-700">+${formatCurrencyVE(totalFilteredIncome)}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200">
+                    <span className="text-[10px] text-rose-800 font-bold uppercase block">Egresos Filtrados</span>
+                    <span className="text-base font-black text-rose-700">-${formatCurrencyVE(totalFilteredExpense)}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
+                    <span className="text-[10px] text-blue-800 font-bold uppercase block">Balance Neto</span>
+                    <span className={`text-base font-black ${netFilteredBalance >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>
+                      {netFilteredBalance >= 0 ? '+' : '-'}${formatCurrencyVE(Math.abs(netFilteredBalance))}
                     </span>
                   </div>
-                ))}
+                </div>
+
+                {/* 4. Tabla Detallada de Movimientos (Sin límite de scroll) */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden print-avoid-break">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-black text-[10px] uppercase">
+                        <th className="p-2.5">Fecha</th>
+                        <th className="p-2.5">Concepto / Descripción</th>
+                        <th className="p-2.5">Categoría</th>
+                        <th className="p-2.5">Cuenta / Origen</th>
+                        <th className="p-2.5 text-right">Monto USD</th>
+                        <th className="p-2.5 text-right">Monto Bs. (BCV)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredMovements.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-6 text-center text-slate-400">
+                            No se encontraron transacciones con los filtros seleccionados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMovements.map((m, index) => {
+                          const isIncome = m.type === 'income';
+                          const bsAmount = m.amountUSD * bcvUsd;
+                          return (
+                            <tr
+                              key={m.id}
+                              className={`print-avoid-break ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                            >
+                              <td className="p-2.5 text-slate-600 font-medium whitespace-nowrap">{m.date}</td>
+                              <td className="p-2.5">
+                                <span className="font-bold text-slate-900 block">{m.description}</span>
+                                {m.notes && <span className="text-[9px] text-slate-400 block">{m.notes}</span>}
+                              </td>
+                              <td className="p-2.5 text-slate-700">
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: m.categoryColor || '#00C2C7' }}
+                                  />
+                                  {m.categoryName}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-slate-600 font-medium whitespace-nowrap">{m.accountName || 'Caja General'}</td>
+                              <td className="p-2.5 text-right font-black whitespace-nowrap">
+                                <span className={isIncome ? 'text-emerald-700' : 'text-rose-700'}>
+                                  {isIncome ? '+' : '-'}${formatCurrencyVE(m.amountUSD)}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-right font-semibold text-slate-600 whitespace-nowrap">
+                                Bs. {formatCurrencyVE(bsAmount)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {filteredMovements.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-300 font-black text-[11px] text-slate-900">
+                          <td colSpan={4} className="p-2.5 text-right">TOTAL CONSOLIDADO:</td>
+                          <td className="p-2.5 text-right text-blue-700">
+                            {netFilteredBalance >= 0 ? '+' : '-'}${formatCurrencyVE(Math.abs(netFilteredBalance))}
+                          </td>
+                          <td className="p-2.5 text-right text-slate-700">
+                            Bs. {formatCurrencyVE(Math.abs(netFilteredBalance) * bcvUsd)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+
+                {/* 5. Footer Oficial */}
+                <div className="border-t border-slate-200 pt-3 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 gap-2 print-avoid-break">
+                  <span>Generado automáticamente por <strong>LanitApp</strong> • Módulo de Auditoría y Movimientos</span>
+                  <span>Total de registros auditados: {filteredMovements.length}</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-app">
+            {/* Actions (Oculto en Impresión) */}
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-app shrink-0 no-print bg-surface">
               <button
                 type="button"
                 onClick={() => setIsPrintModalOpen(false)}
@@ -815,12 +933,11 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary-custom text-white text-xs font-black shadow-lg cursor-pointer"
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary-custom text-white text-xs font-black shadow-lg cursor-pointer hover:opacity-95"
               >
                 <Printer className="w-4 h-4" />
                 <span>Imprimir / Guardar en PDF</span>
               </button>
-            </div>
             </div>
           </div>
         </div>

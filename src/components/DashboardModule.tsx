@@ -437,6 +437,31 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 
   const savingsProgressPct = totalSavingsTarget > 0 ? Math.min(100, Math.round((totalSavingsSaved / totalSavingsTarget) * 100)) : 0;
 
+  // Listas filtradas para el reporte ejecutivo
+  const reportFixedIncomes = useMemo(() => {
+    return fixedIncomes.filter((f) => {
+      if (f.is_active === false) return false;
+      if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+      return true;
+    });
+  }, [fixedIncomes, selectedYear, selectedMonth, userCreatedAt]);
+
+  const reportVariableIncomes = useMemo(() => {
+    return variableIncomes.filter((v) => v.year === selectedYear && v.month === selectedMonth);
+  }, [variableIncomes, selectedYear, selectedMonth]);
+
+  const reportFixedExpenses = useMemo(() => {
+    return fixedExpenses.filter((f) => {
+      if (f.is_active === false) return false;
+      if (!isCreatedInPeriod(f.created_at, selectedYear, selectedMonth, userCreatedAt)) return false;
+      return true;
+    });
+  }, [fixedExpenses, selectedYear, selectedMonth, userCreatedAt]);
+
+  const reportVariableExpenses = useMemo(() => {
+    return (variableExpenses || []).filter((v) => v.year === selectedYear && v.month === selectedMonth);
+  }, [variableExpenses, selectedYear, selectedMonth]);
+
   // Print Executive Report Handler
   const handlePrintReport = () => {
     window.print();
@@ -1162,17 +1187,20 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
           onClick={() => setIsPrintModalOpen(false)}
         >
           <div
-            className="w-full max-w-2xl bg-surface border border-app rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden cursor-default"
+            className="w-full max-w-4xl bg-surface border border-app rounded-3xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Fijo */}
-            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
+            {/* Header Fijo (Oculto en Impresión) */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0 no-print">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-primary-custom" />
-                <h3 className="text-base font-black text-app">
-                  Reporte Financiero Ejecutivo ({MONTH_NAMES[selectedMonth]} {selectedYear})
-                </h3>
+                <div>
+                  <h3 className="text-base font-black text-app">
+                    Informe Financiero Ejecutivo ({MONTH_NAMES[selectedMonth]} {selectedYear})
+                  </h3>
+                  <p className="text-xs text-muted">Vista previa de alta resolución para exportar en PDF o imprimir</p>
+                </div>
               </div>
               <button
                 onClick={() => setIsPrintModalOpen(false)}
@@ -1183,68 +1211,335 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
             </div>
 
             {/* Cuerpo con Scrollbar Interno */}
-            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
-
-            {/* Printable Report Sheet */}
-            <div id="printable-report" className="p-6 rounded-2xl bg-card border border-app text-app space-y-5">
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-app pb-4">
-                <div>
-                  <h1 className="text-xl font-black text-primary-custom tracking-tight">LANITAPP</h1>
-                  <p className="text-xs text-muted">Informe Mensual de Gestión Financiera</p>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4 bg-card/60">
+              {/* Printable Report Sheet */}
+              <div
+                id="printable-report"
+                className="printable-report-sheet p-6 sm:p-8 bg-white text-slate-900 border border-slate-200 rounded-2xl space-y-6 shadow-sm text-xs print:p-0 print:border-none print:shadow-none print:rounded-none"
+              >
+                {/* 1. Header Oficial */}
+                <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4 print-avoid-break">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow">
+                      L
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-black tracking-tight text-slate-900">LANITAPP</h1>
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
+                        Informe Ejecutivo de Gestión Financiera & Control de Capital
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-extrabold text-xs border border-blue-200">
+                      {MONTH_NAMES[selectedMonth]} {selectedYear}
+                    </span>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Emitido: {new Date().toLocaleDateString('es-VE')} {new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-700">
+                      Tasa Oficial BCV: Bs. {formatCurrencyVE(bcvRate)}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right text-xs">
-                  <span className="font-bold text-app block">{MONTH_NAMES[selectedMonth]} {selectedYear}</span>
-                  <span className="text-[10px] text-muted">Emitido: {new Date().toLocaleDateString('es-VE')}</span>
+
+                {/* 2. KPIs Ejecutivos Principales */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 print-avoid-break">
+                  {/* Ingresos */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block mb-1">
+                      Total Ingresos
+                    </span>
+                    <span className="text-lg font-black text-emerald-700 block">
+                      +${formatCurrencyVE(totalIncome)}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-medium block">
+                      Bs. {formatCurrencyVE(totalIncome * bcvRate)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 mt-1 block">
+                      Fijos: ${formatCurrencyVE(totalFixedIncomes)} • Var: ${formatCurrencyVE(totalVariableIncomes + totalDirectIncomes)}
+                    </span>
+                  </div>
+
+                  {/* Egresos */}
+                  <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block mb-1">
+                      Total Egresos
+                    </span>
+                    <span className="text-lg font-black text-rose-700 block">
+                      -${formatCurrencyVE(totalExpense)}
+                    </span>
+                    <span className="text-[10px] text-rose-600 font-medium block">
+                      Bs. {formatCurrencyVE(totalExpense * bcvRate)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 mt-1 block">
+                      Fijos: ${formatCurrencyVE(totalFixedExpenses)} • Var: ${formatCurrencyVE(totalVariableExpenses + totalDirectExpenses)}
+                    </span>
+                  </div>
+
+                  {/* Balance Neto */}
+                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block mb-1">
+                      Balance Neto
+                    </span>
+                    <span className={`text-lg font-black block ${netBalance >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>
+                      {netBalance >= 0 ? '+' : '-'}${formatCurrencyVE(Math.abs(netBalance))}
+                    </span>
+                    <span className="text-[10px] text-blue-600 font-medium block">
+                      Bs. {formatCurrencyVE(netBalance * bcvRate)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 mt-1 block">
+                      Salud: {financialHealth.label} ({savingsRate}% ahorro)
+                    </span>
+                  </div>
+
+                  {/* Capital Cuentas */}
+                  <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-300">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
+                      Capital en Cuentas
+                    </span>
+                    <span className="text-lg font-black text-slate-900 block">
+                      ${formatCurrencyVE(totalCapitalUSD)}
+                    </span>
+                    <span className="text-[10px] text-slate-600 font-medium block">
+                      Bs. {formatCurrencyVE(totalCapitalUSD * bcvRate)}
+                    </span>
+                    <span className="text-[9px] text-slate-500 mt-1 block">
+                      Deuda Activa: ${formatCurrencyVE(totalDebtBalance)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Flujo Quincenal (Q1 vs Q2) */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 print-avoid-break">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h3 className="font-black text-slate-900 text-xs uppercase tracking-wide">
+                      Distribución de Flujo de Caja por Quincenas
+                    </h3>
+                    <span className="text-[10px] text-slate-500">Q1 (1-15) vs Q2 (16-30)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {cashflowData.map((period, idx) => {
+                      const pctExpense = period.Ingresos > 0 ? Math.min(100, Math.round((period.Egresos / period.Ingresos) * 100)) : 0;
+                      return (
+                        <div key={idx} className="p-3 rounded-lg bg-white border border-slate-200 space-y-2">
+                          <div className="flex justify-between items-center font-bold text-slate-900">
+                            <span>{period.name}</span>
+                            <span className="text-xs text-blue-600 font-black">
+                              Remanente: ${formatCurrencyVE(period.Remanente)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                            <div>Ingresos: <strong className="text-emerald-700">${formatCurrencyVE(period.Ingresos)}</strong></div>
+                            <div>Egresos: <strong className="text-rose-700">${formatCurrencyVE(period.Egresos)}</strong></div>
+                          </div>
+                          {/* Barra de progreso de consumo */}
+                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${pctExpense > 90 ? 'bg-rose-500' : pctExpense > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${Math.min(100, pctExpense)}%` }}
+                            />
+                          </div>
+                          <div className="text-right text-[9px] text-slate-400">
+                            Consumo de ingresos: {pctExpense}%
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 4. Gráfica de Distribución de Gastos por Categoría */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 print-avoid-break">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h3 className="font-black text-slate-900 text-xs uppercase tracking-wide">
+                      Distribución de Egresos por Categoría
+                    </h3>
+                    <span className="text-[10px] text-slate-500">
+                      Total Categorizado: ${formatCurrencyVE(categoryExpenseData.reduce((acc, c) => acc + c.amount, 0))}
+                    </span>
+                  </div>
+
+                  {categoryExpenseData.length === 0 ? (
+                    <p className="text-slate-500 text-center py-2 text-[11px]">No hay gastos registrados en este mes.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 pt-1">
+                      {categoryExpenseData.slice(0, 8).map((cat) => (
+                        <div key={cat.id} className="space-y-1">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5 truncate">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                              {cat.name}
+                            </span>
+                            <span className="font-black text-slate-900 shrink-0">
+                              ${formatCurrencyVE(cat.amount)}{' '}
+                              <span className="text-slate-500 font-normal">({cat.percentage}%)</span>
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(100, cat.percentage)}%`, backgroundColor: cat.color }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Desglose Detallado de Ingresos & Gastos (Tablas 2 Columnas) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print-avoid-break">
+                  {/* Ingresos */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-emerald-100/60 p-2.5 font-black text-emerald-900 text-xs flex justify-between">
+                      <span>INGRESOS DEL MES</span>
+                      <span>+${formatCurrencyVE(totalIncome)}</span>
+                    </div>
+                    <div className="divide-y divide-slate-100 max-h-52 overflow-hidden text-[11px]">
+                      {reportFixedIncomes.map((f) => (
+                        <div key={f.id} className="p-2 flex justify-between bg-white">
+                          <div>
+                            <span className="font-bold text-slate-800 block">{f.name}</span>
+                            <span className="text-[10px] text-slate-500">Fijo • {f.default_fortnight === 'both' ? 'Ambas quincenas' : f.default_fortnight.toUpperCase()}</span>
+                          </div>
+                          <span className="font-black text-emerald-700 self-center">
+                            +${formatCurrencyVE(f.default_fortnight === 'both' ? f.amount * 2 : f.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      {reportVariableIncomes.map((v) => (
+                        <div key={v.id} className="p-2 flex justify-between bg-white">
+                          <div>
+                            <span className="font-bold text-slate-800 block">{v.description}</span>
+                            <span className="text-[10px] text-slate-500">Variable • {v.fortnight ? v.fortnight.toUpperCase() : 'Extra'}</span>
+                          </div>
+                          <span className="font-black text-emerald-700 self-center">
+                            +${formatCurrencyVE(v.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      {reportFixedIncomes.length === 0 && reportVariableIncomes.length === 0 && (
+                        <div className="p-3 text-center text-slate-400">Sin ingresos programados</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gastos */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-rose-100/60 p-2.5 font-black text-rose-900 text-xs flex justify-between">
+                      <span>EGRESOS PRINCIPALES</span>
+                      <span>-${formatCurrencyVE(totalExpense)}</span>
+                    </div>
+                    <div className="divide-y divide-slate-100 max-h-52 overflow-hidden text-[11px]">
+                      {reportFixedExpenses.slice(0, 5).map((f) => (
+                        <div key={f.id} className="p-2 flex justify-between bg-white">
+                          <div>
+                            <span className="font-bold text-slate-800 block">{f.name}</span>
+                            <span className="text-[10px] text-slate-500">Fijo • {f.default_fortnight === 'both' ? 'Ambas quincenas' : f.default_fortnight.toUpperCase()}</span>
+                          </div>
+                          <span className="font-black text-rose-700 self-center">
+                            -${formatCurrencyVE(f.default_fortnight === 'both' ? f.amount * 2 : f.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      {reportVariableExpenses.slice(0, 4).map((v) => (
+                        <div key={v.id} className="p-2 flex justify-between bg-white">
+                          <div>
+                            <span className="font-bold text-slate-800 block">{v.description}</span>
+                            <span className="text-[10px] text-slate-500">Variable • {v.fortnight?.toUpperCase() || 'Extra'}</span>
+                          </div>
+                          <span className="font-black text-rose-700 self-center">
+                            -${formatCurrencyVE(v.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      {totalDebtPayments > 0 && (
+                        <div className="p-2 flex justify-between bg-white">
+                          <div>
+                            <span className="font-bold text-slate-800 block">Abonos a Deudas</span>
+                            <span className="text-[10px] text-slate-500">Compromisos financieros</span>
+                          </div>
+                          <span className="font-black text-rose-700 self-center">
+                            -${formatCurrencyVE(totalDebtPayments)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Cuentas y Metas de Ahorro */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print-avoid-break">
+                  {/* Cuentas */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <h4 className="font-black text-slate-900 text-[11px] uppercase tracking-wide border-b border-slate-200 pb-1.5">
+                      Fondos & Cuentas Disponibles
+                    </h4>
+                    <div className="space-y-1.5">
+                      {accounts.map((acc) => {
+                        const txs = transactions.filter((t) => t.account_id === acc.id);
+                        const inc = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+                        const exp = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                        const bal = (acc.initial_balance || 0) + (inc - exp);
+                        return (
+                          <div key={acc.id} className="flex justify-between items-center text-[11px]">
+                            <span className="font-semibold text-slate-800">{acc.name} ({acc.currency})</span>
+                            <span className="font-black text-slate-900">
+                              {acc.currency === 'VES' ? `Bs. ${formatCurrencyVE(bal)}` : `$${formatCurrencyVE(bal)}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Metas de Ahorro */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <h4 className="font-black text-slate-900 text-[11px] uppercase tracking-wide">
+                        Metas de Ahorro Activas
+                      </h4>
+                      <span className="text-[10px] text-emerald-700 font-bold">
+                        Aportado: +${formatCurrencyVE(totalSavingsContributions)}
+                      </span>
+                    </div>
+                    {savingsGoals.filter((g) => g.status === 'active').length === 0 ? (
+                      <p className="text-slate-400 text-[10px]">Sin metas de ahorro activas</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {savingsGoals.filter((g) => g.status === 'active').slice(0, 3).map((goal) => {
+                          const pct = goal.target_amount > 0 ? Math.min(100, Math.round(((goal.current_amount || 0) / goal.target_amount) * 100)) : 0;
+                          return (
+                            <div key={goal.id} className="space-y-1">
+                              <div className="flex justify-between text-[11px]">
+                                <span className="font-semibold text-slate-800">{goal.name}</span>
+                                <span className="font-black text-blue-700">
+                                  ${formatCurrencyVE(goal.current_amount || 0)} / ${formatCurrencyVE(goal.target_amount)} ({pct}%)
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                <div className="h-full bg-blue-600 rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 7. Footer Oficial */}
+                <div className="border-t border-slate-200 pt-3 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 gap-2 print-avoid-break">
+                  <span>Generado automáticamente por <strong>LanitApp</strong> • Sistema de Planificación Financiera</span>
+                  <span>Documento confidencial para control personal</span>
                 </div>
               </div>
-
-              {/* KPI Summary Table */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="p-3 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted uppercase font-bold block">Total Ingresos</span>
-                  <span className="text-base font-black text-[#00C2C7]">+${formatCurrencyVE(totalIncome)}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted uppercase font-bold block">Total Egresos</span>
-                  <span className="text-base font-black text-[#FF914D]">-${formatCurrencyVE(totalExpense)}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-surface border border-app">
-                  <span className="text-[10px] text-muted uppercase font-bold block">Balance Neto</span>
-                  <span className="text-base font-black text-app">${formatCurrencyVE(netBalance)}</span>
-                </div>
-              </div>
-
-              {/* Detailed Breakdown */}
-              <div className="space-y-2 text-xs">
-                <h4 className="font-bold uppercase tracking-wider text-muted text-[11px]">Resumen de Distribución</h4>
-                <div className="divide-y divide-app border border-app rounded-xl overflow-hidden">
-                  <div className="flex justify-between p-2 bg-surface">
-                    <span>Gastos Fijos Programados:</span>
-                    <strong className="text-app">${formatCurrencyVE(totalFixedExpenses)}</strong>
-                  </div>
-                  <div className="flex justify-between p-2 bg-surface">
-                    <span>Abonos a Deudas del Mes:</span>
-                    <strong className="text-app">${formatCurrencyVE(totalDebtPayments)}</strong>
-                  </div>
-                  <div className="flex justify-between p-2 bg-surface">
-                    <span>Aportes a Fondos de Ahorro:</span>
-                    <strong className="text-app">${formatCurrencyVE(totalSavingsContributions)}</strong>
-                  </div>
-                  <div className="flex justify-between p-2 bg-surface">
-                    <span>Tasa BCV Referencial:</span>
-                    <strong className="text-app">Bs. {formatCurrencyVE(bcvRate)}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-muted text-center pt-2">
-                Generado automáticamente por LanitApp • Sistema de Control Financiero Inteligente
-              </p>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-app">
+            {/* Actions (Oculto en Impresión) */}
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-app shrink-0 no-print bg-surface">
               <button
                 type="button"
                 onClick={() => setIsPrintModalOpen(false)}
@@ -1260,7 +1555,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                 <Printer className="w-4 h-4" />
                 <span>Imprimir / Guardar en PDF</span>
               </button>
-            </div>
             </div>
           </div>
         </div>
