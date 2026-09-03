@@ -47,7 +47,8 @@ export const sanitizeDebtPayload = (debt: Partial<Debt> & Record<string, any>, u
     interest_frequency: debt.interest_frequency,
     interest_fortnight: debt.interest_fortnight,
     due_date: debt.due_date,
-    due_day: debt.due_day !== undefined ? Number(debt.due_day) : undefined,
+    due_day: debt.due_day !== undefined && !isNaN(Number(debt.due_day)) ? Number(debt.due_day) : undefined,
+    due_day_2: debt.due_day_2 !== undefined && !isNaN(Number(debt.due_day_2)) ? Number(debt.due_day_2) : undefined,
     notes: debt.notes || '',
     created_at: debt.created_at || now.toISOString(),
     updated_at: now.toISOString(),
@@ -110,7 +111,8 @@ export const normalizeDebtRow = (row: any): Debt => {
     interest_frequency: row.interest_frequency,
     interest_fortnight: row.interest_fortnight,
     due_date: row.due_date,
-    due_day: row.due_day !== undefined ? Number(row.due_day) : undefined,
+    due_day: row.due_day !== undefined && row.due_day !== null ? Number(row.due_day) : undefined,
+    due_day_2: row.due_day_2 !== undefined && row.due_day_2 !== null ? Number(row.due_day_2) : undefined,
     status,
     priority: row.priority || 'medium',
     notes: row.notes || '',
@@ -217,14 +219,35 @@ export const saveDebt = async (
   // 2. Confirmación asíncrona con Supabase
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { data, error } = await supabase
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (user && !authErr) {
+        sanitizedPayload.user_id = user.id;
+        localRecord.user_id = user.id;
+      }
+
+      let { data, error } = await supabase
         .from('debts')
         .upsert(sanitizedPayload)
         .select()
         .single();
 
+      // Si la tabla no tiene las columnas due_day / due_day_2 en Supabase, reintentar sin ellas de forma segura
+      if (error && (error.code === 'PGRST204' || error.message?.toLowerCase().includes('due_day') || error.code === '42703')) {
+        logger.warn('[debtsService saveDebt]: Columnas due_day/due_day_2 no detectadas en Supabase. Reintentando sin ellas...');
+        const { due_day, due_day_2, ...fallbackPayload } = sanitizedPayload;
+        const retryRes = await supabase
+          .from('debts')
+          .upsert(fallbackPayload)
+          .select()
+          .single();
+        data = retryRes.data;
+        error = retryRes.error;
+      }
+
       if (!error && data) {
         const confirmedDebt = normalizeDebtRow(data);
+        confirmedDebt.due_day = localRecord.due_day;
+        confirmedDebt.due_day_2 = localRecord.due_day_2;
         await db.debts.put(confirmedDebt);
         return confirmedDebt;
       } else if (error) {

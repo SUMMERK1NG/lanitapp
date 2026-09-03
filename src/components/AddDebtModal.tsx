@@ -394,8 +394,9 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
       });
       if (onSaved) onSaved(savedDebt);
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       logger.error('Error saving debt:', err);
+      alert('Error al guardar la deuda: ' + (err?.message || 'Intente de nuevo.'));
     } finally {
       setIsSubmitting(false);
     }

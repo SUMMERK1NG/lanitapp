@@ -1931,7 +1931,8 @@ export async function saveDebt(
     interest_frequency: debt.interest_frequency,
     interest_fortnight: debt.interest_fortnight,
     due_date: debt.due_date,
-    due_day: debt.due_day !== undefined ? Number(debt.due_day) : undefined,
+    due_day: debt.due_day !== undefined && !isNaN(Number(debt.due_day)) ? Number(debt.due_day) : undefined,
+    due_day_2: debt.due_day_2 !== undefined && !isNaN(Number(debt.due_day_2)) ? Number(debt.due_day_2) : undefined,
     status,
     notes: debt.notes || '',
     sync_status: 'pending',
@@ -1949,7 +1950,12 @@ export async function saveDebt(
         remaining_amount: Number(record.current_balance),
         currency_type: record.currency || 'USD',
       };
-      const { error } = await supabase.from('debts').upsert(payload);
+      let { error } = await supabase.from('debts').upsert(payload);
+      if (error && (error.code === 'PGRST204' || error.message?.toLowerCase().includes('due_day') || error.code === '42703')) {
+        const { due_day, due_day_2, ...fallbackPayload } = payload as any;
+        const retryRes = await supabase.from('debts').upsert(fallbackPayload);
+        error = retryRes.error;
+      }
       if (!error) {
         record.sync_status = 'synced';
       } else {
