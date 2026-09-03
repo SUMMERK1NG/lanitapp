@@ -104,16 +104,11 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     <div className="space-y-4">
       {/* Header and Filter Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-surface border border-app shadow-md">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-              <Layers className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold text-app">Gestor de Categorías</h3>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+            <Layers className="w-4 h-4" />
           </div>
-          <p className="text-xs text-muted mt-1">
-            Personaliza las etiquetas, colores e iconos para tus ingresos y gastos
-          </p>
+          <h3 className="text-base font-bold text-app">Gestor de Categorías</h3>
         </div>
 
         <div className="flex items-center gap-2">

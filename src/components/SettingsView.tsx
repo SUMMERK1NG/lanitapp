@@ -81,8 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Settings className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-app">Configuración & Preferencias</h2>
-            <p className="text-xs text-muted">Ajusta temas visuales, gestiona usuarios, categorías y respaldos</p>
+            <h2 className="text-base font-bold text-app">Configuración y Preferencias</h2>
           </div>
         </div>
 
@@ -152,7 +151,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-4">
             <div>
               <h3 className="text-sm font-bold text-app">Modos de Interfaz (Temas)</h3>
-              <p className="text-xs text-muted">Selecciona el ambiente visual predeterminado con alto contraste</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -190,7 +188,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-4">
             <div>
               <h3 className="text-sm font-bold text-app">Paleta de Color de Acento</h3>
-              <p className="text-xs text-muted">Personaliza los botones de acción, destaques y gráficos</p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-2.5">

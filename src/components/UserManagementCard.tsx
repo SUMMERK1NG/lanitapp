@@ -318,7 +318,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           </div>
           <div>
             <h3 className="text-base font-bold text-app">Gestión de Usuarios (Admin)</h3>
-            <p className="text-xs text-muted">Edición de perfiles, roles, contraseñas y accesos</p>
           </div>
         </div>
 
