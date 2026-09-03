@@ -61,6 +61,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const selectedDebt = debts.find((d) => d.id === debtId);
   const isDebtVES = selectedDebt?.currency === 'VES' || selectedDebt?.payment_mode === 'ves_fixed';
   const isDebtEUR = selectedDebt?.currency === 'EUR' || selectedDebt?.payment_mode === 'eur_cash' || selectedDebt?.payment_mode === 'ves_euro';
+  const isParallel = selectedDebt?.payment_mode === 'ves_parallel';
+  const isBCVEuro = selectedDebt?.payment_mode === 'ves_euro' || selectedDebt?.payment_type === 'bcv_eur';
+  const isCash = selectedDebt?.payment_mode === 'usd_cash' || selectedDebt?.payment_mode === 'eur_cash' || selectedDebt?.payment_type === 'cash';
+  const isBCVUSD = !isDebtVES && !isDebtEUR && !isParallel && !isCash;
   const debtCurrency = isDebtVES ? 'Bs.' : isDebtEUR ? '€' : '$';
 
   // Interest calculation for currently selected debt
@@ -257,11 +261,31 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const currentBalance = selectedDebt ? Number(selectedDebt.current_balance) : 0;
   const projectedBalance = Number(Math.max(0, currentBalance - effectivePrincipal + unpaidInterestCapitalized).toFixed(2));
 
-  const isBCVEuro = selectedDebt?.payment_type === 'bcv_eur' || selectedDebt?.payment_mode === 'ves_euro';
-  const appliedRate = isBCVEuro ? (rates.bcvEuro || 0) : (parseCleanNumber(customRate) || rates.bcvDollar);
-  const amountInBs = isDebtVES ? totalToPay : totalToPay * appliedRate;
-  const realCostUSD = isDebtVES ? (rates.parallelDollar > 0 ? totalToPay / rates.parallelDollar : totalToPay) : (rates.parallelDollar > 0 ? (totalToPay * appliedRate) / rates.parallelDollar : totalToPay);
-  const differentialSavingsUSD = isDebtVES || isBCVEuro ? 0 : Number((totalToPay - realCostUSD).toFixed(2));
+  let appliedRate = 0;
+  if (isParallel) {
+    appliedRate = parseCleanNumber(customRate) || rates.parallelDollar || 0;
+  } else if (isBCVEuro) {
+    appliedRate = parseCleanNumber(customRate) || rates.bcvEuro || 0;
+  } else if (isBCVUSD) {
+    appliedRate = parseCleanNumber(customRate) || rates.bcvDollar || 0;
+  } else if (isDebtVES) {
+    appliedRate = rates.bcvDollar || 0;
+  }
+
+  let amountInBs = 0;
+  let usdEquivalentForVES = 0;
+  let differentialSavingsUSD = 0;
+
+  if (isDebtVES) {
+    amountInBs = totalToPay;
+    usdEquivalentForVES = rates.bcvDollar > 0 ? Number((totalToPay / rates.bcvDollar).toFixed(2)) : 0;
+  } else if (isParallel || isBCVEuro || isBCVUSD) {
+    amountInBs = totalToPay * appliedRate;
+    if (isBCVUSD && rates.parallelDollar > 0) {
+      const realCostUSD = (totalToPay * appliedRate) / rates.parallelDollar;
+      differentialSavingsUSD = Number(Math.max(0, totalToPay - realCostUSD).toFixed(2));
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,8 +330,8 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         year: selectedOpt.year,
         month: selectedOpt.month,
         fortnight: selectedOpt.fortnight,
-        rate_applied: isDebtVES ? undefined : appliedRate,
-        parallel_rate: isDebtVES ? undefined : rates.parallelDollar,
+        rate_applied: isCash || isDebtVES ? undefined : appliedRate,
+        parallel_rate: isParallel ? appliedRate : rates.parallelDollar,
         notes: autoNote,
       });
       logger.dev('[PAYMENT SUCCESS] Abono procesado con éxito');
@@ -583,27 +607,93 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Rate applied if BCV payment */}
-          {(selectedDebt?.payment_type === 'bcv_usd' || selectedDebt?.payment_type === 'bcv_eur' || isBCVEuro || selectedDebt?.payment_mode === 'ves_bcv') && !isDebtVES && (
-            <div className="p-3 rounded-2xl bg-card border border-app space-y-2">
+          {/* Rate conversion box depending on payment mode */}
+          {isParallel && (
+            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted font-semibold">
-                  {isBCVEuro ? 'Tasa Oficial BCV Euro Aplicada:' : 'Tasa Oficial BCV Dólar Aplicada:'}
+                <span className="text-muted font-semibold flex items-center gap-1.5">
+                  ⚡ Tasa Dólar Promedio Aplicada:
                 </span>
                 <span className="text-app font-bold">Bs. {appliedRate.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted">Equivalente a Pagar en Bs:</span>
                 <span className="text-[#00C2C7] font-extrabold text-sm">
-                  Bs. {amountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                  Bs. {amountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
-              {differentialSavingsUSD > 0 && !isBCVEuro && (
+            </div>
+          )}
+
+          {isBCVUSD && (
+            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted font-semibold flex items-center gap-1.5">
+                  🏛️ Tasa Oficial BCV Dólar Aplicada:
+                </span>
+                <span className="text-app font-bold">Bs. {appliedRate.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">Equivalente a Pagar en Bs:</span>
+                <span className="text-[#00C2C7] font-extrabold text-sm">
+                  Bs. {amountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {differentialSavingsUSD > 0 && (
                 <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 pt-1 border-t border-app">
                   <TrendingDown className="w-3.5 h-3.5" />
-                  Ahorro por brecha cambiaria vs promedio: +${differentialSavingsUSD} USD
+                  Ahorro por brecha cambiaria vs promedio: +${differentialSavingsUSD.toFixed(2)} USD
                 </div>
               )}
+            </div>
+          )}
+
+          {isBCVEuro && (
+            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted font-semibold flex items-center gap-1.5">
+                  🇪🇺 Tasa Oficial BCV Euro Aplicada:
+                </span>
+                <span className="text-app font-bold">Bs. {appliedRate.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">Equivalente a Pagar en Bs:</span>
+                <span className="text-[#00C2C7] font-extrabold text-sm">
+                  Bs. {amountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isDebtVES && (
+            <div className="p-3.5 rounded-2xl bg-card border border-app space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted font-semibold flex items-center gap-1.5">
+                  🏛️ Tasa Oficial BCV (Referencial):
+                </span>
+                <span className="text-app font-bold">Bs. {rates.bcvDollar.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">Equivalente inverso en USD:</span>
+                <span className="text-emerald-400 font-extrabold text-sm">
+                  ${usdEquivalentForVES.toFixed(2)} USD
+                </span>
+              </div>
+              {rates.parallelDollar > 0 && (
+                <div className="text-[11px] text-muted flex items-center justify-between pt-1 border-t border-app">
+                  <span>A Tasa Promedio (Bs. {rates.parallelDollar.toFixed(2)}):</span>
+                  <span className="font-semibold text-app">${(totalToPay / rates.parallelDollar).toFixed(2)} USD</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isCash && (
+            <div className="p-3 rounded-2xl bg-card/60 border border-app flex items-center gap-2 text-xs text-muted">
+              <span className="text-base">{selectedDebt?.payment_mode === 'eur_cash' ? '💶' : '💵'}</span>
+              <span>
+                Pago directo en efectivo en {selectedDebt?.payment_mode === 'eur_cash' ? 'Euros Cash' : 'Dólares Cash'} (sin conversión a Bolívares).
+              </span>
             </div>
           )}
 
