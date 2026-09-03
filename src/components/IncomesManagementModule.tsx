@@ -973,11 +973,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
           onClick={() => setIsFixedModalOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <h3 className="text-base font-bold text-app">
                 {editingFixed ? 'Editar Ingreso Fijo' : 'Nuevo Ingreso Fijo Recurrente'}
               </h3>
@@ -990,7 +991,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               </button>
             </div>
 
-            <form onSubmit={handleSaveFixed} className="space-y-3.5">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-3.5">
+              <form onSubmit={handleSaveFixed} className="space-y-3.5">
               {/* 1. Nombre del Ingreso (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
@@ -1316,6 +1319,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -1327,11 +1331,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
           onClick={() => setIsVarModalOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <h3 className="text-base font-bold text-app">
                 {editingVar ? 'Editar Ingreso Extra' : 'Registrar Ingreso Variable / Extra'}
               </h3>
@@ -1344,7 +1349,9 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
               </button>
             </div>
 
-            <form onSubmit={handleSaveVar} className="space-y-3.5">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-3.5">
+              <form onSubmit={handleSaveVar} className="space-y-3.5">
               {/* 1. Nombre del Ingreso Extra (Obligatorio) */}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
@@ -1697,6 +1704,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

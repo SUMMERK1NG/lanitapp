@@ -498,11 +498,12 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
           onClick={() => setIsAccountModalOpen(false)}
         >
           <div
-            className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 cursor-default"
+            className="w-full max-w-lg bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
                   <Wallet className="w-4 h-4" />
@@ -522,7 +523,9 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
               </button>
             </div>
 
-            <form onSubmit={handleSaveAccount} className="space-y-4">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
+              <form onSubmit={handleSaveAccount} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Nombre de la Cuenta
@@ -681,6 +684,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -692,11 +696,12 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
           onClick={() => setAdjustingAccount(null)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
                   <Sliders className="w-4 h-4" />
@@ -716,7 +721,9 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
               </button>
             </div>
 
-            <form onSubmit={handleExecuteAdjust} className="space-y-4">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
+              <form onSubmit={handleExecuteAdjust} className="space-y-4">
               {/* Adjustment Mode Selector */}
               <div className="grid grid-cols-3 gap-1 p-1 bg-card rounded-2xl border border-app text-xs font-bold">
                 <button
@@ -840,6 +847,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

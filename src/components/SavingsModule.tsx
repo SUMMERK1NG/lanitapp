@@ -582,11 +582,12 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
           onClick={() => setIsGoalModalOpen(false)}
         >
           <div
-            className="w-full max-w-lg sm:max-w-xl bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 cursor-default"
+            className="w-full max-w-lg sm:max-w-xl bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
                   <PiggyBank className="w-4 h-4" />
@@ -607,7 +608,9 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveGoal} className="space-y-4">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
+              <form onSubmit={handleSaveGoal} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">
                   Nombre de la Meta
@@ -887,6 +890,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

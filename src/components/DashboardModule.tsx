@@ -1162,11 +1162,12 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
           onClick={() => setIsPrintModalOpen(false)}
         >
           <div
-            className="w-full max-w-2xl bg-surface border border-app rounded-3xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto cursor-default"
+            className="w-full max-w-2xl bg-surface border border-app rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-primary-custom" />
                 <h3 className="text-base font-black text-app">
@@ -1180,6 +1181,9 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
 
             {/* Printable Report Sheet */}
             <div id="printable-report" className="p-6 rounded-2xl bg-card border border-app text-app space-y-5">
@@ -1256,6 +1260,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                 <Printer className="w-4 h-4" />
                 <span>Imprimir / Guardar en PDF</span>
               </button>
+            </div>
             </div>
           </div>
         </div>

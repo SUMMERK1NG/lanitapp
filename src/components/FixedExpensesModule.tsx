@@ -759,11 +759,12 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
           onClick={() => setIsFixedModalOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-primary-custom" />
                 <h3 className="text-base font-black text-app">
@@ -778,7 +779,9 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveFixed} className="space-y-4">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+              <form onSubmit={handleSaveFixed} className="space-y-4">
               {/* Concepto / Nombre */}
               <div>
                 <label className="block text-xs font-bold text-muted mb-1">
@@ -1012,6 +1015,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -1025,11 +1029,12 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
           onClick={() => setIsVarModalOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden cursor-default"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-app">
+            {/* Header Fijo */}
+            <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#FF914D]" />
                 <h3 className="text-base font-black text-app">
@@ -1044,7 +1049,9 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveVar} className="space-y-4">
+            {/* Cuerpo con Scrollbar Interno */}
+            <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+              <form onSubmit={handleSaveVar} className="space-y-4">
               {/* Descripción */}
               <div>
                 <label className="block text-xs font-bold text-muted mb-1">
@@ -1246,6 +1253,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
