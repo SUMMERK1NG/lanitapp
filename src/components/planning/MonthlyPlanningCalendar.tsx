@@ -80,7 +80,7 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
   savingsGoals,
   savingContributions,
   categories: _categories = [],
-  accounts: _accounts = [],
+  accounts = [],
   rates,
   userId,
   onOpenQuickPayment,
@@ -859,6 +859,9 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
             onChangeFilter={setActiveFilter}
             planningNote={planningNote}
             userId={userId}
+            savingsGoals={savingsGoals}
+            savingContributions={savingContributions}
+            accounts={accounts}
           />
         </div>
       </div>

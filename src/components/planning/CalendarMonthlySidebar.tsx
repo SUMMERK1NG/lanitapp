@@ -1,24 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
-  CheckSquare,
-  Square,
-  Plus,
-  Trash2,
-  FileText,
   CheckCircle2,
   Filter,
   TrendingUp,
+  PiggyBank,
+  Wallet,
 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type {
   PlanningNote,
   ExchangeRatesData,
+  SavingsGoal,
+  SavingContribution,
+  Account,
 } from '../../types/index.ts';
-import {
-  addPlanningTask,
-  togglePlanningTask,
-  deletePlanningTask,
-  updatePlanningNotesText,
-} from '../../lib/db.ts';
+import { db } from '../../lib/db.ts';
 import { formatCurrencyVE } from '../../utils/numberFormat.ts';
 
 export type CalendarFilterType = 'all' | 'fixed_expenses' | 'debts' | 'pending' | 'paid';
@@ -37,6 +33,9 @@ interface CalendarMonthlySidebarProps {
   onChangeFilter: (filter: CalendarFilterType) => void;
   planningNote?: PlanningNote;
   userId?: string;
+  savingsGoals?: SavingsGoal[];
+  savingContributions?: SavingContribution[];
+  accounts?: Account[];
 }
 
 export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
@@ -51,80 +50,69 @@ export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
   rates,
   activeFilter,
   onChangeFilter,
-  planningNote,
-  userId,
+  savingsGoals: propSavingsGoals,
+  savingContributions: propSavingContributions,
+  accounts: propAccounts,
 }) => {
-  const [newTaskText, setNewTaskText] = useState<string>('');
-  const [newTaskDay, setNewTaskDay] = useState<string>('');
-  const [notesText, setNotesText] = useState<string>('');
-  const [isSavedNotice, setIsSavedNotice] = useState<boolean>(false);
+  // Queries reactivas en vivo como fallback continuo
+  const liveGoals = useLiveQuery(() => db.savings_goals.toArray(), []) || [];
+  const liveContribs = useLiveQuery(() => db.saving_contributions.toArray(), []) || [];
+  const liveAccounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
+  const liveTransactions = useLiveQuery(() => db.transactions.toArray(), []) || [];
 
-  // Sync local notes textarea when planningNote from DB updates
-  useEffect(() => {
-    if (planningNote?.notes !== undefined) {
-      setNotesText(planningNote.notes);
-    } else {
-      setNotesText('');
-    }
-  }, [planningNote?.notes, year, month]);
+  const savingsGoals = propSavingsGoals && propSavingsGoals.length > 0 ? propSavingsGoals : liveGoals;
+  const savingContributions = propSavingContributions && propSavingContributions.length > 0 ? propSavingContributions : liveContribs;
+  const accounts = propAccounts && propAccounts.length > 0 ? propAccounts : liveAccounts;
 
-  // Debounced auto-save for notes
-  useEffect(() => {
-    if (notesText === (planningNote?.notes || '')) return;
-
-    const timer = setTimeout(async () => {
-      await updatePlanningNotesText({
-        year,
-        month,
-        notes: notesText,
-        user_id: userId,
-      });
-      setIsSavedNotice(true);
-      setTimeout(() => setIsSavedNotice(false), 2000);
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [notesText, year, month, userId]);
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskText.trim()) return;
-
-    const dayNum = newTaskDay ? parseInt(newTaskDay, 10) : undefined;
-    await addPlanningTask({
-      year,
-      month,
-      text: newTaskText,
-      due_day: dayNum && !isNaN(dayNum) && dayNum >= 1 && dayNum <= 31 ? dayNum : undefined,
-      user_id: userId,
+  // 1. Filtrar aportes de ahorro que correspondan al año y mes seleccionado
+  const monthContributions = useMemo(() => {
+    return savingContributions.filter((c) => {
+      return c.year === year && c.month === month && !c.is_skipped;
     });
+  }, [savingContributions, year, month]);
 
-    setNewTaskText('');
-    setNewTaskDay('');
+  const totalContributedMonth = useMemo(() => {
+    return monthContributions.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  }, [monthContributions]);
+
+  const activeGoals = useMemo(() => {
+    return savingsGoals.filter((g) => g.status !== 'completed');
+  }, [savingsGoals]);
+
+  // 2. Cálculo reactivo de saldos de capital por cuenta
+  const getAccountBalance = (account: Account) => {
+    const accTxs = liveTransactions.filter((t) => t.account_id === account.id);
+    const income = accTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const expense = accTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    return (Number(account.initial_balance) || 0) + income - expense;
   };
 
-  const handleToggleTask = async (taskId: string) => {
-    await togglePlanningTask({
-      year,
-      month,
-      taskId,
-      user_id: userId,
-    });
-  };
+  const { totalCapitalUSD, totalUSD: _totalUSD, totalVES, totalEUR } = useMemo(() => {
+    let capUSD = 0;
+    let uUSD = 0;
+    let uVES = 0;
+    let uEUR = 0;
+    const bcvDollar = rates?.bcvDollar && rates.bcvDollar > 0 ? rates.bcvDollar : 1;
+    const bcvEuro = rates?.bcvEuro && rates.bcvEuro > 0 ? rates.bcvEuro : 1;
 
-  const handleDeleteTask = async (taskId: string) => {
-    await deletePlanningTask({
-      year,
-      month,
-      taskId,
-      user_id: userId,
+    accounts.forEach((acc) => {
+      const bal = getAccountBalance(acc);
+      if (acc.currency === 'VES') {
+        uVES += bal;
+        capUSD += bal / bcvDollar;
+      } else if (acc.currency === 'EUR') {
+        uEUR += bal;
+        capUSD += (bal * bcvEuro) / bcvDollar;
+      } else {
+        uUSD += bal;
+        capUSD += bal;
+      }
     });
-  };
+
+    return { totalCapitalUSD: capUSD, totalUSD: uUSD, totalVES: uVES, totalEUR: uEUR };
+  }, [accounts, liveTransactions, rates]);
 
   const bcvRate = rates?.bcvDollar || 0;
-  const tasks = planningNote?.tasks || [];
-  const completedTasks = tasks.filter((t) => t.completed).length;
-
   const progressPercent = totalCommittedMonth > 0
     ? Math.min(100, Math.round((totalPaidMonth / totalCommittedMonth) * 100))
     : 0;
@@ -250,128 +238,163 @@ export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
         </div>
       </div>
 
-      {/* 3. Recordatorios & Tareas del Mes (Inspirado en la plantilla mensual) */}
+      {/* 3. Planes de Ahorro & Avance de este mes */}
       <div className="p-4 rounded-3xl bg-card border border-app shadow-md space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold">
-              <CheckSquare className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
+              <PiggyBank className="w-4 h-4" />
             </div>
             <div>
               <h4 className="text-xs font-black text-app uppercase tracking-wider">
-                Tareas & Recordatorios
+                Planes de Ahorro
               </h4>
               <span className="text-[10px] text-muted font-medium">
-                {completedTasks}/{tasks.length} completadas
+                Avance de este mes
+              </span>
+            </div>
+          </div>
+
+          {totalContributedMonth > 0 && (
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#00C2C7]/15 text-[#00C2C7] border border-[#00C2C7]/30">
+              +${totalContributedMonth.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          )}
+        </div>
+
+        {/* Resumen del Aporte Mensual */}
+        <div className="p-3 rounded-2xl bg-surface border border-app flex items-center justify-between">
+          <div>
+            <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">
+              Aportado en {monthName}
+            </span>
+            <span className="text-base font-black text-[#00C2C7]">
+              ${totalContributedMonth.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">
+              Metas Activas
+            </span>
+            <span className="text-xs font-bold text-app">
+              {activeGoals.length} {activeGoals.length === 1 ? 'meta' : 'metas'}
+            </span>
+          </div>
+        </div>
+
+        {/* Lista de Metas con barra de progreso y aportes del mes */}
+        {activeGoals.length === 0 ? (
+          <div className="py-3 text-center text-muted text-xs">
+            <span>Sin metas de ahorro activas</span>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar pr-1">
+            {activeGoals.slice(0, 4).map((goal) => {
+              const goalMonthContrib = monthContributions
+                .filter((c) => c.goal_id === goal.id)
+                .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+              const currentAmount = Number(goal.current_amount) || 0;
+              const targetAmount = Number(goal.target_amount) || 1;
+              const progress = Math.min(Math.round((currentAmount / targetAmount) * 100), 100);
+
+              return (
+                <div key={goal.id} className="p-2.5 rounded-xl bg-surface border border-app space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-app truncate">{goal.name}</span>
+                    {goalMonthContrib > 0 ? (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                        +${goalMonthContrib.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted font-mono">{progress}%</span>
+                    )}
+                  </div>
+                  <div className="w-full bg-card rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-[#00C2C7] h-1.5 rounded-full transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted font-mono">
+                    <span>${currentAmount.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                    <span>Meta: ${targetAmount.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Balance de Capital */}
+      <div className="p-4 rounded-3xl bg-card border border-app shadow-md space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-app uppercase tracking-wider">
+                Balance de Capital
+              </h4>
+              <span className="text-[10px] text-muted font-medium">
+                Cuentas y saldos actuales
               </span>
             </div>
           </div>
         </div>
 
-        {/* Add Task Form */}
-        <form onSubmit={handleAddTask} className="flex items-center gap-1.5">
-          <input
-            type="text"
-            value={newTaskText}
-            onChange={(e) => setNewTaskText(e.target.value)}
-            placeholder="Nuevo recordatorio o tarea..."
-            className="flex-1 px-3 py-1.5 rounded-xl bg-surface border border-app text-xs text-app placeholder:text-muted focus:outline-none focus:border-primary-custom"
-          />
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={newTaskDay}
-            onChange={(e) => setNewTaskDay(e.target.value)}
-            placeholder="Día"
-            title="Día del mes (opcional)"
-            className="w-12 px-1.5 py-1.5 rounded-xl bg-surface border border-app text-xs text-center text-app placeholder:text-muted focus:outline-none focus:border-primary-custom"
-          />
-          <button
-            type="submit"
-            disabled={!newTaskText.trim()}
-            className="p-1.5 rounded-xl bg-primary-custom text-white hover:opacity-90 disabled:opacity-40 transition-all cursor-pointer"
-            title="Agregar tarea"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </form>
-
-        {/* Tasks List */}
-        <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar pr-1">
-          {tasks.length === 0 ? (
-            <div className="py-4 text-center text-muted text-xs">
-              <span>Sin tareas pendientes para este mes.</span>
-            </div>
-          ) : (
-            tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`flex items-center justify-between p-2 rounded-xl border transition-all text-xs ${
-                  task.completed
-                    ? 'bg-surface/40 border-app/50 text-muted line-through opacity-70'
-                    : 'bg-surface border-app text-app hover:border-slate-600'
-                }`}
-              >
-                <div
-                  onClick={() => handleToggleTask(task.id)}
-                  className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer select-none"
-                >
-                  {task.completed ? (
-                    <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <Square className="w-4 h-4 text-muted shrink-0" />
-                  )}
-                  <span className="truncate">{task.text}</span>
-                  {task.due_day && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-primary-custom/20 text-primary-custom shrink-0">
-                      Día {task.due_day}
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => handleDeleteTask(task.id)}
-                  className="p-1 rounded-lg text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0 ml-1"
-                  title="Eliminar tarea"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* 4. Notas del Mes (Inspirado en la plantilla física) */}
-      <div className="p-4 rounded-3xl bg-card border border-app shadow-md space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-app uppercase tracking-wider">
-                Notas del Mes
-              </h4>
-              <span className="text-[10px] text-muted font-medium">Apuntes estratégicos</span>
-            </div>
-          </div>
-
-          {isSavedNotice && (
-            <span className="text-[10px] font-bold text-emerald-400 animate-in fade-in duration-200">
-              ✓ Guardado
+        {/* Resumen de Capital Total Estimado */}
+        <div className="p-3 rounded-2xl bg-surface border border-app flex items-center justify-between">
+          <div>
+            <span className="text-[10px] text-muted font-bold uppercase tracking-wider block">
+              Capital Total Est.
             </span>
-          )}
+            <span className="text-base font-black text-app">
+              ${totalCapitalUSD.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+            </span>
+          </div>
+          <div className="text-right text-[10px] space-y-0.5">
+            {totalVES > 0 && (
+              <div className="text-emerald-400 font-bold">
+                Bs. {totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            )}
+            {totalEUR > 0 && (
+              <div className="text-blue-400 font-bold">
+                €{totalEUR.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            )}
+          </div>
         </div>
 
-        <textarea
-          value={notesText}
-          onChange={(e) => setNotesText(e.target.value)}
-          placeholder={`Escribe aquí notas, metas o recordatorios especiales para ${monthName}...`}
-          rows={4}
-          className="w-full p-3 rounded-2xl bg-surface border border-app text-xs text-app placeholder:text-muted focus:outline-none focus:border-primary-custom resize-none no-scrollbar"
-        />
+        {/* Desglose por Cuentas */}
+        {accounts.length === 0 ? (
+          <div className="py-3 text-center text-muted text-xs">
+            <span>Sin cuentas registradas en Capital</span>
+          </div>
+        ) : (
+          <div className="space-y-1.5 max-h-44 overflow-y-auto no-scrollbar pr-1">
+            {accounts.map((acc) => {
+              const bal = getAccountBalance(acc);
+              const currSymbol = acc.currency === 'VES' ? 'Bs.' : acc.currency === 'EUR' ? '€' : '$';
+              return (
+                <div key={acc.id} className="flex items-center justify-between p-2 rounded-xl bg-surface border border-app text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: acc.color || '#00C2C7' }}
+                    />
+                    <span className="font-semibold text-app truncate">{acc.name}</span>
+                  </div>
+                  <span className={`font-black shrink-0 font-mono ${bal < 0 ? 'text-rose-400' : 'text-app'}`}>
+                    {currSymbol} {bal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </aside>
   );
