@@ -47,6 +47,7 @@ export interface UserProfile {
   dashboard_widgets?: any;
   created_at?: string;
   last_sign_in_at?: string;
+  last_sign_in_ip?: string;
   last_login_at?: string;
   updated_at?: string;
   sync_status: SyncStatus;

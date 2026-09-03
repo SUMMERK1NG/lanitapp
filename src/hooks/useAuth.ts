@@ -172,6 +172,8 @@ export function useAuth() {
               accent_color: profileData.accent_color || '#147DF0',
               sync_status: 'synced',
               created_at: profileData.created_at,
+              last_sign_in_at: profileData.last_sign_in_at || authUser.last_sign_in_at,
+              last_sign_in_ip: profileData.last_sign_in_ip,
             };
             await saveUserProfile(userProfile);
             setActiveUserId(userProfile.id);
@@ -313,17 +315,40 @@ export function useAuth() {
           root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
         }
 
-        // Update profiles in Supabase (únicamente columnas existentes y válidas, sin ID ni campos de auth)
+        // Obtener IP pública de acceso de forma ligera con timeout de 2 segundos
+        let clientIp: string | undefined = undefined;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const ipRes = await fetch('https://api.ipify.org?format=json', { signal: ctrl.signal });
+          clearTimeout(timer);
+          if (ipRes.ok) {
+            const json = await ipRes.json();
+            if (json?.ip) clientIp = String(json.ip).trim();
+          }
+        } catch {
+          // Ignorar silenciosamente si no hay red externa o falla el servicio de IP
+        }
+
+        if (clientIp) {
+          userProfile.last_sign_in_ip = clientIp;
+        }
+
+        // Update profiles in Supabase
         if (supabase) {
           try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (session?.user) {
-              const loginUpdatePayload = {
+              const loginUpdatePayload: Record<string, any> = {
                 keep_session: keepSessionVal,
                 updated_at: nowIso,
+                last_sign_in_at: nowIso,
               };
+              if (clientIp) {
+                loginUpdatePayload.last_sign_in_ip = clientIp;
+              }
 
-              logger.dev('[LOGIN UPDATE] Actualizando sesión en profiles para:', session.user.id);
+              logger.dev('[LOGIN UPDATE] Actualizando sesión e IP en profiles para:', session.user.id);
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update(loginUpdatePayload)
@@ -331,9 +356,15 @@ export function useAuth() {
                 .select();
 
               if (updateError) {
-                logger.warn('[PROFILE UPDATE WARNING]:', updateError.message);
-                if (updateError.code === '23505') {
-                  logger.warn('Perfil ya existe, continuando login...');
+                // Fallback resiliente si las columnas aún no han sido migradas en la base de datos de Supabase
+                if (updateError.message?.includes('column') || updateError.code === 'PGRST204') {
+                  logger.warn('[PROFILE UPDATE]: Columnas last_sign_in_at/last_sign_in_ip pendientes en Supabase. Guardando solo keep_session.');
+                  await supabase
+                    .from('profiles')
+                    .update({ keep_session: keepSessionVal, updated_at: nowIso })
+                    .eq('id', session.user.id);
+                } else {
+                  logger.warn('[PROFILE UPDATE WARNING]:', updateError.message);
                 }
               }
             } else if (sessionError) {

@@ -18,6 +18,7 @@ import {
   Lock,
   Send,
   Clock,
+  Globe,
 } from 'lucide-react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
@@ -390,14 +391,16 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                     })
                   : 'N/A';
 
-                const lastAccessFormatted = p.last_sign_in_at || p.last_login_at
+                const hasLastAccess = Boolean(p.last_sign_in_at || p.last_login_at);
+                const lastAccessFormatted = hasLastAccess
                   ? new Date(p.last_sign_in_at || p.last_login_at!).toLocaleString('es-VE', {
                       day: '2-digit',
                       month: 'short',
+                      year: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit',
                     })
-                  : dateFormatted;
+                  : 'Sin accesos registrados';
 
                 return (
                   <tr
@@ -461,9 +464,19 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
                     {/* Último Acceso */}
                     <td className="px-4 py-3 text-muted whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#10B981]" />
-                        <span className="text-app font-medium">{lastAccessFormatted}</span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className={`w-3.5 h-3.5 ${hasLastAccess ? 'text-[#10B981]' : 'text-muted/60'}`} />
+                          <span className={`text-xs font-medium ${hasLastAccess ? 'text-app' : 'text-muted italic'}`}>
+                            {lastAccessFormatted}
+                          </span>
+                        </div>
+                        {p.last_sign_in_ip && (
+                          <div className="flex items-center gap-1 text-[10px] text-muted font-mono pl-5">
+                            <Globe className="w-2.5 h-2.5 text-[#00C2C7]" />
+                            <span>IP: {p.last_sign_in_ip}</span>
+                          </div>
+                        )}
                       </div>
                     </td>
 
