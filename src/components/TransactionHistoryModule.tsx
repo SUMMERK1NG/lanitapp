@@ -769,9 +769,11 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
                 {/* 1. Header Oficial de Auditoría */}
                 <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4 print-avoid-break">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow">
-                      L
-                    </div>
+                    <img
+                      src="/icon.png"
+                      alt="LanitApp Logo"
+                      className="w-12 h-12 object-contain drop-shadow-sm shrink-0"
+                    />
                     <div>
                       <h1 className="text-2xl font-black tracking-tight text-slate-900">LANITAPP</h1>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
