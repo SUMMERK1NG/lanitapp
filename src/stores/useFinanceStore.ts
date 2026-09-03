@@ -1475,12 +1475,27 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     };
 
     const newBalance = Math.max(0, Number(debt.current_balance) - Number(data.amount));
-    const newStatus = newBalance <= 0.01 ? 'paid' : 'active';
+    const isFullPayment = newBalance <= 0.01;
+    const newStatus = isFullPayment ? 'paid' : 'active';
+    let newPendingInstallments: number | undefined;
+    if (debt.pending_installments !== undefined) {
+      if (isFullPayment) {
+        newPendingInstallments = 0;
+      } else {
+        const quotaAmount = debt.installment_amount && debt.installment_amount > 0
+          ? debt.installment_amount
+          : debt.total_amount && debt.total_installments
+            ? debt.total_amount / debt.total_installments
+            : 0;
+        const quotasCovered = quotaAmount > 0 ? Math.max(1, Math.floor(Number(data.amount) / quotaAmount)) : 1;
+        newPendingInstallments = Math.max(0, debt.pending_installments - quotasCovered);
+      }
+    }
     const updatedDebt: Debt = {
       ...debt,
       current_balance: newBalance,
       status: newStatus,
-      pending_installments: debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined,
+      pending_installments: newPendingInstallments,
       updated_at: new Date().toISOString(),
     };
 

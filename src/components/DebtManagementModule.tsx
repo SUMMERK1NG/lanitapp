@@ -235,6 +235,9 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
           filteredDebts.map((debt) => {
             const curBal = Number(debt.current_balance) || 0;
             const isPaid = debt.status === 'paid' || curBal <= 0;
+            const isVES = debt.currency === 'VES' || debt.payment_mode === 'ves_fixed';
+            const isEUR = debt.currency === 'EUR' || debt.payment_mode === 'eur_cash' || debt.payment_mode === 'ves_euro';
+            const debtCurrency = isVES ? 'Bs. ' : isEUR ? '€' : currency || '$';
             const payments = safePayments.filter((p) => p && p.debt_id === debt.id);
             const isExpanded = expandedDebtId === debt.id;
             const totalAmount = Number(debt.total_amount) || 0;
@@ -297,7 +300,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                         <span>
                           Cuotas:{' '}
                           <strong className="text-[#FF914D]">
-                            {debt.pending_installments} de {debt.total_installments || debt.pending_installments} restantes (~{currency}{Number(cuota || 0).toFixed(2)} c/u)
+                            {debt.pending_installments} de {debt.total_installments || debt.pending_installments} restantes (~{debtCurrency}{Number(cuota || 0).toFixed(2)} c/u)
                           </strong>
                         </span>
                       )}
@@ -312,13 +315,13 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                       {(debt.has_interest || (debt.interest_rate !== undefined && debt.interest_rate > 0)) && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
                           <span>Interés: {debt.interest_rate}%</span>
-                          {debt.interest_amount ? <span>(${Number(debt.interest_amount || 0).toFixed(2)} {debt.interest_frequency === 'fortnightly' ? 'Q' : 'M'})</span> : null}
+                          {debt.interest_amount ? <span>({debtCurrency}{Number(debt.interest_amount || 0).toFixed(2)} {debt.interest_frequency === 'fortnightly' ? 'Q' : 'M'})</span> : null}
                         </span>
                       )}
 
                       {debt.has_late_fee && (debt.late_fee_amount || 0) > 0 && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FF914D]/15 text-[#FF914D] border border-[#FF914D]/30 flex items-center gap-1">
-                          <span>Mora: +${Number(debt.late_fee_amount || 0).toFixed(2)}</span>
+                          <span>Mora: +{debtCurrency}{Number(debt.late_fee_amount || 0).toFixed(2)}</span>
                         </span>
                       )}
 
@@ -337,7 +340,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                         Saldo Restante
                       </span>
                       <span className="text-xl font-black text-[#FF914D]">
-                        {currency}{curBal.toFixed(2)}
+                        {debtCurrency}{curBal.toFixed(2)}
                       </span>
                     </div>
 
@@ -381,8 +384,8 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                 {/* Progress bar */}
                 <div className="px-4 sm:px-5 pb-3">
                   <div className="flex justify-between text-[10px] text-muted mb-1">
-                    <span>Amortizado: ${Number(paidForThisDebt || 0).toFixed(2)}</span>
-                    <span>Total Original: ${totalAmount.toFixed(2)} ({pct}%)</span>
+                    <span>Amortizado: {debtCurrency}{Number(paidForThisDebt || 0).toFixed(2)}</span>
+                    <span>Total Original: {debtCurrency}{totalAmount.toFixed(2)} ({pct}%)</span>
                   </div>
                   <div className="w-full bg-card h-2 rounded-full overflow-hidden">
                     <div
@@ -435,8 +438,8 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                               </div>
 
                               <div className="text-right">
-                                <span className="font-black text-[#00C2C7]">+{currency}{pAmount.toFixed(2)}</span>
-                                {pAmountInBs !== undefined && (
+                                <span className="font-black text-[#00C2C7]">+{debtCurrency}{pAmount.toFixed(2)}</span>
+                                {pAmountInBs !== undefined && !isVES && (
                                   <span className="text-[10px] text-muted block">
                                     Bs. {pAmountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                                   </span>

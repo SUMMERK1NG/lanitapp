@@ -59,6 +59,9 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const [suggestedNotice, setSuggestedNotice] = useState<string>('');
 
   const selectedDebt = debts.find((d) => d.id === debtId);
+  const isDebtVES = selectedDebt?.currency === 'VES' || selectedDebt?.payment_mode === 'ves_fixed';
+  const isDebtEUR = selectedDebt?.currency === 'EUR' || selectedDebt?.payment_mode === 'eur_cash' || selectedDebt?.payment_mode === 'ves_euro';
+  const debtCurrency = isDebtVES ? 'Bs.' : isDebtEUR ? '€' : '$';
 
   // Interest calculation for currently selected debt
   const scheduledInterest = useMemo(() => {
@@ -72,9 +75,9 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     return 0;
   }, [selectedDebt]);
 
-  // Sync breakdown when selected debt changes
+  // Sync breakdown ONLY when modal opens or selected debtId changes
   useEffect(() => {
-    if (!selectedDebt) return;
+    if (!isOpen || !selectedDebt) return;
     if (selectedDebt.has_interest && scheduledInterest > 0) {
       setInterestAmount(scheduledInterest);
       // If debt is open mode with interest, default suggested principal is 0 or cuota
@@ -85,17 +88,19 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
       } else {
         setPaymentMode('mixed');
         const suggestedPrincipal = Math.max(0, (selectedDebt.installment_amount || 0) - scheduledInterest);
-        setPrincipalAmount(suggestedPrincipal > 0 ? suggestedPrincipal : Number((selectedDebt.current_balance / (selectedDebt.pending_installments || 1)).toFixed(2)));
-        setCustomAmount(scheduledInterest + (suggestedPrincipal > 0 ? suggestedPrincipal : 0));
+        const cuotaVal = suggestedPrincipal > 0 ? suggestedPrincipal : Number((selectedDebt.current_balance / (selectedDebt.pending_installments || 1)).toFixed(2));
+        setPrincipalAmount(cuotaVal);
+        setCustomAmount(scheduledInterest + cuotaVal);
       }
     } else {
       setPaymentMode('custom');
       const defaultCuota = selectedDebt.installment_amount || (selectedDebt.pending_installments ? selectedDebt.current_balance / selectedDebt.pending_installments : selectedDebt.current_balance);
-      setCustomAmount(initialAmount || defaultCuota);
-      setPrincipalAmount(initialAmount || defaultCuota);
+      const initAmt = initialAmount !== undefined ? initialAmount : Number(defaultCuota.toFixed(2));
+      setCustomAmount(initAmt);
+      setPrincipalAmount(initAmt);
       setInterestAmount(0);
     }
-  }, [debtId, selectedDebt, scheduledInterest, initialAmount]);
+  }, [isOpen, debtId]);
 
   // Compute smart fortnight from date
   const computeSmartFortnight = (dateStr: string): { year: number; month: number; fortnight: FortnightType; notice: string } => {
@@ -250,12 +255,13 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
   // Projected new balance
   const currentBalance = selectedDebt ? Number(selectedDebt.current_balance) : 0;
-  const projectedBalance = Math.max(0, currentBalance - effectivePrincipal + unpaidInterestCapitalized);
+  const projectedBalance = Number(Math.max(0, currentBalance - effectivePrincipal + unpaidInterestCapitalized).toFixed(2));
 
-  const appliedRate = parseCleanNumber(customRate) || rates.bcvDollar;
-  const amountInBs = totalToPay * appliedRate;
-  const realCostUSD = rates.parallelDollar > 0 ? (totalToPay * appliedRate) / rates.parallelDollar : totalToPay;
-  const differentialSavingsUSD = Number((totalToPay - realCostUSD).toFixed(2));
+  const isBCVEuro = selectedDebt?.payment_type === 'bcv_eur' || selectedDebt?.payment_mode === 'ves_euro';
+  const appliedRate = isBCVEuro ? (rates.bcvEuro || 0) : (parseCleanNumber(customRate) || rates.bcvDollar);
+  const amountInBs = isDebtVES ? totalToPay : totalToPay * appliedRate;
+  const realCostUSD = isDebtVES ? (rates.parallelDollar > 0 ? totalToPay / rates.parallelDollar : totalToPay) : (rates.parallelDollar > 0 ? (totalToPay * appliedRate) / rates.parallelDollar : totalToPay);
+  const differentialSavingsUSD = isDebtVES || isBCVEuro ? 0 : Number((totalToPay - realCostUSD).toFixed(2));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,8 +306,8 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         year: selectedOpt.year,
         month: selectedOpt.month,
         fortnight: selectedOpt.fortnight,
-        rate_applied: selectedDebt?.payment_type === 'bcv_usd' ? appliedRate : undefined,
-        parallel_rate: selectedDebt?.payment_type === 'bcv_usd' ? rates.parallelDollar : undefined,
+        rate_applied: isDebtVES ? undefined : appliedRate,
+        parallel_rate: isDebtVES ? undefined : rates.parallelDollar,
         notes: autoNote,
       });
       logger.dev('[PAYMENT SUCCESS] Abono procesado con éxito');
@@ -362,11 +368,62 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                     </span>
                   </div>
                   <span className="text-sm font-black text-[#FF914D] shrink-0 ml-2">
-                    ${d.current_balance}
+                    {d.currency === 'VES' || d.payment_mode === 'ves_fixed' ? 'Bs.' : d.currency === 'EUR' || d.payment_mode === 'eur_cash' ? '€' : '$'}{d.current_balance}
                   </span>
                 </button>
               ))}
             </div>
+
+            {selectedDebt && (
+              <div className="grid grid-cols-3 gap-1.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fullBal = Number(Number(selectedDebt.current_balance || 0).toFixed(2));
+                    if (selectedDebt.has_interest) {
+                      setPaymentMode('principal_only');
+                      setPrincipalAmount(fullBal);
+                      setInterestAmount(0);
+                    }
+                    setCustomAmount(fullBal);
+                    setNotes(`Liquidación total de deuda (${debtCurrency}${fullBal.toFixed(2)})`);
+                  }}
+                  className="py-2 px-1.5 rounded-xl bg-primary-custom/15 border border-primary-custom/40 hover:bg-primary-custom/25 text-[10px] font-black text-primary-custom transition-all text-center cursor-pointer shadow-xs"
+                >
+                  🎯 Liquidar Total ({debtCurrency}{Number(selectedDebt.current_balance || 0).toFixed(2)})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cuotaVal = selectedDebt.installment_amount || (selectedDebt.pending_installments ? Number(selectedDebt.current_balance) / selectedDebt.pending_installments : Number(selectedDebt.current_balance));
+                    const cuotaFixed = Number(cuotaVal.toFixed(2));
+                    if (selectedDebt.has_interest) {
+                      setPaymentMode('mixed');
+                      setPrincipalAmount(Math.max(0, Number((cuotaFixed - scheduledInterest).toFixed(2))));
+                      setInterestAmount(scheduledInterest);
+                    }
+                    setCustomAmount(cuotaFixed);
+                    setNotes(`Abono de cuota (${debtCurrency}${cuotaFixed.toFixed(2)})`);
+                  }}
+                  className="py-2 px-1.5 rounded-xl bg-surface border border-app hover:border-primary-custom text-[10px] font-bold text-app transition-all text-center cursor-pointer shadow-xs"
+                >
+                  ⚡ Pagar 1 Cuota
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotes('');
+                    const inputEl = document.querySelector('input[type="text"]') as HTMLInputElement | null;
+                    if (inputEl) inputEl.focus();
+                  }}
+                  className="py-2 px-1.5 rounded-xl bg-surface border border-dashed border-app hover:border-app text-[10px] font-bold text-muted hover:text-app transition-all text-center cursor-pointer shadow-xs"
+                >
+                  ✏️ Monto Personalizado
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Special Breakdown Options for Debts with Interest */}
@@ -476,19 +533,19 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             /* Flat Amount to pay for non-interest debts */
             <div>
               <label className="block text-xs font-semibold text-muted mb-1">
-                Monto a Abonar ($ USD)
+                Monto a Abonar ({debtCurrency})
               </label>
               <MoneyInput
                 value={customAmount}
                 onChange={setCustomAmount}
-                currencySymbol="$"
+                currencySymbol={debtCurrency}
                 placeholder="0,00"
                 autoFocus
                 required
               />
               {selectedDebt && (
                 <span className="text-[11px] text-muted mt-1 block">
-                  Saldo pendiente actual: <strong className="text-[#FF914D]">${selectedDebt.current_balance}</strong>
+                  Saldo pendiente actual: <strong className="text-[#FF914D]">{debtCurrency}{Number(selectedDebt.current_balance || 0).toFixed(2)}</strong>
                 </span>
               )}
             </div>
@@ -499,38 +556,40 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             <div className="p-3 rounded-2xl bg-surface border border-primary-custom/30 space-y-1.5 text-xs">
               <div className="flex justify-between items-center text-muted">
                 <span>Total a Pagar hoy:</span>
-                <span className="font-extrabold text-app text-sm">${totalToPay.toFixed(2)} USD</span>
+                <span className="font-extrabold text-app text-sm">{debtCurrency}{totalToPay.toFixed(2)}</span>
               </div>
               {selectedDebt.has_interest && (
                 <div className="flex justify-between items-center text-[11px] text-muted border-t border-app/60 pt-1">
                   <span>Reducción de Capital:</span>
-                  <span className="font-bold text-emerald-400">-${effectivePrincipal.toFixed(2)} USD</span>
+                  <span className="font-bold text-emerald-400">-{debtCurrency}{effectivePrincipal.toFixed(2)}</span>
                 </div>
               )}
               {selectedDebt.has_interest && effectiveInterest > 0 && (
                 <div className="flex justify-between items-center text-[11px] text-muted">
                   <span>Intereses Cubiertos:</span>
-                  <span className="font-bold text-amber-400">${effectiveInterest.toFixed(2)} USD</span>
+                  <span className="font-bold text-amber-400">{debtCurrency}{effectiveInterest.toFixed(2)}</span>
                 </div>
               )}
               {selectedDebt.has_interest && unpaidInterestCapitalized > 0 && (
                 <div className="flex justify-between items-center text-[11px] text-amber-400 font-medium">
                   <span>Interés no pagado acumulado:</span>
-                  <span className="font-bold">+${unpaidInterestCapitalized.toFixed(2)} USD</span>
+                  <span className="font-bold">+{debtCurrency}{unpaidInterestCapitalized.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between items-center text-xs font-bold pt-1 border-t border-app/60">
                 <span>Nuevo Saldo Adeudado:</span>
-                <span className="text-[#FF914D] font-black">${projectedBalance.toFixed(2)} USD</span>
+                <span className="text-[#FF914D] font-black">{debtCurrency}{projectedBalance.toFixed(2)}</span>
               </div>
             </div>
           )}
 
           {/* Rate applied if BCV payment */}
-          {selectedDebt?.payment_type === 'bcv_usd' && (
+          {(selectedDebt?.payment_type === 'bcv_usd' || selectedDebt?.payment_type === 'bcv_eur' || isBCVEuro || selectedDebt?.payment_mode === 'ves_bcv') && !isDebtVES && (
             <div className="p-3 rounded-2xl bg-card border border-app space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted font-semibold">Tasa Oficial BCV Aplicada:</span>
+                <span className="text-muted font-semibold">
+                  {isBCVEuro ? 'Tasa Oficial BCV Euro Aplicada:' : 'Tasa Oficial BCV Dólar Aplicada:'}
+                </span>
                 <span className="text-app font-bold">Bs. {appliedRate.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -539,7 +598,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                   Bs. {amountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              {differentialSavingsUSD > 0 && (
+              {differentialSavingsUSD > 0 && !isBCVEuro && (
                 <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 pt-1 border-t border-app">
                   <TrendingDown className="w-3.5 h-3.5" />
                   Ahorro por brecha cambiaria vs promedio: +${differentialSavingsUSD} USD

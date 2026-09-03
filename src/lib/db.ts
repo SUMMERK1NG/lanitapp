@@ -2040,8 +2040,22 @@ export async function addDebtPayment(data: {
   };
 
   const newBalance = Math.max(0, Number(debt.current_balance) - Number(data.amount));
-  const newStatus = newBalance <= 0.01 ? 'paid' : 'active';
-  const newPendingInstallments = debt.pending_installments ? Math.max(0, debt.pending_installments - 1) : undefined;
+  const isFullPayment = newBalance <= 0.01;
+  const newStatus = isFullPayment ? 'paid' : 'active';
+  let newPendingInstallments: number | undefined;
+  if (debt.pending_installments !== undefined) {
+    if (isFullPayment) {
+      newPendingInstallments = 0;
+    } else {
+      const quotaAmount = debt.installment_amount && debt.installment_amount > 0
+        ? debt.installment_amount
+        : debt.total_amount && debt.total_installments
+          ? debt.total_amount / debt.total_installments
+          : 0;
+      const quotasCovered = quotaAmount > 0 ? Math.max(1, Math.floor(Number(data.amount) / quotaAmount)) : 1;
+      newPendingInstallments = Math.max(0, debt.pending_installments - quotasCovered);
+    }
+  }
 
   const txRecord: Transaction = {
     id: ensureValidUuid(),

@@ -36,9 +36,9 @@ export const PAYMENT_MODES_LIST: {
 }[] = [
   { id: 'usd_cash', icon: '💵', label: 'CASH USD', currency: 'USD', paymentType: 'cash' },
   { id: 'eur_cash', icon: '💶', label: 'CASH EURO', currency: 'EUR', paymentType: 'cash' },
-  { id: 'ves_bcv', icon: '🏛️', label: 'DOLAR TASA BCV (BS)', currency: 'VES', paymentType: 'bcv_usd' },
-  { id: 'ves_euro', icon: '🇪🇺', label: 'EURO TASA BCV (BS)', currency: 'VES', paymentType: 'bcv_eur' },
-  { id: 'ves_parallel', icon: '⚡', label: 'DOLAR PROMEDIO (BS)', currency: 'VES', paymentType: 'bcv_usd' },
+  { id: 'ves_bcv', icon: '🏛️', label: 'DOLAR TASA BCV (BS)', currency: 'USD', paymentType: 'bcv_usd' },
+  { id: 'ves_euro', icon: '🇪🇺', label: 'EURO TASA BCV (BS)', currency: 'EUR', paymentType: 'bcv_eur' },
+  { id: 'ves_parallel', icon: '⚡', label: 'DOLAR PROMEDIO (BS)', currency: 'USD', paymentType: 'bcv_usd' },
   { id: 'ves_fixed', icon: '🇻🇪', label: 'BOLIVARES MONTO FIJO', currency: 'VES', paymentType: 'bcv_usd' },
   { id: 'other', icon: '🌐', label: 'OTROS', currency: 'USD', paymentType: 'other' },
 ];
@@ -351,6 +351,10 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
   const currentSelectedCategory = expenseCategories.find((c) => c.id === platform) || expenseCategories[0];
   const currentSelectedPaymentMode = PAYMENT_MODES_LIST.find((p) => p.id === paymentMode) || PAYMENT_MODES_LIST[0];
+  const isVES = paymentMode === 'ves_fixed';
+  const isEUR = paymentMode === 'eur_cash' || paymentMode === 'ves_euro' || currentSelectedPaymentMode.currency === 'EUR';
+  const activeCurrencySymbol = isVES ? 'Bs.' : isEUR ? '€' : '$';
+  const activeCurrencyLabel = isVES ? 'BOLÍVARES' : isEUR ? 'EUROS' : 'USD';
   const selectedStartOpt = startPeriodOptions.find((o) => o.key === startPeriodKey) || startPeriodOptions[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -580,15 +584,20 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
           {/* 4. Monto Total de la Deuda */}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
-              {debtMode === 'installments' ? 'Monto Total de la Deuda ($ USD)' : 'Monto Total / Saldo Inicial ($ USD)'}
+              {debtMode === 'installments' ? `Monto Total de la Deuda (${activeCurrencyLabel})` : `Monto Total / Saldo Inicial (${activeCurrencyLabel})`}
             </label>
             <MoneyInput
               value={debtAmount}
               onChange={handleDebtAmountChange}
-              currencySymbol="$"
+              currencySymbol={activeCurrencySymbol}
               placeholder="0,00"
               required
             />
+            {isVES && (
+              <p className="text-[11px] text-[#00C2C7] mt-1 font-medium">
+                💡 Los montos se registrarán en Bolívares sin conversión a Dólar
+              </p>
+            )}
           </div>
 
           {/* 5. Estructura de Cuotas (Solo en modo installments) */}
@@ -601,12 +610,12 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] font-semibold text-muted mb-1 truncate">
-                    Inicial ($) (Opcional)
+                    Inicial ({activeCurrencySymbol}) (Opcional)
                   </label>
                   <MoneyInput
                     value={initialPayment}
                     onChange={handleInitialPaymentChange}
-                    currencySymbol="$"
+                    currencySymbol={activeCurrencySymbol}
                     placeholder="0,00"
                   />
                 </div>
@@ -627,12 +636,12 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
 
                 <div>
                   <label className="block text-[10px] font-semibold text-muted mb-1 truncate">
-                    Monto por Cuota ($)
+                    Monto por Cuota ({activeCurrencySymbol})
                   </label>
                   <MoneyInput
                     value={installmentAmount}
                     onChange={setInstallmentAmount}
-                    currencySymbol="$"
+                    currencySymbol={activeCurrencySymbol}
                     placeholder="0,00"
                   />
                 </div>
@@ -718,7 +727,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-muted mb-1">Monto Interés ($ USD)</label>
+                      <label className="block text-[11px] font-semibold text-muted mb-1">Monto Interés ({activeCurrencySymbol})</label>
                       <input
                         type="text"
                         value={interestAmount}
@@ -786,12 +795,12 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <label className="block text-[11px] font-semibold text-muted mb-1">
-                      Monto de Penalización ($ USD)
+                      Monto de Penalización ({activeCurrencySymbol})
                     </label>
                     <MoneyInput
                       value={lateFeeAmount}
                       onChange={setLateFeeAmount}
-                      currencySymbol="$"
+                      currencySymbol={activeCurrencySymbol}
                       placeholder="4.00"
                     />
                   </div>
