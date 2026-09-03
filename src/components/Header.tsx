@@ -263,10 +263,10 @@ export const Header: React.FC<HeaderProps> = ({
             );
           })()}
 
-          {/* Botón Único de Perfil / Avatar en esquina superior derecha */}
+          {/* Botón de Perfil / Avatar (Visible en móvil, en desktop ya está en la barra lateral) */}
           <button
             onClick={onOpenProfile}
-            className="w-8 h-8 rounded-xl bg-card hover:bg-surface-hover border-2 border-primary-custom flex items-center justify-center text-sm overflow-hidden shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className="lg:hidden w-8 h-8 rounded-xl bg-card hover:bg-surface-hover border-2 border-primary-custom flex items-center justify-center text-sm overflow-hidden shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
             title="Perfil de Usuario & Ajustes de Tema"
           >
             {isImageAvatar ? (
