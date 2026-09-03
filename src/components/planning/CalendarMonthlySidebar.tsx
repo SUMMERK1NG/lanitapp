@@ -119,64 +119,7 @@ export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
 
   return (
     <aside className="w-full flex flex-col space-y-4">
-      {/* 1. Global Monthly Summary Card */}
-      <div className="p-4 rounded-3xl bg-card border border-app shadow-md space-y-3.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-app uppercase tracking-wider">
-                Resumen de {monthName}
-              </h4>
-              <span className="text-[10px] text-muted font-medium">Compromisos del mes</span>
-            </div>
-          </div>
-
-          <span className="text-sm font-black text-primary-custom">
-            ${totalCommittedMonth.toFixed(2)}
-          </span>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-[11px] font-bold">
-            <span className="text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Cubierto: ${totalPaidMonth.toFixed(2)}
-            </span>
-            <span className="text-slate-400">
-              Pendiente: ${totalPendingMonth.toFixed(2)}
-            </span>
-          </div>
-          <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden border border-slate-700/60 flex">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-[10px] text-muted">
-            <span>{progressPercent}% completado</span>
-            {bcvRate > 0 && (
-              <span>Bs. {formatCurrencyVE(totalCommittedMonth * bcvRate)}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Quincena 15 vs Quincena 30 Breakdown */}
-        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-app">
-          <div className="p-2.5 rounded-2xl bg-surface/80 border border-app">
-            <span className="text-[10px] font-bold text-muted block uppercase">Quincena 15</span>
-            <span className="text-xs font-black text-app block">${totalQ1.toFixed(2)}</span>
-          </div>
-          <div className="p-2.5 rounded-2xl bg-surface/80 border border-app">
-            <span className="text-[10px] font-bold text-muted block uppercase">Quincena 30</span>
-            <span className="text-xs font-black text-app block">${totalQ2.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Interactive Calendar Filter */}
+      {/* 1. Interactive Calendar Filter (Al inicio para acceso rápido) */}
       <div className="p-3.5 rounded-3xl bg-card border border-app space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1.5">
@@ -235,6 +178,63 @@ export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
           >
             Cubiertos / Pagados
           </button>
+        </div>
+      </div>
+
+      {/* 2. Global Monthly Summary Card */}
+      <div className="p-4 rounded-3xl bg-card border border-app shadow-md space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-app uppercase tracking-wider">
+                Resumen de {monthName}
+              </h4>
+              <span className="text-[10px] text-muted font-medium">Compromisos del mes</span>
+            </div>
+          </div>
+
+          <span className="text-sm font-black text-primary-custom">
+            ${totalCommittedMonth.toFixed(2)}
+          </span>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between text-[11px] font-bold">
+            <span className="text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Cubierto: ${totalPaidMonth.toFixed(2)}
+            </span>
+            <span className="text-slate-400">
+              Pendiente: ${totalPendingMonth.toFixed(2)}
+            </span>
+          </div>
+          <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden border border-slate-700/60 flex">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted">
+            <span>{progressPercent}% completado</span>
+            {bcvRate > 0 && (
+              <span>Bs. {formatCurrencyVE(totalCommittedMonth * bcvRate)}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Quincena 15 vs Quincena 30 Breakdown */}
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-app">
+          <div className="p-2.5 rounded-2xl bg-surface/80 border border-app">
+            <span className="text-[10px] font-bold text-muted block uppercase">Quincena 15</span>
+            <span className="text-xs font-black text-app block">${totalQ1.toFixed(2)}</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-surface/80 border border-app">
+            <span className="text-[10px] font-bold text-muted block uppercase">Quincena 30</span>
+            <span className="text-xs font-black text-app block">${totalQ2.toFixed(2)}</span>
+          </div>
         </div>
       </div>
 
