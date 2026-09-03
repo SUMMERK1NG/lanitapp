@@ -50,39 +50,20 @@ import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { Skeleton } from './components/ui/Skeleton.tsx';
 import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2, WifiOff } from 'lucide-react';
 
-// Lazy loading de módulos secundarios para optimizar el bundle inicial y tiempo de carga
-const PlanningModule = lazy(() =>
-  import('./components/planning/PlanningModule.tsx').then((m) => ({ default: m.PlanningModule }))
-);
-const IncomesManagementModule = lazy(() =>
-  import('./components/IncomesManagementModule.tsx').then((m) => ({ default: m.IncomesManagementModule }))
-);
-const FixedExpensesModule = lazy(() =>
-  import('./components/FixedExpensesModule.tsx').then((m) => ({ default: m.FixedExpensesModule }))
-);
-const DebtManagementModule = lazy(() =>
-  import('./components/DebtManagementModule.tsx').then((m) => ({ default: m.DebtManagementModule }))
-);
-const SavingsModule = lazy(() =>
-  import('./components/SavingsModule.tsx').then((m) => ({ default: m.SavingsModule }))
-);
-const AccountsManagementModule = lazy(() =>
-  import('./components/AccountsManagementModule.tsx').then((m) => ({ default: m.AccountsManagementModule }))
-);
-const TransactionHistoryModule = lazy(() =>
-  import('./components/TransactionHistoryModule.tsx').then((m) => ({ default: m.TransactionHistoryModule }))
-);
-const RatesHistoryModule = lazy(() =>
-  import('./components/RatesHistoryModule.tsx').then((m) => ({ default: m.RatesHistoryModule }))
-);
-const SettingsView = lazy(() =>
-  import('./components/SettingsView.tsx').then((m) => ({ default: m.SettingsView }))
-);
+import { PlanningModule } from './components/planning/PlanningModule.tsx';
+import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
+import { FixedExpensesModule } from './components/FixedExpensesModule.tsx';
+import { DebtManagementModule } from './components/DebtManagementModule.tsx';
+import { SavingsModule } from './components/SavingsModule.tsx';
+import { AccountsManagementModule } from './components/AccountsManagementModule.tsx';
+import { TransactionHistoryModule } from './components/TransactionHistoryModule.tsx';
+import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
+import { SettingsView } from './components/SettingsView.tsx';
 const AuditPanel = lazy(() =>
   import('./components/AuditPanel.tsx').then((m) => ({ default: m.AuditPanel }))
 );
 import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
-import { getUserPreferences, updatePreference } from './lib/profilePreferences.ts';
+import { getUserPreferences } from './lib/profilePreferences.ts';
 import { checkAndNotifyDeficit } from './services/deficitAlertService.ts';
 import { logger } from './utils/logger.ts';
 
@@ -120,19 +101,20 @@ const ViewLoadingFallback: React.FC = () => (
 );
 
 export function App() {
-  const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
+  const [activeView, setActiveView] = useState<ActiveViewType>(() => {
+    try {
+      const saved = localStorage.getItem('lanitapp_last_active_view') as ActiveViewType;
+      if (saved && AVAILABLE_VIEWS.includes(saved)) return saved;
+    } catch {}
+    return 'dashboard';
+  });
 
-  const handleViewChange = async (newView: ActiveViewType) => {
+  const handleViewChange = useCallback((newView: ActiveViewType) => {
     setActiveView(newView);
-    if (currentUser?.id) {
-      try {
-        updateProfile({ last_active_view: newView });
-        await updatePreference(currentUser.id, 'last_active_view', newView);
-      } catch (error) {
-        logger.error('Error guardando última vista en Supabase:', error);
-      }
-    }
-  };
+    try {
+      localStorage.setItem('lanitapp_last_active_view', newView);
+    } catch {}
+  }, []);
   const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
   const isStoreLoading = useFinanceStore((state) => state.isLoading);
@@ -151,12 +133,17 @@ export function App() {
     updateProfile,
   } = useAuth();
 
-  // Sincronizar vista activa cuando el perfil del usuario esté disponible
+  // Sincronizar vista activa inicial si existe en el perfil del usuario y no hay en localStorage
   useEffect(() => {
     if (currentUser?.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
-      setActiveView(currentUser.last_active_view as ActiveViewType);
+      try {
+        const local = localStorage.getItem('lanitapp_last_active_view');
+        if (!local) {
+          setActiveView(currentUser.last_active_view as ActiveViewType);
+        }
+      } catch {}
     }
-  }, [currentUser?.last_active_view]);
+  }, [currentUser?.id]);
 
   // Selected period state (Month: 0-11, Year)
   const now = new Date();
@@ -220,9 +207,12 @@ export function App() {
       // Fetch fresh preferences from profiles in Supabase
       getUserPreferences(currentUser.id).then((prefs) => {
         if (prefs) {
-          if (prefs.last_active_view && AVAILABLE_VIEWS.includes(prefs.last_active_view as ActiveViewType)) {
-            setActiveView(prefs.last_active_view as ActiveViewType);
-          }
+          try {
+            const localSaved = localStorage.getItem('lanitapp_last_active_view');
+            if (!localSaved && prefs.last_active_view && AVAILABLE_VIEWS.includes(prefs.last_active_view as ActiveViewType)) {
+              setActiveView(prefs.last_active_view as ActiveViewType);
+            }
+          } catch {}
           if (prefs.keep_session !== undefined) {
             setKeepConnected(prefs.keep_session);
           }
@@ -260,9 +250,6 @@ export function App() {
           }
           if (updated.accent_color && updated.accent_color !== accentColor) {
             setAccentColor(updated.accent_color as AccentColor);
-          }
-          if (updated.last_active_view && AVAILABLE_VIEWS.includes(updated.last_active_view as ActiveViewType)) {
-            setActiveView(updated.last_active_view as ActiveViewType);
           }
           if (updated.keep_session !== undefined) {
             setKeepConnected(updated.keep_session);
@@ -642,7 +629,7 @@ export function App() {
 
           {/* VIEW 2: PLANIFICACIÓN INTEGRAL (GESTIÓN QUINCENAL & CALENDARIO) */}
           {activeView === 'fortnight' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <PlanningModule
                 selectedYear={selectedYear}
                 selectedMonth={selectedMonth}
@@ -677,7 +664,7 @@ export function App() {
 
           {/* VIEW 3: GESTIÓN INTEGRAL DE INGRESOS */}
           {activeView === 'incomes' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <IncomesManagementModule
                 fixedIncomes={fixedIncomes}
                 monthlyIncomeOverrides={monthlyIncomeOverrides}
@@ -697,7 +684,7 @@ export function App() {
 
           {/* VIEW 4: GESTIÓN DE GASTOS (FIJOS & VARIABLES) */}
           {activeView === 'fixed_expenses' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <FixedExpensesModule
                 fixedExpenses={fixedExpenses}
                 variableExpenses={variableExpenses}
@@ -717,7 +704,7 @@ export function App() {
 
           {/* VIEW 5: CONTROL DE DEUDAS */}
           {activeView === 'debts' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <DebtManagementModule
                 debts={debts}
                 debtPayments={debtPayments}
@@ -730,7 +717,7 @@ export function App() {
 
           {/* VIEW 6: PLANES DE AHORRO */}
           {activeView === 'savings' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <SavingsModule
                 savingsGoals={savingsGoals}
                 savingContributions={savingContributions}
@@ -741,7 +728,7 @@ export function App() {
 
           {/* VIEW: CAPITAL & CUENTAS (CAJA CHICA / FONDOS) */}
           {activeView === 'accounts' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <AccountsManagementModule
                 accounts={accounts}
                 transactions={transactions}
@@ -753,7 +740,7 @@ export function App() {
 
           {/* VIEW 7: HISTORIAL INTEGRAL DE MOVIMIENTOS & AUDITORÍA */}
           {activeView === 'transactions' && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <TransactionHistoryModule
                 transactions={transactions}
                 categories={categories}
@@ -780,7 +767,7 @@ export function App() {
 
           {/* VIEW 8: TASAS BCV & CALCULADORA */}
           {activeView === 'rates' && (
-            <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="space-y-4">
               <div className="p-5 rounded-3xl bg-surface border border-app space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -843,7 +830,7 @@ export function App() {
 
           {/* VIEW 9: CONFIGURACIÓN & BACKUP (ADMIN ONLY) */}
           {activeView === 'settings' && isAdmin && (
-            <div className="animate-in fade-in duration-200">
+            <div className="w-full">
               <SettingsView
                 categories={categories}
                 accounts={accounts}
