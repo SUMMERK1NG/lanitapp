@@ -399,7 +399,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             </div>
 
             {selectedDebt && (
-              <div className="grid grid-cols-3 gap-1.5 pt-2">
+              <div className="grid grid-cols-2 gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -412,7 +412,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                     setCustomAmount(fullBal);
                     setNotes(`Liquidación total de deuda (${debtCurrency}${fullBal.toFixed(2)})`);
                   }}
-                  className="py-2 px-1.5 rounded-xl bg-primary-custom/15 border border-primary-custom/40 hover:bg-primary-custom/25 text-[10px] font-black text-primary-custom transition-all text-center cursor-pointer shadow-xs"
+                  className="py-2.5 px-3 rounded-xl bg-primary-custom/15 border border-primary-custom/40 hover:bg-primary-custom/25 text-xs font-black text-primary-custom transition-all text-center cursor-pointer shadow-xs"
                 >
                   🎯 Liquidar Total ({debtCurrency}{Number(selectedDebt.current_balance || 0).toFixed(2)})
                 </button>
@@ -426,25 +426,20 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                       setPaymentMode('mixed');
                       setPrincipalAmount(Math.max(0, Number((cuotaFixed - scheduledInterest).toFixed(2))));
                       setInterestAmount(scheduledInterest);
+                    } else {
+                      setPaymentMode('custom');
                     }
                     setCustomAmount(cuotaFixed);
-                    setNotes(`Abono de cuota (${debtCurrency}${cuotaFixed.toFixed(2)})`);
-                  }}
-                  className="py-2 px-1.5 rounded-xl bg-surface border border-app hover:border-primary-custom text-[10px] font-bold text-app transition-all text-center cursor-pointer shadow-xs"
-                >
-                  ⚡ Pagar 1 Cuota
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
                     setNotes('');
                     const inputEl = document.querySelector('input[type="text"]') as HTMLInputElement | null;
-                    if (inputEl) inputEl.focus();
+                    if (inputEl) {
+                      inputEl.focus();
+                      inputEl.select();
+                    }
                   }}
-                  className="py-2 px-1.5 rounded-xl bg-surface border border-dashed border-app hover:border-app text-[10px] font-bold text-muted hover:text-app transition-all text-center cursor-pointer shadow-xs"
+                  className="py-2.5 px-3 rounded-xl bg-surface border border-app hover:border-primary-custom text-xs font-bold text-app transition-all text-center cursor-pointer shadow-xs"
                 >
-                  ✏️ Monto Personalizado
+                  ✏️ Abonar Monto Personalizado
                 </button>
               </div>
             )}
