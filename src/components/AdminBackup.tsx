@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Server,
-  ShieldCheck,
   FileCode,
   Lock,
   Activity,
@@ -169,12 +168,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-app">Persistencia Cloud en Tiempo Real</h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-custom/20 text-primary-custom font-extrabold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Admin Only
-                </span>
-              </div>
+              <h3 className="text-sm font-bold text-app">Persistencia Cloud en Tiempo Real</h3>
               <p className="text-xs text-muted">Sincronización bidireccional continua con Supabase</p>
             </div>
           </div>

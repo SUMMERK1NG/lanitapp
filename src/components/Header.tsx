@@ -216,7 +216,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenAudit}
               className="p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-primary-custom shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
-              title="Diagnóstico & Auditoría Supabase (Solo Admin)"
+              title="Diagnóstico & Auditoría Supabase"
             >
               <Activity className="w-4 h-4" />
             </button>

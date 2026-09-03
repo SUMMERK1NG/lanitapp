@@ -9,7 +9,6 @@ import {
   Copy,
   Check,
   Search,
-  ShieldCheck,
   Server,
   Zap,
 } from 'lucide-react';
@@ -74,14 +73,9 @@ export const AuditPanel: React.FC<AuditPanelProps> = ({ isOpen, onClose, current
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-app leading-tight">
-                  Auditoría & Diagnóstico Supabase
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Solo Admin
-                </span>
-              </div>
+              <h3 className="text-base font-black text-app leading-tight">
+                Auditoría & Diagnóstico Supabase
+              </h3>
               <p className="text-[11px] text-muted mt-0.5">
                 Validador en tiempo real de tablas, RLS, lectura y escritura
               </p>
