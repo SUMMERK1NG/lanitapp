@@ -311,7 +311,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredExpenses = fixedExpenses.filter(matchesUser);
       const filteredVarExpenses = variableExpenses.filter(matchesUser);
       const filteredDebts = debts.filter(matchesUser);
-      const filteredDebtPayments = debtPayments.filter(matchesUser);
+      const filteredDebtPayments = debtPayments.filter(matchesUser).map((p: any) => ({
+        ...p,
+        amount: Number(p.amount ?? p.amount_paid ?? 0),
+      }));
       const filteredSavings = savingsGoals.filter(matchesUser);
       const filteredContribs = savingContributions.filter(matchesUser);
       const filteredStates = fortnightItemStates.filter(matchesUser);
@@ -450,7 +453,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       }));
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
       const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
-      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({ ...p, id: ensureValidUuid(p.id), sync_status: 'synced' }));
+      const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({
+        ...p,
+        id: ensureValidUuid(p.id),
+        amount: Number(p.amount ?? p.amount_paid ?? 0),
+        sync_status: 'synced',
+      }));
       const savingsGoals: SavingsGoal[] = rawSavings.map((s: any) => ({ ...s, id: ensureValidUuid(s.id), sync_status: 'synced' }));
       const savingContributions: SavingContribution[] = rawContribs.map((c: any) => ({ ...c, id: ensureValidUuid(c.id), sync_status: 'synced' }));
       const fortnightItemStates: FortnightItemState[] = rawStates.map((st: any) => ({ ...st, id: ensureValidUuid(st.id), sync_status: 'synced' }));
@@ -695,7 +703,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debtPayments: s.debtPayments.filter((p) => p.id !== oldRow.id) }));
           await db.debt_payments.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: DebtPayment = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
+          const item: DebtPayment = {
+            ...newRow,
+            id: ensureValidUuid(newRow.id),
+            amount: Number(newRow.amount ?? newRow.amount_paid ?? 0),
+            sync_status: 'synced',
+          };
           set((s) => ({
             debtPayments: s.debtPayments.some((p) => p.id === item.id)
               ? s.debtPayments.map((p) => (p.id === item.id ? item : p))

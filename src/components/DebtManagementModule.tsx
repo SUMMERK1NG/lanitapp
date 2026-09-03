@@ -42,22 +42,27 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
   const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<string | undefined>(undefined);
   const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
 
+  // Safe collections
+  const safeDebts = (Array.isArray(debts) ? debts : []).filter((d): d is Debt => Boolean(d && d.id));
+  const safePayments = (Array.isArray(debtPayments) ? debtPayments : []).filter(Boolean);
+
   // Financial Metrics
-  const totalDebtOriginal = debts.reduce((sum, d) => sum + d.total_amount, 0);
-  const totalCurrentBalance = debts.reduce((sum, d) => sum + d.current_balance, 0);
-  const totalPaid = totalDebtOriginal - totalCurrentBalance;
+  const totalDebtOriginal = safeDebts.reduce((sum, d) => sum + (Number(d?.total_amount) || 0), 0);
+  const totalCurrentBalance = safeDebts.reduce((sum, d) => sum + (Number(d?.current_balance) || 0), 0);
+  const totalPaid = Math.max(0, totalDebtOriginal - totalCurrentBalance);
 
   // Next fortnight commitments for active debts
   const now = new Date();
   const currentFortnight = now.getDate() <= 15 ? 'q1' : 'q2';
-  const currentMonthCommitment = debts
-    .filter((d) => d.status === 'active' && d.current_balance > 0)
+  const currentMonthCommitment = safeDebts
+    .filter((d) => d.status === 'active' && (Number(d.current_balance) || 0) > 0)
     .filter((d) => !d.fortnight_due || d.fortnight_due === 'both' || d.fortnight_due === currentFortnight)
     .reduce((sum, d) => {
+      const curBal = Number(d.current_balance) || 0;
       let cuota = 0;
       if (d.debt_mode === 'open') {
         if (d.has_interest) {
-          const monthlyInterest = Number(d.interest_amount || ((d.current_balance * (d.interest_rate || 0)) / 100));
+          const monthlyInterest = Number(d.interest_amount || ((curBal * (Number(d.interest_rate) || 0)) / 100));
           if (d.interest_frequency === 'fortnightly') {
             cuota = monthlyInterest;
           } else if (d.interest_fortnight) {
@@ -68,17 +73,18 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
             cuota = monthlyInterest;
           }
         } else {
-          cuota = d.installment_amount || 0;
+          cuota = Number(d.installment_amount) || 0;
         }
       } else {
-        cuota = d.installment_amount || (d.pending_installments ? d.current_balance / d.pending_installments : d.current_balance);
+        cuota = Number(d.installment_amount) || (d.pending_installments ? curBal / d.pending_installments : curBal);
       }
-      return sum + Math.min(d.current_balance, cuota);
+      return sum + Math.min(curBal, cuota);
     }, 0);
 
   // Filtered Debts
-  const filteredDebts = debts.filter((d) => {
-    const isPaid = d.status === 'paid' || d.current_balance <= 0;
+  const filteredDebts = safeDebts.filter((d) => {
+    const curBal = Number(d.current_balance) || 0;
+    const isPaid = d.status === 'paid' || curBal <= 0;
     if (filterTab === 'active') return !isPaid;
     if (filterTab === 'paid') return isPaid;
     return true;
@@ -227,12 +233,24 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
           </div>
         ) : (
           filteredDebts.map((debt) => {
-            const isPaid = debt.status === 'paid' || debt.current_balance <= 0;
-            const payments = debtPayments.filter((p) => p.debt_id === debt.id);
+            const curBal = Number(debt.current_balance) || 0;
+            const isPaid = debt.status === 'paid' || curBal <= 0;
+            const payments = safePayments.filter((p) => p && p.debt_id === debt.id);
             const isExpanded = expandedDebtId === debt.id;
-            const paidForThisDebt = debt.total_amount - debt.current_balance;
-            const pct = debt.total_amount > 0 ? Math.round((paidForThisDebt / debt.total_amount) * 100) : 100;
-            const cuota = debt.installment_amount || (debt.pending_installments ? debt.current_balance / debt.pending_installments : debt.current_balance);
+            const totalAmount = Number(debt.total_amount) || 0;
+            const paidForThisDebt = Math.max(0, totalAmount - curBal);
+            const pct = totalAmount > 0 ? Math.round((paidForThisDebt / totalAmount) * 100) : 100;
+            let cuota = 0;
+            if (debt.debt_mode === 'open') {
+              if (debt.has_interest) {
+                const monthlyInterest = Number(debt.interest_amount || ((curBal * (Number(debt.interest_rate) || 0)) / 100));
+                cuota = debt.interest_frequency === 'fortnightly' ? monthlyInterest : debt.fortnight_due === 'both' ? monthlyInterest / 2 : monthlyInterest;
+              } else {
+                cuota = Number(debt.installment_amount) || 0;
+              }
+            } else {
+              cuota = Number(debt.installment_amount) || (debt.pending_installments ? curBal / debt.pending_installments : curBal);
+            }
 
             return (
               <div
@@ -279,7 +297,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                         <span>
                           Cuotas:{' '}
                           <strong className="text-[#FF914D]">
-                            {debt.pending_installments} de {debt.total_installments || debt.pending_installments} restantes (~{currency}{cuota.toFixed(2)} c/u)
+                            {debt.pending_installments} de {debt.total_installments || debt.pending_installments} restantes (~{currency}{Number(cuota || 0).toFixed(2)} c/u)
                           </strong>
                         </span>
                       )}
@@ -294,7 +312,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                       {(debt.has_interest || (debt.interest_rate !== undefined && debt.interest_rate > 0)) && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
                           <span>Interés: {debt.interest_rate}%</span>
-                          {debt.interest_amount ? <span>(${debt.interest_amount.toFixed(2)} {debt.interest_frequency === 'fortnightly' ? 'Q' : 'M'})</span> : null}
+                          {debt.interest_amount ? <span>(${Number(debt.interest_amount || 0).toFixed(2)} {debt.interest_frequency === 'fortnightly' ? 'Q' : 'M'})</span> : null}
                         </span>
                       )}
 
@@ -319,7 +337,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                         Saldo Restante
                       </span>
                       <span className="text-xl font-black text-[#FF914D]">
-                        {currency}{debt.current_balance.toFixed(2)}
+                        {currency}{curBal.toFixed(2)}
                       </span>
                     </div>
 
@@ -363,8 +381,8 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                 {/* Progress bar */}
                 <div className="px-4 sm:px-5 pb-3">
                   <div className="flex justify-between text-[10px] text-muted mb-1">
-                    <span>Amortizado: ${paidForThisDebt.toFixed(2)}</span>
-                    <span>Total Original: ${debt.total_amount.toFixed(2)} ({pct}%)</span>
+                    <span>Amortizado: ${Number(paidForThisDebt || 0).toFixed(2)}</span>
+                    <span>Total Original: ${totalAmount.toFixed(2)} ({pct}%)</span>
                   </div>
                   <div className="w-full bg-card h-2 rounded-full overflow-hidden">
                     <div
@@ -393,36 +411,40 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
                       <p className="text-xs text-muted py-2">No se han registrado abonos todavía.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {payments.map((p) => (
-                          <div
-                            key={p.id}
-                            className="flex items-center justify-between p-2 rounded-xl bg-surface border border-app text-xs"
-                          >
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-semibold text-app">{p.payment_date}</span>
-                                  <span className="text-[10px] text-muted">
-                                    ({p.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})
-                                  </span>
+                        {payments.map((p, pIdx) => {
+                          const pAmount = Number(p?.amount ?? (p as any)?.amount_paid ?? 0);
+                          const pAmountInBs = p?.amount_in_bs !== undefined && p?.amount_in_bs !== null ? Number(p.amount_in_bs) : undefined;
+                          return (
+                            <div
+                              key={p?.id || `p_${pIdx}`}
+                              className="flex items-center justify-between p-2 rounded-xl bg-surface border border-app text-xs"
+                            >
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-semibold text-app">{p?.payment_date || 'Sin fecha'}</span>
+                                    <span className="text-[10px] text-muted">
+                                      ({p?.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})
+                                    </span>
+                                  </div>
+                                  {p?.notes && (
+                                    <span className="text-[10px] text-muted block truncate max-w-xs">{p.notes}</span>
+                                  )}
                                 </div>
-                                {p.notes && (
-                                  <span className="text-[10px] text-muted block truncate max-w-xs">{p.notes}</span>
+                              </div>
+
+                              <div className="text-right">
+                                <span className="font-black text-[#00C2C7]">+{currency}{pAmount.toFixed(2)}</span>
+                                {pAmountInBs !== undefined && (
+                                  <span className="text-[10px] text-muted block">
+                                    Bs. {pAmountInBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                                  </span>
                                 )}
                               </div>
                             </div>
-
-                            <div className="text-right">
-                              <span className="font-black text-[#00C2C7]">+{currency}{p.amount.toFixed(2)}</span>
-                              {p.amount_in_bs && (
-                                <span className="text-[10px] text-muted block">
-                                  Bs. {p.amount_in_bs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
