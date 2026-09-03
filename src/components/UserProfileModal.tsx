@@ -191,7 +191,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <User className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-app">Mi Perfil y Preferencias</h3>
+              <h3 className="text-base font-bold text-app">Mi Perfil</h3>
               <p className="text-[11px] text-muted">Ajustes personales y personalización</p>
             </div>
           </div>

@@ -81,7 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Settings className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-app">Configuración y Preferencias</h2>
+            <h2 className="text-base font-bold text-app">Configuración</h2>
             <p className="text-xs text-muted mt-0.5">Ajustes visuales, usuarios y respaldo</p>
           </div>
         </div>
@@ -151,7 +151,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {/* Theme Modes */}
           <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-app">Modos de Interfaz (Temas)</h3>
+              <h3 className="text-sm font-bold text-app">Tema de Interfaz</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
