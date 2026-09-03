@@ -29,13 +29,17 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
       <div
-        className="w-full sm:max-w-md bg-surface border border-app rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 duration-200"
+        className="w-full sm:max-w-md bg-surface border border-app rounded-t-3xl sm:rounded-3xl shadow-2xl text-app max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 cursor-default"
         role="dialog"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+        {/* Header - Fijo arriba */}
+        <div className="flex items-center justify-between p-5 sm:p-6 pb-3 border-b border-app shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold relative shadow-inner">
               <PlusCircle className="w-5 h-5" />
@@ -44,20 +48,19 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
               <h3 className="text-sm sm:text-base font-black text-app leading-tight">
                 ¿Qué deseas registrar?
               </h3>
-              <p className="text-[11px] text-muted">
-                Acciones rápidas para tu planificación y control de gastos
-              </p>
+              <p className="text-[11px] text-muted">Acciones rápidas del mes</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+            className="p-2 rounded-full hover:bg-surface-hover text-muted hover:text-app transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-2.5">
+        {/* Content con scrollbar interno seguro */}
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-2.5">
           {/* 1. Gasto Fijo Recurrente */}
           {onSelectFixedExpense && (
             <button

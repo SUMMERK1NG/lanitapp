@@ -577,8 +577,15 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
 
       {/* Modal Nueva / Editar Meta de Ahorro */}
       {isGoalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-lg sm:max-w-xl bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150 cursor-pointer"
+          onClick={() => setIsGoalModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg sm:max-w-xl bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
@@ -886,8 +893,15 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
 
       {/* Modal Aportar Ahora a Meta */}
       {isContributionModalOpen && selectedGoalForContrib && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setIsContributionModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">

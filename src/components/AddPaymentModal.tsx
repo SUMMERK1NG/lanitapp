@@ -345,10 +345,17 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[90vh] overflow-y-auto animate-in zoom-in-95 no-scrollbar">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 cursor-default"
+        role="dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header - Fijo arriba para evitar que el scrollbar sobresalga */}
+        <div className="flex items-center justify-between p-5 sm:p-6 pb-3 border-b border-app shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
               <DollarSign className="w-4 h-4" />
@@ -366,6 +373,8 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
           </button>
         </div>
 
+        {/* Contenido con scrollbar interno seguro */}
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Target Debt Selection */}
           <div>
@@ -776,6 +785,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

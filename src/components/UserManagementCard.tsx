@@ -544,8 +544,15 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
       {/* MODAL 1: EDITAR DATOS DE USUARIO */}
       {/* ------------------------------------------------------------- */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setEditingUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-app">
               <div className="flex items-center gap-2">
@@ -679,8 +686,15 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
       {/* MODAL 2: GESTIÓN DE CONTRASEÑA DE USUARIO */}
       {/* ------------------------------------------------------------- */}
       {passwordTargetUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setPasswordTargetUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-app">
               <div className="flex items-center gap-2">
@@ -810,8 +824,15 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
       {/* MODAL 3: CONFIRMACIÓN DE ELIMINACIÓN DE USUARIO */}
       {/* ------------------------------------------------------------- */}
       {deletingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#1C2A4A]/95 border border-[#ef4444]/30 rounded-3xl p-6 shadow-2xl text-white space-y-4 animate-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setDeletingUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-[#1C2A4A]/95 border border-[#ef4444]/30 rounded-3xl p-6 shadow-2xl text-white space-y-4 animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-[#ef4444]/20 text-[#ef4444] flex items-center justify-center font-bold shrink-0">
                 <AlertTriangle className="w-6 h-6" />

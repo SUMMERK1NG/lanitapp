@@ -203,10 +203,14 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[94vh] flex flex-col justify-between overflow-hidden animate-in zoom-in-95"
+        className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[94vh] flex flex-col justify-between overflow-hidden animate-in zoom-in-95 cursor-default"
         role="dialog"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-app">

@@ -58,8 +58,15 @@ export const AuditPanel: React.FC<AuditPanelProps> = ({ isOpen, onClose, current
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-surface border border-app rounded-3xl shadow-2xl text-app flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl bg-surface border border-app rounded-3xl shadow-2xl text-app flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 cursor-default"
+        role="dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-app flex items-center justify-between bg-card/40">
           <div className="flex items-center gap-3">

@@ -179,13 +179,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in cursor-pointer"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app max-h-[92vh] overflow-y-auto animate-in zoom-in-95"
+        className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 cursor-default"
         role="dialog"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+        {/* Header - Fijo arriba para que el scrollbar no sobresalga en las esquinas */}
+        <div className="flex items-center justify-between p-5 pb-3 border-b border-app shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
               <User className="w-4 h-4" />
@@ -203,7 +207,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </button>
         </div>
 
-        {/* User Role & Identity Badge */}
+        {/* Contenido con scrollbar interno seguro */}
+        <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+          {/* User Role & Identity Badge */}
         <div className="p-3.5 rounded-2xl bg-card border border-app mb-4 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -485,6 +491,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             )}
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
