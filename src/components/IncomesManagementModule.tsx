@@ -968,11 +968,27 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       {/* Add / Edit Fixed Income Modal */}
       {isFixedModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto no-scrollbar">
-            <h3 className="text-base font-bold mb-4">
-              {editingFixed ? 'Editar Ingreso Fijo' : 'Nuevo Ingreso Fijo Recurrente'}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setIsFixedModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+              <h3 className="text-base font-bold text-app">
+                {editingFixed ? 'Editar Ingreso Fijo' : 'Nuevo Ingreso Fijo Recurrente'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsFixedModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveFixed} className="space-y-3.5">
               {/* 1. Nombre del Ingreso (Obligatorio) */}
@@ -1306,11 +1322,27 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       {/* Add / Edit Variable Income Modal */}
       {isVarModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto no-scrollbar">
-            <h3 className="text-base font-bold mb-4">
-              {editingVar ? 'Editar Ingreso Extra' : 'Registrar Ingreso Variable / Extra'}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setIsVarModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 max-h-[90vh] overflow-y-auto cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
+              <h3 className="text-base font-bold text-app">
+                {editingVar ? 'Editar Ingreso Extra' : 'Registrar Ingreso Variable / Extra'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsVarModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-card text-muted hover:text-app transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveVar} className="space-y-3.5">
               {/* 1. Nombre del Ingreso Extra (Obligatorio) */}
@@ -1671,8 +1703,15 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
       {/* Quick Create Account Sub-Modal */}
       {isQuickAccountModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md cursor-pointer animate-in fade-in"
+          onClick={() => setIsQuickAccountModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 shadow-2xl text-app animate-in zoom-in-95 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-app mb-4">
               <h4 className="text-sm font-bold text-app flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-primary-custom" />

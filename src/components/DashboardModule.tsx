@@ -1073,8 +1073,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       {/* MODAL 1: PERSONALIZAR DASHBOARD */}
       {/* ================================================================ */}
       {isCustomizeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in cursor-pointer"
+          onClick={() => setIsCustomizeModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-5 shadow-2xl space-y-4 cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-app">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-primary-custom" />
@@ -1150,8 +1157,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       {/* MODAL 2: VISTA PREVIA Y EXPORTACIÓN EJECUTIVA PDF */}
       {/* ================================================================ */}
       {isPrintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-2xl bg-surface border border-app rounded-3xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in cursor-pointer"
+          onClick={() => setIsPrintModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl bg-surface border border-app rounded-3xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto cursor-default"
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-app">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-primary-custom" />
