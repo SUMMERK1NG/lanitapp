@@ -8,7 +8,13 @@ import { sendPasswordResetEmail } from '../lib/emailConfig.ts';
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    try {
+      const flash = sessionStorage.getItem('lanitapp_auth_flash_error');
+      if (flash) return flash;
+    } catch {}
+    return null;
+  });
 
   // Initialize auth session on load (F5 / start)
   const initAuth = useCallback(async () => {
@@ -255,6 +261,12 @@ export function useAuth() {
     const client = supabase;
     if (isSupabaseConfigured() && client) {
       const { data: listener } = client.auth.onAuthStateChange(async (event, session) => {
+        // Si hay un error de enlace expirado o inválido activo, bloquear cualquier inicio de sesión automático
+        if (sessionStorage.getItem('lanitapp_auth_flash_error')) {
+          logger.warn('[Auth] Bloqueando evento onAuthStateChange debido a flash error de enlace expirado.');
+          return;
+        }
+
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
           const authUser = session.user;
           const { data: profileData, error: profileErr } = await client
@@ -395,6 +407,7 @@ export function useAuth() {
     setLoading(true);
 
     const cleanCedula = fullCedula.trim();
+    sessionStorage.removeItem('lanitapp_auth_flash_error');
     if (!cleanCedula || !password) {
       setLoading(false);
       const msg = 'Por favor ingresa tu cédula de identidad y contraseña.';
