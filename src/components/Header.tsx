@@ -75,6 +75,40 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
+  // Rotación automática de tasas en la versión móvil (Dólar, Euro y Promedio)
+  const mobileRateItems = useMemo(() => [
+    {
+      key: 'usd',
+      label: 'Dólar BCV',
+      shortLabel: '$',
+      color: 'text-orange-400',
+      value: rates.bcvDollar,
+    },
+    {
+      key: 'eur',
+      label: 'Euro BCV',
+      shortLabel: '€',
+      color: 'text-[#00C2C7]',
+      value: rates.bcvEuro,
+    },
+    {
+      key: 'parallel',
+      label: 'Promedio Paralelo',
+      shortLabel: 'PROM',
+      color: 'text-[#FF914D]',
+      value: rates.parallelDollar,
+    },
+  ], [rates.bcvDollar, rates.bcvEuro, rates.parallelDollar]);
+
+  const [activeRateIndex, setActiveRateIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveRateIndex((prev) => (prev + 1) % mobileRateItems.length);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [mobileRateItems.length]);
+
   const notifications = useMemo(() => {
     const all = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
     return all.filter((n) => !dismissedIds.has(n.id));
@@ -90,10 +124,10 @@ export const Header: React.FC<HeaderProps> = ({
   );
 
   return (
-    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-app px-2.5 sm:px-6 py-2 transition-colors">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Side: Active View Title (Mobile shows miniature icon only, Desktop shows view title + sidebar toggle) */}
-        <div className="flex items-center gap-2.5 shrink-0">
+    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-app px-2 sm:px-6 py-2 transition-colors">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
+        {/* Left Side: Brand Logo on mobile / View Title on Desktop */}
+        <div className="flex items-center gap-2 shrink-0">
           {onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
@@ -109,19 +143,51 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <h2 className="text-sm sm:text-base font-black tracking-tight text-app leading-tight">
+          {/* Logo en Móvil (Sustituye 'Lanita Global' para liberar espacio y asegurar que el avatar se vea completo) */}
+          <div className="flex items-center sm:hidden shrink-0">
+            <img
+              src="/icon.png"
+              alt="Lanitapp"
+              className="w-7 h-7 object-contain drop-shadow-xs"
+            />
+          </div>
+
+          {/* Título en Desktop / Tablets */}
+          <h2 className="hidden sm:block text-sm sm:text-base font-black tracking-tight text-app leading-tight truncate">
             {activeViewTitle}
           </h2>
         </div>
 
-        {/* Mobile-Only Compact BCV Rate Pill */}
+        {/* Mobile-Only Compact Auto-Rotating Rate Pill (Euro, Promedio y Dólar) */}
         <div className="sm:hidden flex items-center justify-center shrink-0">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 border border-slate-700/60 text-xs whitespace-nowrap">
-            <span className="text-orange-400 font-bold">$</span>
-            <span className="text-white font-semibold">
-              {rates.bcvDollar ? `Bs. ${rates.bcvDollar.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Cargando...'}
-            </span>
-          </div>
+          {(() => {
+            const current = mobileRateItems[activeRateIndex] || mobileRateItems[0];
+            const formatted = current.value
+              ? `Bs. ${current.value.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : 'Cargando...';
+
+            return (
+              <button
+                type="button"
+                onClick={() => setActiveRateIndex((prev) => (prev + 1) % mobileRateItems.length)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-xs whitespace-nowrap cursor-pointer transition-all active:scale-95 select-none"
+                title={`${current.label}: ${formatted}. Toca para alternar (Dólar, Euro, Promedio).`}
+              >
+                <span
+                  key={current.key}
+                  className={`${current.color} font-bold text-xs animate-in fade-in zoom-in-95 duration-200`}
+                >
+                  {current.shortLabel}
+                </span>
+                <span
+                  key={`${current.key}-val`}
+                  className="text-white font-semibold tabular-nums animate-in fade-in duration-200"
+                >
+                  {formatted}
+                </span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* Desktop Live BCV & Parallel Rates Widget */}
@@ -184,11 +250,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Action Controls, Notification Bell & User Avatar */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Botón Único de Calculadora */}
           <button
             onClick={onOpenConverter}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0"
             title="Abrir Calculadora y Conversor de Divisas"
           >
             <Calculator className="w-3.5 h-3.5" />
@@ -196,10 +262,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Centro de Notificaciones (Icono de Campana) */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={onOpenNotifications}
-              className="relative p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-app shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="relative p-1.5 sm:p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-app shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
               title="Centro de Notificaciones y Alertas"
             >
               <Bell className="w-4 h-4" />
@@ -215,7 +281,7 @@ export const Header: React.FC<HeaderProps> = ({
           {activeProfile?.role === 'admin' && onOpenAudit && (
             <button
               onClick={onOpenAudit}
-              className="p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-primary-custom shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-card hover:bg-surface-hover border border-app text-primary-custom shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
               title="Diagnóstico & Auditoría Supabase"
             >
               <Activity className="w-4 h-4" />
@@ -252,7 +318,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={onSync}
                 disabled={effectiveStatus === 'syncing' || !isOnline}
-                className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${buttonClass}`}
+                className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer shrink-0 ${buttonClass}`}
                 title={tooltipText}
               >
                 {dotElement}
@@ -266,7 +332,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Botón de Perfil / Avatar (Visible en móvil, en desktop ya está en la barra lateral) */}
           <button
             onClick={onOpenProfile}
-            className="lg:hidden w-8 h-8 rounded-xl bg-card hover:bg-surface-hover border-2 border-primary-custom flex items-center justify-center text-sm overflow-hidden shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className="lg:hidden w-8 h-8 rounded-xl bg-card hover:bg-surface-hover border-2 border-primary-custom flex items-center justify-center text-sm overflow-hidden shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
             title="Perfil de Usuario & Ajustes de Tema"
           >
             {isImageAvatar ? (
