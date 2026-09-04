@@ -21,6 +21,7 @@ import type {
 import {
   db,
   DEFAULT_CATEGORIES,
+  seedUserDefaultCategories,
   toSupabaseAccountPayload,
   getFortnightPeriodKey,
   getActiveUserId,
@@ -338,10 +339,13 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredTxs = transactions.filter(matchesUser);
 
       const userCategories = categories.filter((c) => c.user_id === userId);
+      const isSeeded = typeof localStorage !== 'undefined' && userId && localStorage.getItem('lanitapp_cat_seeded_' + userId);
       const fallbackCategories = categories.filter((c) => !c.user_id);
       const resolvedCategories =
         userCategories.length > 0
           ? userCategories
+          : isSeeded
+          ? []
           : fallbackCategories.length > 0
           ? fallbackCategories
           : DEFAULT_CATEGORIES;
@@ -433,14 +437,20 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       ]);
 
       const profiles: UserProfile[] = rawProfiles;
+
+      // Categorías individuales por usuario
       const userCats = rawCategories.filter((c: any) => c.user_id === userId);
-      const fallbackCats = rawCategories.filter((c: any) => !c.user_id);
-      const categories: Category[] =
-        userCats.length > 0
-          ? userCats
-          : fallbackCats.length > 0
-          ? fallbackCats
-          : DEFAULT_CATEGORIES;
+      const localCats = await db.categories.where('user_id').equals(userId).toArray();
+
+      let categories: Category[] = [];
+      if (userCats.length > 0) {
+        categories = userCats;
+        await db.categories.bulkPut(userCats);
+      } else if (localCats.length > 0) {
+        categories = localCats;
+      } else {
+        categories = await seedUserDefaultCategories(userId);
+      }
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({
         id: ensureValidUuid(a.id),
