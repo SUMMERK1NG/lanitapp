@@ -58,7 +58,6 @@ export const recordUserAccess = async (userId: string, explicitIp?: string) => {
   const payload: Record<string, any> = {
     updated_at: nowIso,
     last_sign_in_at: nowIso,
-    last_login_at: nowIso,
   };
   if (clientIp) {
     payload.last_sign_in_ip = clientIp;
@@ -602,7 +601,6 @@ export function useAuth() {
               keep_session: keepSessionVal,
               updated_at: nowIso,
               last_sign_in_at: nowIso,
-              last_login_at: nowIso,
             };
             if (clientIp) {
               loginUpdatePayload.last_sign_in_ip = clientIp;
