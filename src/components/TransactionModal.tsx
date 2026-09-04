@@ -241,17 +241,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         : 'border-app bg-card text-muted hover:bg-surface hover:text-app'
                     }`}
                   >
-                    <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center mb-1 transition-all"
-                      style={{
-                        backgroundColor: isSelected
-                          ? 'transparent'
-                          : cat.color ? `${cat.color}20` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.15)',
-                        color: isSelected
-                          ? 'var(--primary-color, #FF914D)'
-                          : cat.color || 'var(--primary-color, #f59e0b)',
-                      }}
-                    >
+                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center mb-1 transition-all ${
+                      isSelected
+                        ? 'bg-transparent text-primary-custom'
+                        : 'bg-primary-custom/15 text-primary-custom'
+                    }`}>
                       <CategoryIcon iconName={cat.icon} size={16} className="w-4 h-4" />
                     </div>
                     <span className="text-[11px] font-bold truncate w-full">

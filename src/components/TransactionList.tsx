@@ -275,14 +275,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     >
                       {/* Left: Icon & Details */}
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
-                          style={{
-                            backgroundColor: category?.color ? `${category.color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
-                            color: category?.color || 'var(--primary-color, #f59e0b)',
-                            borderColor: category?.color ? `${category.color}30` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
-                          }}
-                        >
+                        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-transform shadow-xs">
                           <CategoryIcon
                             iconName={category?.icon || (isExpense ? 'ArrowUpRight' : 'ArrowDownLeft')}
                             size={18}

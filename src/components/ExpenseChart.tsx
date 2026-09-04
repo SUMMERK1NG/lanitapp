@@ -166,10 +166,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({
           <div key={item.category_id} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <div
-                  className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px]"
-                  style={{ backgroundColor: item.color }}
-                >
+                <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] bg-primary-custom/15 text-primary-custom border border-primary-custom/25">
                   <CategoryIcon iconName={item.icon} size={12} className="w-3 h-3" />
                 </div>
                 <span className="text-slate-200 font-semibold">{item.category_name}</span>

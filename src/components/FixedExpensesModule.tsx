@@ -626,14 +626,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2.5 truncate">
-                        <div
-                          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
-                          style={{
-                            backgroundColor: cat?.color ? `${cat.color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
-                            color: cat?.color || 'var(--primary-color, #f59e0b)',
-                            borderColor: cat?.color ? `${cat.color}30` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
-                          }}
-                        >
+                        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-transform shadow-xs">
                           <CategoryIcon iconName={cat?.icon || 'Receipt'} className="w-5 h-5" />
                         </div>
                         <div className="truncate">
@@ -742,14 +735,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5 truncate">
-                        <div
-                          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
-                          style={{
-                            backgroundColor: cat?.color ? `${cat.color}18` : 'rgba(var(--primary-color-rgb, 255, 145, 77), 0.12)',
-                            color: cat?.color || 'var(--primary-color, #FF914D)',
-                            borderColor: cat?.color ? `${cat.color}30` : 'rgba(var(--primary-color-rgb, 255, 145, 77), 0.25)',
-                          }}
-                        >
+                        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-transform shadow-xs">
                           <CategoryIcon iconName={cat?.icon || 'ShoppingCart'} className="w-5 h-5" />
                         </div>
                         <div className="truncate">

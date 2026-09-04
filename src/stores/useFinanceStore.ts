@@ -353,6 +353,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const sanitizedCategories = resolvedCategories.map((c) => ({
         ...c,
         name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+        color: '#FF914D',
       }));
 
       set({
@@ -460,6 +461,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       categories = categories.map((c) => ({
         ...c,
         name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+        color: '#FF914D',
       }));
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({

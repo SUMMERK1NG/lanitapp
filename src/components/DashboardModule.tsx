@@ -1068,10 +1068,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                       className="p-2.5 rounded-2xl bg-card border border-app flex items-center justify-between hover:border-app-hover transition-all"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0"
-                          style={{ backgroundColor: cat?.color || '#00C2C7' }}
-                        >
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 shadow-xs">
                           <CategoryIcon iconName={cat?.icon || 'DollarSign'} className="w-4 h-4" />
                         </div>
                         <div>

@@ -4,7 +4,6 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Check,
   X,
   RotateCcw,
 } from 'lucide-react';
@@ -50,18 +49,8 @@ const AVAILABLE_ICONS = [
   'Dumbbell',
 ];
 
-const PRESET_COLORS = [
-  '#147DF0',
-  '#00C2C7',
-  '#10B981',
-  '#F59E0B',
-  '#FF914D',
-  '#EF4444',
-  '#8B5CF6',
-  '#EC4899',
-  '#6366F1',
-  '#9BA3AF',
-];
+// Unified theme color for all categories
+const THEME_CATEGORY_COLOR = '#FF914D';
 
 export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }) => {
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
@@ -72,7 +61,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
   const [name, setName] = useState<string>('');
   const [type, setType] = useState<TransactionType>('expense');
   const [icon, setIcon] = useState<string>('Home');
-  const [color, setColor] = useState<string>('#147DF0');
 
   const filteredCategories = categories.filter((c) => c.type === activeTab);
 
@@ -81,7 +69,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     setName('');
     setType(activeTab);
     setIcon(activeTab === 'expense' ? 'ShoppingCart' : 'Briefcase');
-    setColor(PRESET_COLORS[0]);
     setIsModalOpen(true);
   };
 
@@ -90,7 +77,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     setName(cat.name);
     setType(cat.type);
     setIcon(cat.icon);
-    setColor(cat.color);
     setIsModalOpen(true);
   };
 
@@ -105,7 +91,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
       name: name.trim(),
       type,
       icon,
-      color,
+      color: THEME_CATEGORY_COLOR,
     });
 
     if (userId) {
@@ -227,14 +213,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
               className="p-3.5 rounded-2xl bg-surface border border-app flex items-center justify-between shadow-sm hover:border-primary-custom transition-all"
             >
               <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
-                  style={{
-                    backgroundColor: cat.color ? `${cat.color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
-                    color: cat.color || 'var(--primary-color, #f59e0b)',
-                    borderColor: cat.color ? `${cat.color}35` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
-                  }}
-                >
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-transform shadow-xs">
                   <CategoryIcon iconName={cat.icon} size={20} className="w-5 h-5" />
                 </div>
                 <div>
@@ -359,14 +338,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
 
               {/* Live Preview */}
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-app">
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition-all shadow-xs"
-                  style={{
-                    backgroundColor: color ? `${color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
-                    color: color || 'var(--primary-color, #f59e0b)',
-                    borderColor: color ? `${color}35` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
-                  }}
-                >
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-all shadow-xs">
                   <CategoryIcon iconName={icon} size={22} className="w-5.5 h-5.5" />
                 </div>
                 <div className="truncate">
@@ -374,54 +346,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
                   <span className="text-[10px] text-muted uppercase font-semibold">
                     {type === 'expense' ? 'Gasto' : 'Ingreso'} • Vista previa
                   </span>
-                </div>
-              </div>
-
-              {/* Color Picker */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-muted">
-                    Color del Icono
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setColor('')}
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
-                      !color
-                        ? 'bg-primary-custom text-white border-primary-custom'
-                        : 'bg-card text-muted hover:text-app border-app'
-                    }`}
-                  >
-                    Usar color del tema
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className="w-7 h-7 rounded-xl flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-sm border border-black/10"
-                      style={{ backgroundColor: c }}
-                    >
-                      {color === c && <Check className="w-4 h-4 text-white drop-shadow" />}
-                    </button>
-                  ))}
-                  <label
-                    className="w-7 h-7 rounded-xl border border-dashed border-app hover:border-primary-custom flex items-center justify-center cursor-pointer transition-all bg-card overflow-hidden"
-                    title="Color personalizado"
-                  >
-                    <input
-                      type="color"
-                      value={color || '#147DF0'}
-                      onChange={(e) => setColor(e.target.value)}
-                      className="opacity-0 w-0 h-0 absolute pointer-events-none"
-                    />
-                    <div
-                      className="w-4 h-4 rounded-full border border-white/30"
-                      style={{ backgroundColor: color || 'var(--primary-color, #f59e0b)' }}
-                    />
-                  </label>
                 </div>
               </div>
 
