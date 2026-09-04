@@ -40,6 +40,7 @@ import { AuthScreen } from './components/AuthScreen.tsx';
 import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx';
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
+import { SignOutConfirmModal } from './components/SignOutConfirmModal.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
 import { AddVariableIncomeModal } from './components/AddVariableIncomeModal.tsx';
@@ -282,6 +283,7 @@ export function App() {
 
   // Modals state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isGlobalSignOutConfirmOpen, setIsGlobalSignOutConfirmOpen] = useState<boolean>(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState<boolean>(false);
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
@@ -591,7 +593,7 @@ export function App() {
           onToggleCollapse={toggleSidebar}
           onSync={syncNow}
           onOpenConverter={() => setIsConverterOpen(true)}
-          onSignOut={signOut}
+          onSignOut={() => setIsGlobalSignOutConfirmOpen(true)}
           activeProfile={currentUser}
           onOpenProfile={() => setIsProfileModalOpen(true)}
         />
@@ -928,6 +930,16 @@ export function App() {
         onClose={() => setIsResetPasswordModalOpen(false)}
         onSuccessToast={showToast}
         onSignOut={signOut}
+      />
+
+      {/* Global Sign Out Confirmation Modal */}
+      <SignOutConfirmModal
+        isOpen={isGlobalSignOutConfirmOpen}
+        onClose={() => setIsGlobalSignOutConfirmOpen(false)}
+        onConfirm={() => {
+          setIsGlobalSignOutConfirmOpen(false);
+          signOut();
+        }}
       />
 
       {/* Unified Quick Action Floating Modal (+) */}

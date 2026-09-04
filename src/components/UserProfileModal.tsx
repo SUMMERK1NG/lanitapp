@@ -22,6 +22,7 @@ import { evaluatePasswordStrength } from './AuthScreen.tsx';
 import { saveUserProfile } from '../lib/db.ts';
 import { supabase } from '../lib/supabase.ts';
 import { logger } from '../utils/logger.ts';
+import { SignOutConfirmModal } from './SignOutConfirmModal.tsx';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -89,6 +90,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     return cur.startsWith('/') || cur.startsWith('http') ? 'sheep' : 'sheep';
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState<boolean>(false);
 
   // Estados para cambio de contraseña
   const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState<boolean>(false);
@@ -302,10 +304,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleSelectAvatarPreset = handleSelectAvatar;
 
   const handleSignOutClick = () => {
-    if (window.confirm('¿Seguro que deseas cerrar la sesión actual?')) {
-      onClose();
-      if (onSignOut) onSignOut();
-    }
+    setIsSignOutConfirmOpen(true);
   };
 
   return (
@@ -783,7 +782,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={handleSignOutClick}
-                className="lg:hidden w-full py-2.5 rounded-xl bg-[#ef4444]/15 hover:bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/30 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Cerrar Sesión en LANITAPP</span>
@@ -793,6 +792,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         </form>
         </div>
       </div>
+
+      {/* Confirmation Modal for Sign Out */}
+      <SignOutConfirmModal
+        isOpen={isSignOutConfirmOpen}
+        onClose={() => setIsSignOutConfirmOpen(false)}
+        onConfirm={() => {
+          setIsSignOutConfirmOpen(false);
+          onClose();
+          if (onSignOut) onSignOut();
+        }}
+      />
     </div>
   );
 };
