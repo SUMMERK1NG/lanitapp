@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Briefcase,
   Plus,
@@ -37,6 +37,7 @@ import {
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { logger } from '../utils/logger.ts';
 
 const iconMap: Record<string, any> = {
@@ -166,19 +167,38 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
 
   const incomeCategories = categories.filter((c) => c.type === 'income');
 
+  // Estado optimista para actualización visual instantánea (0ms) sin depender de red o recarga
+  const [optimisticStatus, setOptimisticStatus] = useState<Record<string, boolean>>({});
+
+  // Limpiar estados optimistas cuando cambia el periodo seleccionado
+  useEffect(() => {
+    setOptimisticStatus({});
+  }, [selectedYear, selectedMonth]);
+
   // 1. Process Fixed Incomes for current month with currency conversions
   const overrideMap = useMemo(() => {
     return new Map(
       monthlyIncomeOverrides
-        .filter((o) => o.year === selectedYear && o.month === selectedMonth)
-        .map((o) => [o.fixed_income_id, o])
+        .filter((o) => {
+          let yr = o.year;
+          let mo = o.month;
+          if ((yr === undefined || mo === undefined) && (o as any).month_year) {
+            const [y, m] = String((o as any).month_year).split('-').map(Number);
+            if (!isNaN(y)) yr = y;
+            if (!isNaN(m)) mo = m - 1;
+          }
+          return yr === selectedYear && mo === selectedMonth;
+        })
+        .map((o) => [o.fixed_income_id || (o as any).income_id, o])
     );
   }, [monthlyIncomeOverrides, selectedYear, selectedMonth]);
 
   const processedFixedIncomes = useMemo(() => {
     return fixedIncomes.map((fi) => {
       const override = overrideMap.get(fi.id);
-      const isActive = override?.is_active !== undefined ? override.is_active : fi.is_active;
+      const isOverrideActive = override?.is_active !== undefined ? override.is_active : fi.is_active;
+      // El estado optimista local tiene prioridad inmediata antes de la propagación de red
+      const isActive = optimisticStatus[fi.id] !== undefined ? optimisticStatus[fi.id] : isOverrideActive;
 
       let mode: FixedExpensePaymentMode = fi.payment_mode || 'usd_cash';
       if (mode === 'cash') mode = 'usd_cash';
@@ -218,7 +238,7 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
         finalAmount: finalAmountUSD || 0,
       };
     });
-  }, [fixedIncomes, overrideMap, bcvUsd, bcvEur, parallelUsd]);
+  }, [fixedIncomes, overrideMap, optimisticStatus, bcvUsd, bcvEur, parallelUsd]);
 
   const totalMonthlyFixed = processedFixedIncomes
     .filter((i) => i.isActive)
@@ -363,16 +383,42 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   };
 
   const handleToggleFixedActive = async (income: typeof processedFixedIncomes[0]) => {
+    const newStatus = !income.isActive;
+    // Actualización visual inmediata e instantánea (0ms)
+    setOptimisticStatus((prev) => ({ ...prev, [income.id]: newStatus }));
+
     try {
-      await toggleMonthlyFixedIncomeOverride(
+      const record = await toggleMonthlyFixedIncomeOverride(
         income.id,
         selectedYear,
         selectedMonth,
-        !income.isActive,
+        newStatus,
         income.finalAmount
       );
-      logger.dev(`[FIXED INCOME] Pausa toggled para ingreso ${income.id}: ${!income.isActive}`);
+      // Sincronizar el store global para que todas las vistas reflejen el cambio al instante
+      useFinanceStore.setState((state) => {
+        const overrides = [...state.monthlyIncomeOverrides];
+        const idx = overrides.findIndex(
+          (o) =>
+            (o.fixed_income_id === income.id || (o as any).income_id === income.id) &&
+            o.year === selectedYear &&
+            o.month === selectedMonth
+        );
+        if (idx >= 0) {
+          overrides[idx] = record;
+        } else {
+          overrides.push(record);
+        }
+        return { monthlyIncomeOverrides: overrides };
+      });
+      logger.dev(`[FIXED INCOME] Pausa toggled para ingreso ${income.id}: ${newStatus}`);
     } catch (error) {
+      // Revertir estado si ocurre error
+      setOptimisticStatus((prev) => {
+        const copy = { ...prev };
+        delete copy[income.id];
+        return copy;
+      });
       logger.error('[FIXED INCOME PAUSE ERROR]:', error);
       alert('Error al pausar/activar el ingreso fijo. Por favor intenta de nuevo.');
     }

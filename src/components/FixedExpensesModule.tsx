@@ -34,6 +34,7 @@ import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { logger } from '../utils/logger.ts';
 
 export const PAYMENT_MODES_LIST: {
@@ -350,7 +351,22 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     setOptimisticStatus((prev) => ({ ...prev, [id]: newStatus }));
 
     try {
-      await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, newStatus);
+      const record = await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, newStatus);
+      useFinanceStore.setState((state) => {
+        const overrides = [...state.monthlyFixedOverrides];
+        const idx = overrides.findIndex(
+          (o) =>
+            (o.fixed_expense_id === id || (o as any).expense_id === id) &&
+            o.year === selectedYear &&
+            o.month === selectedMonth
+        );
+        if (idx >= 0) {
+          overrides[idx] = record;
+        } else {
+          overrides.push(record);
+        }
+        return { monthlyFixedOverrides: overrides };
+      });
       logger.dev(`[FIXED EXPENSE] Pausa toggled para gasto ${id}: ${newStatus}`);
     } catch (error) {
       // Revertir estado si ocurre error
