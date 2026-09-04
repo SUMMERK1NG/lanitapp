@@ -49,6 +49,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const moreMenuItems = [
     {
+      id: 'incomes',
+      title: 'Gestión de Ingresos',
+      description: 'Sueldos fijos y extras por quincena',
+      icon: Briefcase,
+      color: '#147DF0',
+      action: () => onChangeView('incomes'),
+      active: activeView === 'incomes',
+    },
+    {
       id: 'fixed_expenses',
       title: 'Gastos Fijos',
       description: 'Alquiler, servicios, suscripciones y compromisos',
@@ -56,15 +65,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       color: '#FF914D',
       action: () => onChangeView('fixed_expenses'),
       active: activeView === 'fixed_expenses',
-    },
-    {
-      id: 'savings',
-      title: 'Ahorros & Metas',
-      description: 'Metas quincenales y aportes acumulados',
-      icon: PiggyBank,
-      color: '#10B981',
-      action: () => onChangeView('savings'),
-      active: activeView === 'savings',
     },
     {
       id: 'debts',
@@ -76,13 +76,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       active: activeView === 'debts',
     },
     {
-      id: 'incomes',
-      title: 'Gestión de Ingresos',
-      description: 'Sueldos fijos y extras por quincena',
-      icon: Briefcase,
-      color: '#147DF0',
-      action: () => onChangeView('incomes'),
-      active: activeView === 'incomes',
+      id: 'savings',
+      title: 'Ahorros & Metas',
+      description: 'Metas quincenales y aportes acumulados',
+      icon: PiggyBank,
+      color: '#10B981',
+      action: () => onChangeView('savings'),
+      active: activeView === 'savings',
     },
     {
       id: 'converter',
