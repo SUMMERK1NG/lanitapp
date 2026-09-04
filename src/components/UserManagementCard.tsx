@@ -19,11 +19,13 @@ import {
   Send,
   Clock,
   Globe,
+  Check,
 } from 'lucide-react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
+import { evaluatePasswordStrength } from './AuthScreen.tsx';
 
 interface UserManagementCardProps {
   currentUserId?: string;
@@ -52,8 +54,22 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
   // Password Management Form State
   const [passwordMode, setPasswordMode] = useState<'reset_email' | 'direct_password'>('reset_email');
   const [directPassword, setDirectPassword] = useState<string>('');
+  const [confirmDirectPassword, setConfirmDirectPassword] = useState<string>('');
   const [showDirectPassword, setShowDirectPassword] = useState<boolean>(false);
+  const [showConfirmDirectPassword, setShowConfirmDirectPassword] = useState<boolean>(false);
+  const [directPasswordError, setDirectPasswordError] = useState<string | null>(null);
   const [isProcessingPassword, setIsProcessingPassword] = useState<boolean>(false);
+
+  const pwdStrength = evaluatePasswordStrength(directPassword);
+
+  const getStrengthMeta = (score: number, length: number) => {
+    if (length === 0) return { label: '', colorText: '', barColor: '' };
+    if (score <= 1) return { label: 'Muy Débil', colorText: 'text-rose-400', barColor: 'bg-rose-500' };
+    if (score === 2) return { label: 'Débil', colorText: 'text-amber-400', barColor: 'bg-amber-500' };
+    if (score === 3) return { label: 'Aceptable', colorText: 'text-cyan-400', barColor: 'bg-cyan-500' };
+    return { label: 'Segura y Robusta', colorText: 'text-emerald-400', barColor: 'bg-emerald-500' };
+  };
+  const strengthMeta = getStrengthMeta(pwdStrength.score, directPassword.length);
 
   // Delete state
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
@@ -209,7 +225,10 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
     setPasswordTargetUser(user);
     setPasswordMode('reset_email');
     setDirectPassword('');
+    setConfirmDirectPassword('');
     setShowDirectPassword(false);
+    setShowConfirmDirectPassword(false);
+    setDirectPasswordError(null);
   };
 
   // Process Password Action
@@ -218,6 +237,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
     if (!passwordTargetUser) return;
 
     setIsProcessingPassword(true);
+    setDirectPasswordError(null);
 
     try {
       if (passwordMode === 'reset_email') {
@@ -236,14 +256,40 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         setPasswordTargetUser(null);
       } else {
         // Direct password assignment
-        if (directPassword.length < 6) {
-          throw new Error('La nueva contraseña debe tener al menos 6 caracteres.');
+        const newPwd = directPassword.trim();
+        const confPwd = confirmDirectPassword.trim();
+
+        if (!newPwd || !confPwd) {
+          const msg = 'Por favor completa ambos campos de contraseña.';
+          setDirectPasswordError(msg);
+          throw new Error(msg);
+        }
+
+        if (!pwdStrength.isValid) {
+          let msg = 'La contraseña no cumple con los requisitos mínimos de seguridad.';
+          if (!pwdStrength.hasMinLength) {
+            msg = 'La nueva contraseña debe tener al menos 8 caracteres.';
+          } else if (!pwdStrength.hasUpper || !pwdStrength.hasLower) {
+            msg = 'La nueva contraseña debe incluir al menos una letra mayúscula y una minúscula.';
+          } else if (!pwdStrength.hasNumber) {
+            msg = 'La nueva contraseña debe incluir al menos un número.';
+          } else if (!pwdStrength.hasSpecial) {
+            msg = 'La nueva contraseña debe incluir al menos un carácter especial (@, #, $, *, -, etc.).';
+          }
+          setDirectPasswordError(msg);
+          throw new Error(msg);
+        }
+
+        if (newPwd !== confPwd) {
+          const msg = 'Las contraseñas no coinciden. Por favor verifica que ambas sean iguales.';
+          setDirectPasswordError(msg);
+          throw new Error(msg);
         }
 
         if (isSupabaseConfigured() && supabase) {
           const { error: rpcErr } = await supabase.rpc('set_user_password_by_admin', {
             target_user_id: passwordTargetUser.id,
-            new_password: directPassword,
+            new_password: newPwd,
           });
 
           if (rpcErr) {
@@ -691,7 +737,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           onClick={() => setPasswordTargetUser(null)}
         >
           <div
-            className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95 cursor-default"
+            className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl text-app space-y-5 animate-in zoom-in-95 cursor-default max-h-[92vh] overflow-y-auto"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
@@ -760,29 +806,135 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                   </p>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[#00C2C7]" />
-                    Nueva Contraseña
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showDirectPassword ? 'text' : 'password'}
-                      required
-                      placeholder="Mínimo 6 caracteres"
-                      value={directPassword}
-                      onChange={(e) => setDirectPassword(e.target.value)}
-                      className="w-full bg-card border border-app rounded-xl pl-3 pr-10 py-2.5 text-xs text-app focus:outline-none focus:ring-2 focus:ring-primary-custom"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowDirectPassword(!showDirectPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted hover:text-app cursor-pointer"
-                    >
-                      {showDirectPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                <div className="space-y-3.5">
+                  {/* Nueva Contraseña */}
+                  <div>
+                    <label className="block text-xs font-bold text-app mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[#00C2C7]" />
+                      Nueva Contraseña
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showDirectPassword ? 'text' : 'password'}
+                        required
+                        maxLength={64}
+                        placeholder="Mínimo 8 caracteres"
+                        value={directPassword}
+                        onChange={(e) => {
+                          setDirectPassword(e.target.value.slice(0, 64));
+                          if (directPasswordError) setDirectPasswordError(null);
+                        }}
+                        className="w-full bg-card border border-app rounded-xl pl-3 pr-10 py-2.5 text-xs text-app placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-custom"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectPassword(!showDirectPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted hover:text-app cursor-pointer"
+                        title={showDirectPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                      >
+                        {showDirectPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Indicador dinámico de seguridad */}
+                    {directPassword.length > 0 && (
+                      <div className="mt-2 p-2.5 bg-card border border-app rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                        <div className="flex items-center justify-between text-[10px] font-bold">
+                          <span className="text-muted">Nivel de seguridad:</span>
+                          <span className={`text-[10px] font-extrabold ${strengthMeta.colorText}`}>
+                            {strengthMeta.label}
+                          </span>
+                        </div>
+
+                        {/* Barra de 4 segmentos */}
+                        <div className="grid grid-cols-4 gap-1 h-1.5 w-full">
+                          <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 1 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                          <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 2 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                          <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 3 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                          <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 4 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                        </div>
+
+                        {/* Requisitos */}
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[9px]">
+                          <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasMinLength ? 'text-emerald-400 font-semibold' : 'text-muted'}`}>
+                            <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasMinLength ? 'text-emerald-400' : 'text-muted/60'}`} />
+                            <span>Mín. 8 caracteres</span>
+                          </div>
+                          <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400 font-semibold' : 'text-muted'}`}>
+                            <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400' : 'text-muted/60'}`} />
+                            <span>Mayús. y minús.</span>
+                          </div>
+                          <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasNumber ? 'text-emerald-400 font-semibold' : 'text-muted'}`}>
+                            <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasNumber ? 'text-emerald-400' : 'text-muted/60'}`} />
+                            <span>Al menos un número</span>
+                          </div>
+                          <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasSpecial ? 'text-emerald-400 font-semibold' : 'text-muted'}`}>
+                            <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasSpecial ? 'text-emerald-400' : 'text-muted/60'}`} />
+                            <span>Carácter especial (@#$...)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] text-muted block mt-1">
+
+                  {/* Confirmar Nueva Contraseña */}
+                  <div>
+                    <label className="block text-xs font-bold text-app mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                      Confirmar Nueva Contraseña
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmDirectPassword ? 'text' : 'password'}
+                        required
+                        maxLength={64}
+                        placeholder="Repite la nueva contraseña"
+                        value={confirmDirectPassword}
+                        onChange={(e) => {
+                          setConfirmDirectPassword(e.target.value.slice(0, 64));
+                          if (directPasswordError) setDirectPasswordError(null);
+                        }}
+                        className={`w-full bg-card border rounded-xl pl-3 pr-10 py-2.5 text-xs text-app placeholder:text-muted focus:outline-none focus:ring-2 ${
+                          confirmDirectPassword.length > 0
+                            ? directPassword === confirmDirectPassword
+                              ? 'border-emerald-500/60 focus:ring-emerald-500'
+                              : 'border-rose-500/60 focus:ring-rose-500'
+                            : 'border-app focus:ring-primary-custom'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmDirectPassword(!showConfirmDirectPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted hover:text-app cursor-pointer"
+                        title={showConfirmDirectPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                      >
+                        {showConfirmDirectPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {confirmDirectPassword.length > 0 && (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                        {directPassword === confirmDirectPassword ? (
+                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Las contraseñas coinciden
+                          </span>
+                        ) : (
+                          <span className="text-rose-400 font-medium flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" /> Las contraseñas no coinciden
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {directPasswordError && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{directPasswordError}</span>
+                    </div>
+                  )}
+
+                  <span className="text-[10px] text-muted block">
                     La contraseña se actualizará de inmediato para este usuario.
                   </span>
                 </div>
@@ -799,7 +951,14 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                 </button>
                 <button
                   type="submit"
-                  disabled={isProcessingPassword}
+                  disabled={
+                    isProcessingPassword ||
+                    (passwordMode === 'direct_password' &&
+                      (!directPassword ||
+                        !confirmDirectPassword ||
+                        directPassword !== confirmDirectPassword ||
+                        !pwdStrength.isValid))
+                  }
                   className="flex-1 py-2.5 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   {passwordMode === 'reset_email' ? (
