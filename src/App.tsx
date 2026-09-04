@@ -42,6 +42,7 @@ import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
+import { AddVariableIncomeModal } from './components/AddVariableIncomeModal.tsx';
 import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
 import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
@@ -282,10 +283,11 @@ export function App() {
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState<boolean>(false);
   const [isConverterOpen, setIsConverterOpen] = useState<boolean>(false);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState<boolean>(false);
+  const [isAddVariableIncomeModalOpen, setIsAddVariableIncomeModalOpen] = useState<boolean>(false);
   const [isAddFixedExpenseModalOpen, setIsAddFixedExpenseModalOpen] = useState<boolean>(false);
   const [isAddVariableExpenseModalOpen, setIsAddVariableExpenseModalOpen] = useState<boolean>(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState<boolean>(false);
-  const [transactionModalType, setTransactionModalType] = useState<TransactionType>('expense');
+  const [transactionModalType] = useState<TransactionType>('expense');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
@@ -526,11 +528,6 @@ export function App() {
         ? 'Movimiento registrado y sincronizado'
         : 'Movimiento guardado localmente (Offline)'
     );
-  };
-
-  const handleOpenTransactionForType = (type: TransactionType) => {
-    setTransactionModalType(type);
-    setIsTransactionModalOpen(true);
   };
 
   const handleOpenPaymentModal = (debtId?: string) => {
@@ -943,10 +940,21 @@ export function App() {
       <QuickActionModal
         isOpen={isQuickActionOpen}
         onClose={() => setIsQuickActionOpen(false)}
-        onSelectFixedExpense={() => setIsAddFixedExpenseModalOpen(true)}
+        onSelectVariableIncome={() => setIsAddVariableIncomeModalOpen(true)}
         onSelectVariableExpense={() => setIsAddVariableExpenseModalOpen(true)}
-        onSelectTransaction={(type) => handleOpenTransactionForType(type)}
         onSelectDebtPayment={() => handleOpenPaymentModal()}
+      />
+
+      {/* Add Variable Income Modal (Available globally & in mobile +) */}
+      <AddVariableIncomeModal
+        isOpen={isAddVariableIncomeModalOpen}
+        onClose={() => setIsAddVariableIncomeModalOpen(false)}
+        categories={categories}
+        accounts={accounts}
+        rates={rates}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        onSaved={() => showToast('Ingreso variable guardado con éxito')}
       />
 
       {/* Add Fixed Expense Modal (Available globally & in mobile +) */}

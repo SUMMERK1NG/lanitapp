@@ -32,8 +32,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onChangeView,
   onOpenQuickAction,
   onOpenConverter,
-  onOpenProfile,
-  onNavigateToSettings,
+  onOpenProfile: _onOpenProfile,
+  onNavigateToSettings: _onNavigateToSettings,
   isAdmin = false,
   pendingCount = 0,
 }) => {
@@ -95,11 +95,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'settings',
-      title: 'Perfil / Ajustes',
-      description: 'Tema, avatar, administración y backup',
+      title: 'Configuración',
+      description: isAdmin
+        ? 'Temas, usuarios, categorías y respaldo'
+        : 'Personalización y categorías',
       icon: Settings,
       color: '#94A3B8',
-      action: () => (onOpenProfile ? onOpenProfile() : onChangeView('settings')),
+      action: () => onChangeView('settings'),
       active: activeView === 'settings',
     },
   ];
@@ -131,58 +133,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             </div>
 
             <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto no-scrollbar py-1">
-              {/* Tarjetas dedicadas para Administrador */}
-              {isAdmin && (
-                <>
-                  <button
-                    onClick={() => {
-                      setIsMoreOpen(false);
-                      if (onNavigateToSettings) {
-                        onNavigateToSettings('users');
-                      } else {
-                        onChangeView('settings');
-                      }
-                    }}
-                    className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-orange-500/30 hover:border-orange-500/60 transition-all text-left cursor-pointer"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold text-lg shrink-0">
-                      👑
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white text-sm">Gestión de Usuarios</span>
-                        <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-orange-500 text-black">
-                          ADMIN
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 truncate">Crear, activar, bloquear y eliminar accesos</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsMoreOpen(false);
-                      if (onNavigateToSettings) {
-                        onNavigateToSettings('backup');
-                      } else {
-                        onChangeView('settings');
-                      }
-                    }}
-                    className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:border-slate-600 transition-all text-left cursor-pointer"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold text-lg shrink-0">
-                      💾
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-semibold text-white text-sm">Copia de Seguridad</span>
-                      <p className="text-xs text-slate-400 truncate">Exportar/importar datos locales y sincronización</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-                  </button>
-                </>
-              )}
-
               {/* Módulos estándar */}
               {moreMenuItems.map((item) => {
                 const Icon = item.icon;
