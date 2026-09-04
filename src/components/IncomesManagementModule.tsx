@@ -737,8 +737,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm"
-                          style={{ backgroundColor: category?.color || '#147DF0' }}
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
+                          style={{
+                            backgroundColor: category?.color ? `${category.color}18` : 'rgba(var(--primary-color-rgb, 20, 125, 240), 0.12)',
+                            color: category?.color || 'var(--primary-color, #147DF0)',
+                            borderColor: category?.color ? `${category.color}30` : 'rgba(var(--primary-color-rgb, 20, 125, 240), 0.25)',
+                          }}
                         >
                           <CategoryIcon iconName={category?.icon || 'Briefcase'} size={20} className="w-5 h-5" />
                         </div>
@@ -897,8 +901,12 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm"
-                          style={{ backgroundColor: isAllocation ? '#00C2C7' : category?.color || '#FF914D' }}
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
+                          style={{
+                            backgroundColor: isAllocation ? 'rgba(0, 194, 199, 0.15)' : category?.color ? `${category.color}18` : 'rgba(var(--primary-color-rgb, 255, 145, 77), 0.12)',
+                            color: isAllocation ? '#00C2C7' : category?.color || 'var(--primary-color, #FF914D)',
+                            borderColor: isAllocation ? 'rgba(0, 194, 199, 0.3)' : category?.color ? `${category.color}30` : 'rgba(var(--primary-color-rgb, 255, 145, 77), 0.25)',
+                          }}
                         >
                           {isAllocation ? (
                             <ArrowLeftRight className="w-5 h-5" />

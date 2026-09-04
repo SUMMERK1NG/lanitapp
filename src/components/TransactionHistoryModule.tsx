@@ -689,8 +689,12 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
                 >
                   <div className="flex items-center gap-3 truncate">
                     <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-inner"
-                      style={{ backgroundColor: m.categoryColor }}
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
+                      style={{
+                        backgroundColor: m.categoryColor ? `${m.categoryColor}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
+                        color: m.categoryColor || 'var(--primary-color, #f59e0b)',
+                        borderColor: m.categoryColor ? `${m.categoryColor}30` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
+                      }}
                     >
                       <CategoryIcon iconName={m.categoryIcon} className="w-5 h-5" />
                     </div>

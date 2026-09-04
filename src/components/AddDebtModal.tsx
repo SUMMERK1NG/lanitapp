@@ -501,44 +501,43 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
                   setIsPaymentModeDropdownOpen(false);
                   setIsStartPeriodDropdownOpen(false);
                 }}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl border border-app bg-card text-app text-xs font-bold transition-all hover:bg-surface-hover cursor-pointer"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-app bg-card text-app text-xs font-bold transition-all hover:bg-surface-hover cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
               >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs"
-                    style={{ backgroundColor: currentSelectedCategory?.color || '#3b82f6' }}
-                  >
-                    {renderIcon(currentSelectedCategory?.icon)}
-                  </div>
-                  <span>{currentSelectedCategory?.name || 'Seleccionar Categoría'}</span>
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-primary-custom flex items-center shrink-0">
+                    {renderIcon(currentSelectedCategory?.icon || 'CreditCard')}
+                  </span>
+                  <span className="truncate">{currentSelectedCategory?.name || 'Seleccionar Categoría'}</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-muted transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-muted transition-transform shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isCategoryDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-surface border border-app rounded-2xl shadow-2xl z-30 max-h-48 overflow-y-auto p-1.5 space-y-1">
-                  {expenseCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setPlatform(cat.id as DebtPlatformType);
-                        setIsCategoryDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-2 p-2 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer ${
-                        platform === cat.id ? 'bg-primary-custom text-white' : 'text-app hover:bg-surface-hover'
-                      }`}
-                    >
-                      <div
-                        className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs shrink-0"
-                        style={{ backgroundColor: cat.color || '#3b82f6' }}
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setIsCategoryDropdownOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-40 max-h-52 overflow-y-auto p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    {expenseCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setPlatform(cat.id as DebtPlatformType);
+                          setIsCategoryDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          platform === cat.id
+                            ? 'bg-primary-custom text-white shadow-sm'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                       >
-                        {renderIcon(cat.icon)}
-                      </div>
-                      <span className="truncate">{cat.name}</span>
-                    </button>
-                  ))}
-                </div>
+                        <span className={`flex items-center shrink-0 ${platform === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                          {renderIcon(cat.icon)}
+                        </span>
+                        <span className="truncate">{cat.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>

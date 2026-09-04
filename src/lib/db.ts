@@ -159,22 +159,22 @@ export const resolveCategoryUuidToCode = async (uuid: string): Promise<string> =
 
 export const DEFAULT_CATEGORIES: Category[] = [
   // Gastos
-  { id: 'cat_housing', code: 'cat_housing', name: 'Vivienda & Alquiler', type: 'expense', icon: 'Home', color: '#147DF0', sync_status: 'synced' },
-  { id: 'cat_food', code: 'cat_food', name: 'Comida & Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#00C2C7', sync_status: 'synced' },
-  { id: 'cat_services', code: 'cat_services', name: 'Servicios & Fibra', type: 'expense', icon: 'Wifi', color: '#3B82F6', sync_status: 'synced' },
-  { id: 'cat_transport', code: 'cat_transport', name: 'Transporte & Gasolina', type: 'expense', icon: 'Car', color: '#F59E0B', sync_status: 'synced' },
-  { id: 'cat_debt', code: 'cat_debt', name: 'Pago de Deudas & Cuotas', type: 'expense', icon: 'CreditCard', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_health', code: 'cat_health', name: 'Salud & Farmacia', type: 'expense', icon: 'HeartPulse', color: '#10B981', sync_status: 'synced' },
-  { id: 'cat_entertainment', code: 'cat_entertainment', name: 'Ocio & Salidas', type: 'expense', icon: 'Film', color: '#8B5CF6', sync_status: 'synced' },
-  { id: 'cat_savings', code: 'cat_savings', name: 'Ahorro & Metas', type: 'expense', icon: 'PiggyBank', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_housing', code: 'cat_housing', name: 'Vivienda y Alquiler', type: 'expense', icon: 'Home', color: '#147DF0', sync_status: 'synced' },
+  { id: 'cat_food', code: 'cat_food', name: 'Comida y Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_services', code: 'cat_services', name: 'Servicios y Fibra', type: 'expense', icon: 'Wifi', color: '#3B82F6', sync_status: 'synced' },
+  { id: 'cat_transport', code: 'cat_transport', name: 'Transporte y Gasolina', type: 'expense', icon: 'Car', color: '#F59E0B', sync_status: 'synced' },
+  { id: 'cat_debt', code: 'cat_debt', name: 'Pago de Deudas y Cuotas', type: 'expense', icon: 'CreditCard', color: '#FF914D', sync_status: 'synced' },
+  { id: 'cat_health', code: 'cat_health', name: 'Salud y Farmacia', type: 'expense', icon: 'HeartPulse', color: '#10B981', sync_status: 'synced' },
+  { id: 'cat_entertainment', code: 'cat_entertainment', name: 'Ocio y Salidas', type: 'expense', icon: 'Film', color: '#8B5CF6', sync_status: 'synced' },
+  { id: 'cat_savings', code: 'cat_savings', name: 'Ahorro y Metas', type: 'expense', icon: 'PiggyBank', color: '#00C2C7', sync_status: 'synced' },
   { id: 'cat_other_exp', code: 'cat_other_exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#9BA3AF', sync_status: 'synced' },
 
   // Ingresos
   { id: 'cat_salary', code: 'cat_salary', name: 'Sueldo Base', type: 'income', icon: 'Briefcase', color: '#147DF0', sync_status: 'synced' },
-  { id: 'cat_bonus', code: 'cat_bonus', name: 'Plus & Bonos', type: 'income', icon: 'TrendingUp', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_bonus', code: 'cat_bonus', name: 'Plus y Bonos', type: 'income', icon: 'TrendingUp', color: '#00C2C7', sync_status: 'synced' },
   { id: 'cat_guard', code: 'cat_guard', name: 'Guardias / Turnos', type: 'income', icon: 'Clock', color: '#6366F1', sync_status: 'synced' },
   { id: 'cat_tickets', code: 'cat_tickets', name: 'Tickets Alimentación', type: 'income', icon: 'UtensilsCrossed', color: '#10B981', sync_status: 'synced' },
-  { id: 'cat_extras', code: 'cat_extras', name: 'Extras & Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
+  { id: 'cat_extras', code: 'cat_extras', name: 'Extras y Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
 ];
 
 export const DEFAULT_ACCOUNTS: Account[] = [];
@@ -1700,6 +1700,14 @@ export async function seedUserDefaultCategories(userId: string, force?: boolean)
     const existing = await db.categories
       .filter((c) => c.user_id === userId)
       .toArray();
+
+    // Auto-sanitize any existing categories containing '&' to 'y'
+    for (const cat of existing) {
+      if (cat.name && cat.name.includes('&')) {
+        cat.name = cat.name.replace(/\s*&\s*/g, ' y ');
+        await db.categories.put(cat);
+      }
+    }
 
     if (existing.length > 0 && !force) {
       return existing;

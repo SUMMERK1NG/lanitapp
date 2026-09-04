@@ -242,10 +242,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     }`}
                   >
                     <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center mb-1 text-white shadow-sm"
-                      style={{ backgroundColor: cat.color }}
+                      className="w-7 h-7 rounded-xl flex items-center justify-center mb-1 transition-all"
+                      style={{
+                        backgroundColor: isSelected
+                          ? 'transparent'
+                          : cat.color ? `${cat.color}20` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.15)',
+                        color: isSelected
+                          ? 'var(--primary-color, #FF914D)'
+                          : cat.color || 'var(--primary-color, #f59e0b)',
+                      }}
                     >
-                      <CategoryIcon iconName={cat.icon} size={14} className="w-3.5 h-3.5" />
+                      <CategoryIcon iconName={cat.icon} size={16} className="w-4 h-4" />
                     </div>
                     <span className="text-[11px] font-bold truncate w-full">
                       {cat.name}

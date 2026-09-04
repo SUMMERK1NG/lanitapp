@@ -4,6 +4,7 @@ import type { FixedExpense, Category, ExchangeRatesData, FixedExpensePaymentMode
 import { saveFixedExpense } from '../lib/db.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
+import { CategoryIcon } from './CategoryIcon.tsx';
 
 interface AddFixedExpenseModalProps {
   isOpen: boolean;
@@ -314,45 +315,72 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
           )}
 
           {/* Categoría */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-bold text-muted mb-1">
-              Categoría
+              Categoría <span className="text-red-400">*</span>
             </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsFixedCategoryDropdownOpen(!isFixedCategoryDropdownOpen)}
-                className="w-full p-2.5 rounded-xl bg-card border border-app text-left flex items-center justify-between text-xs font-bold text-app cursor-pointer"
-              >
-                <span>
-                  {expenseCategories.find((c) => c.id === fixedCategoryId)?.name || 'Selecciona Categoría'}
-                </span>
-                <ChevronDown className="w-4 h-4 text-muted" />
-              </button>
+            <button
+              type="button"
+              onClick={() => setIsFixedCategoryDropdownOpen(!isFixedCategoryDropdownOpen)}
+              className="w-full bg-card hover:bg-surface-hover border border-app rounded-xl px-3.5 py-2.5 text-xs font-bold text-app flex items-center justify-between transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-custom"
+            >
+              <div className="flex items-center gap-2 truncate">
+                {(() => {
+                  const selectedCat = expenseCategories.find((c) => c.id === fixedCategoryId);
+                  if (selectedCat) {
+                    return (
+                      <>
+                        <span className="text-primary-custom flex items-center shrink-0">
+                          <CategoryIcon iconName={selectedCat.icon} size={16} />
+                        </span>
+                        <span className="truncate">{selectedCat.name}</span>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <span className="text-primary-custom flex items-center shrink-0">
+                        <CategoryIcon iconName="Receipt" size={16} />
+                      </span>
+                      <span className="truncate">Selecciona Categoría</span>
+                    </>
+                  );
+                })()}
+              </div>
+              <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+            </button>
 
-              {isFixedCategoryDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 p-1 rounded-2xl bg-surface border border-app shadow-2xl z-20 max-h-48 overflow-y-auto space-y-1">
-                  {expenseCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setFixedCategoryId(cat.id);
-                        setIsFixedCategoryDropdownOpen(false);
-                      }}
-                      className={`w-full p-2 rounded-xl text-left text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                        fixedCategoryId === cat.id
-                          ? 'bg-primary-custom text-white'
-                          : 'text-app hover:bg-card'
-                      }`}
-                    >
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                      <span>{cat.name}</span>
-                    </button>
-                  ))}
+            {isFixedCategoryDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsFixedCategoryDropdownOpen(false)} />
+                <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-slate-900 border border-slate-700 rounded-2xl p-2 shadow-2xl max-h-52 overflow-y-auto no-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  {expenseCategories && expenseCategories.length > 0 ? (
+                    expenseCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setFixedCategoryId(cat.id);
+                          setIsFixedCategoryDropdownOpen(false);
+                        }}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                          fixedCategoryId === cat.id
+                            ? 'bg-primary-custom text-white shadow-sm'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span className={`flex items-center shrink-0 ${fixedCategoryId === cat.id ? 'text-white' : 'text-primary-custom'}`}>
+                          <CategoryIcon iconName={cat.icon} size={16} />
+                        </span>
+                        <span className="truncate">{cat.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-2 text-xs text-slate-400 text-center">No hay categorías disponibles</div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           {/* Notas */}

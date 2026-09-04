@@ -350,9 +350,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           ? fallbackCategories
           : DEFAULT_CATEGORIES;
 
+      const sanitizedCategories = resolvedCategories.map((c) => ({
+        ...c,
+        name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+      }));
+
       set({
         accounts: filteredAccounts,
-        categories: resolvedCategories,
+        categories: sanitizedCategories,
         fixedIncomes: filteredFixedIncomes,
         monthlyIncomeOverrides,
         variableIncomes: filteredVarIncomes,
@@ -451,6 +456,11 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       } else {
         categories = await seedUserDefaultCategories(userId);
       }
+
+      categories = categories.map((c) => ({
+        ...c,
+        name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+      }));
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({
         id: ensureValidUuid(a.id),

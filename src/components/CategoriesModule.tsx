@@ -35,6 +35,19 @@ const AVAILABLE_ICONS = [
   'PiggyBank',
   'BadgeDollarSign',
   'MoreHorizontal',
+  'Wifi',
+  'Clock',
+  'Receipt',
+  'Sparkles',
+  'Smartphone',
+  'Zap',
+  'Fuel',
+  'Plane',
+  'Coffee',
+  'BookOpen',
+  'Stethoscope',
+  'Music',
+  'Dumbbell',
 ];
 
 const PRESET_COLORS = [
@@ -215,8 +228,12 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
             >
               <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
-                  style={{ backgroundColor: cat.color }}
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
+                  style={{
+                    backgroundColor: cat.color ? `${cat.color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
+                    color: cat.color || 'var(--primary-color, #f59e0b)',
+                    borderColor: cat.color ? `${cat.color}35` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
+                  }}
                 >
                   <CategoryIcon iconName={cat.icon} size={20} className="w-5 h-5" />
                 </div>
@@ -340,23 +357,71 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
                 </div>
               </div>
 
+              {/* Live Preview */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-app">
+                <div
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition-all shadow-xs"
+                  style={{
+                    backgroundColor: color ? `${color}18` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.12)',
+                    color: color || 'var(--primary-color, #f59e0b)',
+                    borderColor: color ? `${color}35` : 'rgba(var(--primary-color-rgb, 245, 158, 11), 0.25)',
+                  }}
+                >
+                  <CategoryIcon iconName={icon} size={22} className="w-5.5 h-5.5" />
+                </div>
+                <div className="truncate">
+                  <h5 className="text-xs font-bold text-app truncate">{name.trim() || 'Nombre de la Categoría'}</h5>
+                  <span className="text-[10px] text-muted uppercase font-semibold">
+                    {type === 'expense' ? 'Gasto' : 'Ingreso'} • Vista previa
+                  </span>
+                </div>
+              </div>
+
               {/* Color Picker */}
               <div>
-                <label className="block text-xs font-semibold text-muted mb-1.5">
-                  Color de la Categoría
-                </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-muted">
+                    Color del Icono
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setColor('')}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                      !color
+                        ? 'bg-primary-custom text-white border-primary-custom'
+                        : 'bg-card text-muted hover:text-app border-app'
+                    }`}
+                  >
+                    Usar color del tema
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   {PRESET_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setColor(c)}
-                      className="w-7 h-7 rounded-xl flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-sm"
+                      className="w-7 h-7 rounded-xl flex items-center justify-center transition-transform hover:scale-110 cursor-pointer shadow-sm border border-black/10"
                       style={{ backgroundColor: c }}
                     >
                       {color === c && <Check className="w-4 h-4 text-white drop-shadow" />}
                     </button>
                   ))}
+                  <label
+                    className="w-7 h-7 rounded-xl border border-dashed border-app hover:border-primary-custom flex items-center justify-center cursor-pointer transition-all bg-card overflow-hidden"
+                    title="Color personalizado"
+                  >
+                    <input
+                      type="color"
+                      value={color || '#147DF0'}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="opacity-0 w-0 h-0 absolute pointer-events-none"
+                    />
+                    <div
+                      className="w-4 h-4 rounded-full border border-white/30"
+                      style={{ backgroundColor: color || 'var(--primary-color, #f59e0b)' }}
+                    />
+                  </label>
                 </div>
               </div>
 
