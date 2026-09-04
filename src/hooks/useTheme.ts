@@ -69,9 +69,12 @@ export function useTheme() {
     const loadPreferences = async () => {
       try {
         if (isSupabaseConfigured() && supabase) {
-          const { data: { user } } = await supabase.auth.getUser();
+          const { data: { session } } = await supabase.auth.getSession();
+          const user = session?.user;
+          const expiresAt = session?.expires_at || 0;
+          const isExpired = expiresAt && expiresAt < Math.floor(Date.now() / 1000);
 
-          if (user && isMounted) {
+          if (user && !isExpired && isMounted) {
             const prefs = await getUserPreferences(user.id);
             if (prefs && isMounted) {
               if (prefs.theme_mode) {

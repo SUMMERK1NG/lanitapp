@@ -16,83 +16,152 @@ export function useAuth() {
 
     try {
       if (isSupabaseConfigured() && supabase) {
-        const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+        // 1. Obtener la sesión almacenada en el cliente
+        let { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
 
         if (sessionErr) {
           logger.warn('Session check error:', sessionErr.message);
+          await supabase.auth.signOut().catch(() => {});
           setActiveUserId('');
           setCurrentUser(null);
           setLoading(false);
           return;
         }
 
-        if (sessionData?.session?.user) {
-          const authUser = sessionData.session.user;
-          // Fetch real profile from public.profiles
-          const { data: profileData, error: profileErr } = await supabase
+        let session = sessionData?.session;
+
+        // 2. Si hay sesión, verificar si el token JWT expiró o está próximo a expirar (< 60s)
+        if (session) {
+          const expiresAt = session.expires_at || 0;
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (expiresAt && expiresAt - nowSec < 60) {
+            logger.info('[Auth] Token JWT expirado o próximo a expirar. Renovando sesión activamente...');
+            const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+            if (refreshErr || !refreshData?.session) {
+              logger.warn('[Auth] No se pudo renovar la sesión expirada:', refreshErr?.message);
+              // La sesión caducó definitivamente. Limpiar para no inundar de errores 401
+              await supabase.auth.signOut().catch(() => {});
+              setActiveUserId('');
+              setCurrentUser(null);
+              setLoading(false);
+              return;
+            }
+            session = refreshData.session;
+          }
+        }
+
+        if (session?.user) {
+          const authUser = session.user;
+          // 3. Consultar perfil en profiles
+          let { data: profileData, error: profileErr } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', authUser.id)
             .maybeSingle();
 
-          if (profileData && !profileErr) {
-              const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
-              const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
-              const userProfile: UserProfile = {
-                id: profileData.id,
-                email: profileData.email || authUser.email,
-                cedula: profileData.cedula || authUser.user_metadata?.cedula || '',
-                first_name: profileData.first_name || authUser.user_metadata?.first_name || '',
-                last_name: profileData.last_name || authUser.user_metadata?.last_name || '',
-                name: profileData.name || (profileData.first_name ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario'),
-                avatar: avatarResolved,
-                avatar_url: avatarResolved,
-                role,
-                is_active: true,
-                currency: profileData.currency || 'USD',
-                theme_mode: profileData.theme_mode || 'navy',
-                accent_color: profileData.accent_color || '#147DF0',
-                last_active_view: profileData.last_active_view || 'dashboard',
-                keep_session: profileData.keep_session ?? false,
-                sync_status: 'synced',
-                created_at: profileData.created_at,
-                last_sign_in_at: profileData.last_sign_in_at || profileData.last_login_at || authUser.last_sign_in_at || new Date().toISOString(),
-                last_login_at: profileData.last_login_at || profileData.last_sign_in_at || authUser.last_sign_in_at || new Date().toISOString(),
-              };
+          // Si hay error de autenticación (401 / PGRST301 / JWT expired)
+          if (profileErr) {
+            const isAuthError =
+              profileErr.code === 'PGRST301' ||
+              profileErr.message?.toLowerCase().includes('jwt') ||
+              profileErr.message?.toLowerCase().includes('token') ||
+              profileErr.message?.toLowerCase().includes('unauthorized');
 
-              await saveUserProfile(userProfile);
-              setActiveUserId(userProfile.id);
-              // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
-              // Tema y color de acento se manejan de forma centralizada y sincronizada en Supabase profiles
-              if (typeof document !== 'undefined') {
-                const root = document.documentElement;
-                root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
-                root.classList.add(`theme-${userProfile.theme_mode || 'navy'}`);
-                root.style.setProperty('--primary', userProfile.accent_color || '#147DF0');
-                root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
+            if (isAuthError) {
+              logger.warn('[Auth] Error de autorización al consultar perfil. Intentando refresco de emergencia...');
+              const { data: emergencyRefresh, error: emergencyErr } = await supabase.auth.refreshSession();
+              if (!emergencyErr && emergencyRefresh?.session) {
+                const retry = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', authUser.id)
+                  .maybeSingle();
+                profileData = retry.data;
+                profileErr = retry.error;
+              } else {
+                logger.warn('[Auth] Refresco de emergencia falló. Cerrando sesión limpia.');
+                await supabase.auth.signOut().catch(() => {});
+                setActiveUserId('');
+                setCurrentUser(null);
+                setLoading(false);
+                return;
               }
-              setCurrentUser(userProfile);
+            }
+          }
+
+          // Si tras el reintento persiste un error de autenticación fatal
+          if (profileErr) {
+            const isFatalAuth =
+              profileErr.code === 'PGRST301' ||
+              profileErr.message?.toLowerCase().includes('jwt') ||
+              profileErr.message?.toLowerCase().includes('unauthorized');
+
+            if (isFatalAuth) {
+              logger.error('[Auth] Token caducado o inválido:', profileErr.message);
+              await supabase.auth.signOut().catch(() => {});
+              setActiveUserId('');
+              setCurrentUser(null);
               setLoading(false);
               return;
-            } else {
-              // If profile record does not exist in profiles yet, create it
-              const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
-              const defaultAvatar = '👑';
-              const newProfile: UserProfile = {
-                id: authUser.id,
-                email: authUser.email,
-                cedula: authUser.user_metadata?.cedula || '',
-                first_name: authUser.user_metadata?.first_name || '',
-                last_name: authUser.user_metadata?.last_name || '',
-                name: authUser.user_metadata?.first_name ? `${authUser.user_metadata.first_name || ''} ${authUser.user_metadata.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario',
-                avatar: defaultAvatar,
-                avatar_url: defaultAvatar,
-                role,
-                is_active: true,
-                currency: 'USD',
-                theme_mode: 'navy',
-                accent_color: '#147DF0',
-                sync_status: 'synced',
+            }
+          }
+
+          if (profileData) {
+            const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
+            const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
+            const userProfile: UserProfile = {
+              id: profileData.id,
+              email: profileData.email || authUser.email,
+              cedula: profileData.cedula || authUser.user_metadata?.cedula || '',
+              first_name: profileData.first_name || authUser.user_metadata?.first_name || '',
+              last_name: profileData.last_name || authUser.user_metadata?.last_name || '',
+              name: profileData.name || (profileData.first_name ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario'),
+              avatar: avatarResolved,
+              avatar_url: avatarResolved,
+              role,
+              is_active: true,
+              currency: profileData.currency || 'USD',
+              theme_mode: profileData.theme_mode || 'navy',
+              accent_color: profileData.accent_color || '#147DF0',
+              last_active_view: profileData.last_active_view || 'dashboard',
+              keep_session: profileData.keep_session ?? false,
+              sync_status: 'synced',
+              created_at: profileData.created_at,
+              last_sign_in_at: profileData.last_sign_in_at || profileData.last_login_at || authUser.last_sign_in_at || new Date().toISOString(),
+              last_login_at: profileData.last_login_at || profileData.last_sign_in_at || authUser.last_sign_in_at || new Date().toISOString(),
+            };
+
+            await saveUserProfile(userProfile);
+            setActiveUserId(userProfile.id);
+            if (typeof document !== 'undefined') {
+              const root = document.documentElement;
+              root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+              root.classList.add(`theme-${userProfile.theme_mode || 'navy'}`);
+              root.style.setProperty('--primary', userProfile.accent_color || '#147DF0');
+              root.style.setProperty('--primary-custom', userProfile.accent_color || '#147DF0');
+            }
+            setCurrentUser(userProfile);
+            setLoading(false);
+            return;
+          } else if (!profileErr) {
+            // Solo si NO hubo error de red/auth pero la fila no existe aún, se inicializa el perfil
+            const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
+            const defaultAvatar = '👑';
+            const newProfile: UserProfile = {
+              id: authUser.id,
+              email: authUser.email,
+              cedula: authUser.user_metadata?.cedula || '',
+              first_name: authUser.user_metadata?.first_name || '',
+              last_name: authUser.user_metadata?.last_name || '',
+              name: authUser.user_metadata?.first_name ? `${authUser.user_metadata.first_name || ''} ${authUser.user_metadata.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario',
+              avatar: defaultAvatar,
+              avatar_url: defaultAvatar,
+              role,
+              is_active: true,
+              currency: 'USD',
+              theme_mode: 'navy',
+              accent_color: '#147DF0',
+              sync_status: 'synced',
               created_at: new Date().toISOString(),
             };
 
@@ -117,7 +186,6 @@ export function useAuth() {
 
             await saveUserProfile(newProfile);
             setActiveUserId(newProfile.id);
-            // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             setCurrentUser(newProfile);
             setLoading(false);
             return;
@@ -145,15 +213,15 @@ export function useAuth() {
     const client = supabase;
     if (isSupabaseConfigured() && client) {
       const { data: listener } = client.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
           const authUser = session.user;
-          const { data: profileData } = await client
+          const { data: profileData, error: profileErr } = await client
             .from('profiles')
             .select('*')
             .eq('id', authUser.id)
             .maybeSingle();
 
-          if (profileData) {
+          if (profileData && !profileErr) {
             const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
             const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
             const userProfile: UserProfile = {
@@ -177,7 +245,6 @@ export function useAuth() {
             };
             await saveUserProfile(userProfile);
             setActiveUserId(userProfile.id);
-            // El rol debe venir ÚNICAMENTE de Supabase Auth/Profiles. No se permite almacenamiento local del rol por seguridad.
             setCurrentUser(userProfile);
           }
         } else if (event === 'SIGNED_OUT') {

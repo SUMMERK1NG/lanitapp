@@ -136,12 +136,20 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
       return false;
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData?.user) {
+    // 1. Validar sesión localmente sin emitir llamadas de red fallidas (403 Forbidden)
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData?.session;
+    if (!session?.user) {
       return false;
     }
 
-    const user = userData.user;
+    // Si el token JWT ya caducó, no invocar la API hasta que se renueve
+    const expiresAt = session.expires_at || 0;
+    if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
+      return false;
+    }
+
+    const user = session.user;
     const userEmail = user.email;
     if (!userEmail) return false;
 

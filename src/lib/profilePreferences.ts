@@ -36,22 +36,37 @@ export const getUserPreferences = async (userId: string): Promise<UserPreference
       .maybeSingle();
 
     if (res.error) {
-      // Si la columna dashboard_widgets no existe aún en la tabla, reintentar con las columnas previas
-      const fallbackRes = await supabase
-        .from('profiles')
-        .select('theme_mode, accent_color, last_active_view, keep_session, currency')
-        .eq('id', userId)
-        .maybeSingle();
+      // Si el error es de autenticación (401 / JWT expirado), abortar de inmediato sin reintentar
+      const isAuthErr =
+        res.error.code === 'PGRST301' ||
+        res.error.message?.toLowerCase().includes('jwt') ||
+        res.error.message?.toLowerCase().includes('unauthorized') ||
+        res.status === 401;
 
-      if (fallbackRes.error) {
-        const minimalRes = await supabase
+      if (isAuthErr) {
+        return null;
+      }
+
+      // Solo si la columna dashboard_widgets no existe aún en la tabla (42703/PGRST204), reintentar con las columnas previas
+      if (res.error.code === '42703' || res.error.code === 'PGRST204' || res.error.message?.toLowerCase().includes('column')) {
+        const fallbackRes = await supabase
           .from('profiles')
-          .select('currency')
+          .select('theme_mode, accent_color, last_active_view, keep_session, currency')
           .eq('id', userId)
           .maybeSingle();
-        data = minimalRes.data;
+
+        if (fallbackRes.error) {
+          const minimalRes = await supabase
+            .from('profiles')
+            .select('currency')
+            .eq('id', userId)
+            .maybeSingle();
+          data = minimalRes.data;
+        } else {
+          data = fallbackRes.data;
+        }
       } else {
-        data = fallbackRes.data;
+        return null;
       }
     } else {
       data = res.data;

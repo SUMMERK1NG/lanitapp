@@ -205,11 +205,24 @@ async function safeQuery<T = any>(
   try {
     const res = await queryFn();
     if (res.error) {
+      const isAuthErr =
+        res.error.code === 'PGRST301' ||
+        (res.error as any)?.status === 401 ||
+        res.error.message?.toLowerCase().includes('jwt') ||
+        res.error.message?.toLowerCase().includes('unauthorized');
+
+      if (isAuthErr) {
+        throw new Error(`AUTH_EXPIRED: ${res.error.message || 'JWT Expired'}`);
+      }
+
       logger.warn(`[Supabase Table Notice '${tableName}'] :`, res.error.message || res.error.details || res.error);
       return [];
     }
     return (res.data as T[]) || [];
   } catch (err: any) {
+    if (err?.message?.startsWith('AUTH_EXPIRED')) {
+      throw err;
+    }
     logger.warn(`[Supabase Table Query Exception '${tableName}'] :`, err?.message || err);
     return [];
   }
@@ -512,6 +525,9 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       logger.error('[FinanceStore Fetch Initial Error]:', err);
       await get().loadFromLocalCache(userId);
       set({ syncStatus: 'error', error: err.message, isLoading: false });
+      if (err?.message?.includes('AUTH_EXPIRED') && isSupabaseConfigured() && supabase) {
+        supabase.auth.refreshSession().catch(() => {});
+      }
     }
   },
 
