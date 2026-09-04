@@ -36,6 +36,10 @@ import {
   subscribeToDebtsChanges as subscribeToDebtsChangesService,
   fetchDebts as fetchDebtsService,
 } from '../services/debtsService.ts';
+import {
+  normalizeMonthlyFixedOverrideRow,
+  normalizeMonthlyFixedIncomeOverrideRow,
+} from '../lib/supabasePayloads.ts';
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
 
@@ -420,7 +424,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         default_fortnight: quincenaToFortnight(i.default_fortnight, i.notes),
         sync_status: 'synced',
       }));
-      const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => normalizeMonthlyFixedIncomeOverrideRow(o));
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => {
         const [yr, mo] = (v.month_year || '').split('-').map(Number);
         const now = new Date();
@@ -451,7 +455,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         default_fortnight: quincenaToFortnight(e.default_fortnight || e.default_quincena),
         sync_status: 'synced',
       }));
-      const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => ({ ...o, sync_status: 'synced' }));
+      const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => normalizeMonthlyFixedOverrideRow(o));
       const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
       const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({
         ...p,
@@ -667,13 +671,28 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ monthlyFixedOverrides: s.monthlyFixedOverrides.filter((o) => o.id !== oldRow.id) }));
           await db.monthly_fixed_overrides.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: MonthlyFixedOverride = { ...newRow, sync_status: 'synced' };
+          const item: MonthlyFixedOverride = normalizeMonthlyFixedOverrideRow(newRow);
           set((s) => ({
             monthlyFixedOverrides: s.monthlyFixedOverrides.some((o) => o.id === item.id)
               ? s.monthlyFixedOverrides.map((o) => (o.id === item.id ? item : o))
               : [...s.monthlyFixedOverrides, item],
           }));
           await db.monthly_fixed_overrides.put(item);
+        }
+        break;
+      }
+      case 'monthly_fixed_income_overrides': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({ monthlyIncomeOverrides: s.monthlyIncomeOverrides.filter((o) => o.id !== oldRow.id) }));
+          await db.monthly_fixed_income_overrides.delete(oldRow.id);
+        } else if (newRow?.id) {
+          const item: MonthlyFixedIncomeOverride = normalizeMonthlyFixedIncomeOverrideRow(newRow);
+          set((s) => ({
+            monthlyIncomeOverrides: s.monthlyIncomeOverrides.some((o) => o.id === item.id)
+              ? s.monthlyIncomeOverrides.map((o) => (o.id === item.id ? item : o))
+              : [...s.monthlyIncomeOverrides, item],
+          }));
+          await db.monthly_fixed_income_overrides.put(item);
         }
         break;
       }

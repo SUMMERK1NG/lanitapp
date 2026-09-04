@@ -22,7 +22,7 @@ import type {
   PlanningTask,
 } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
-import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
+import { ensureValidUuid, generateUuid, isValidUuid } from '../utils/uuid.ts';
 import {
   setCategoryMap,
   toSupabaseDebtPaymentPayload,
@@ -32,6 +32,8 @@ import {
   toSupabaseMonthlyIncomeOverridePayload,
   toSupabaseVariableIncomePayload,
   toSupabaseTransactionPayload,
+  normalizeMonthlyFixedOverrideRow,
+  normalizeMonthlyFixedIncomeOverrideRow,
 } from './supabasePayloads.ts';
 import { logger } from '../utils/logger.ts';
 
@@ -558,7 +560,10 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
       })));
     }
     if (remoteExpenseOverrides && remoteExpenseOverrides.length > 0) {
-      await db.monthly_fixed_overrides.bulkPut(remoteExpenseOverrides.map((o) => ({ ...o, sync_status: 'synced' })));
+      await db.monthly_fixed_overrides.bulkPut(remoteExpenseOverrides.map((o) => normalizeMonthlyFixedOverrideRow(o)));
+    }
+    if (remoteIncomeOverrides && remoteIncomeOverrides.length > 0) {
+      await db.monthly_fixed_income_overrides.bulkPut(remoteIncomeOverrides.map((o) => normalizeMonthlyFixedIncomeOverrideRow(o)));
     }
     if (remoteDebts && remoteDebts.length > 0) {
       await db.debts.bulkPut(remoteDebts.map((d) => ({
@@ -1370,30 +1375,92 @@ export async function toggleMonthlyFixedIncomeOverride(
   month: number,
   isActive: boolean,
   customAmount?: number
-): Promise<void> {
-  const id = `${fixedIncomeId}_${year}_${month}`;
+): Promise<MonthlyFixedIncomeOverride> {
+  const cleanIncomeId = ensureValidUuid(fixedIncomeId);
+  const userId = getActiveUserId();
+  const monthYear = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // 1. Buscar si ya existe un override para este ingreso, año y mes en Dexie
+  const allOverrides = await db.monthly_fixed_income_overrides.toArray();
+  const existing = allOverrides.find(
+    (o) => (o.fixed_income_id === cleanIncomeId || (o as any).income_id === cleanIncomeId) &&
+           o.year === year &&
+           o.month === month
+  );
+
+  // Limpiar registro local huérfano con ID no UUID si existía
+  if (existing && !isValidUuid(existing.id)) {
+    try {
+      await db.monthly_fixed_income_overrides.delete(existing.id);
+    } catch {
+      // Ignorar error al limpiar ID corrupto
+    }
+  }
+
+  let finalId = existing && isValidUuid(existing.id) ? existing.id : generateUuid();
+
   const record: MonthlyFixedIncomeOverride = {
-    id,
-    fixed_income_id: fixedIncomeId,
+    id: finalId,
+    user_id: userId,
+    fixed_income_id: cleanIncomeId,
     year,
     month,
     is_active: isActive,
-    custom_amount: customAmount !== undefined ? Number(customAmount) : undefined,
+    custom_amount: customAmount !== undefined ? Number(customAmount) : existing?.custom_amount,
+    notes: existing?.notes,
     sync_status: 'pending',
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUid = user?.id || userId;
+      record.user_id = currentUid;
+
+      // Si no teníamos un ID previo válido, consultar si existe remotamente
+      if (!existing || !isValidUuid(existing.id)) {
+        const { data: remoteExisting } = await supabase
+          .from('monthly_fixed_income_overrides')
+          .select('id')
+          .eq('income_id', cleanIncomeId)
+          .eq('month_year', monthYear)
+          .maybeSingle();
+
+        if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
+          finalId = remoteExisting.id;
+          record.id = finalId;
+        }
+      }
+
       const { sync_status, ...rawPayload } = record;
-      const payload = toSupabaseMonthlyIncomeOverridePayload(rawPayload);
-      const { error } = await supabase.from('monthly_fixed_income_overrides').upsert(payload);
-      if (!error) record.sync_status = 'synced';
+      const payload = toSupabaseMonthlyIncomeOverridePayload(rawPayload, currentUid);
+
+      const { data, error } = await supabase
+        .from('monthly_fixed_income_overrides')
+        .upsert(payload, { onConflict: 'id' })
+        .select();
+
+      if (error) {
+        logger.error('[FIXED INCOME OVERRIDE ERROR]:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          payload,
+        });
+      } else {
+        record.sync_status = 'synced';
+        if (data && data[0]?.id) {
+          record.id = data[0].id;
+        }
+      }
     } catch (e) {
-      logger.warn('Override upsert notice:', e);
+      logger.warn('[FIXED INCOME OVERRIDE EXCEPTION]:', e);
     }
   }
 
   await db.monthly_fixed_income_overrides.put(record);
+  return record;
 }
 
 /**
@@ -1808,31 +1875,93 @@ export async function toggleMonthlyFixedOverride(
   isActive: boolean,
   customAmount?: number,
   assumedByThirdParty?: boolean
-): Promise<void> {
-  const id = `${fixedExpenseId}_${year}_${month}`;
+): Promise<MonthlyFixedOverride> {
+  const cleanExpenseId = ensureValidUuid(fixedExpenseId);
+  const userId = getActiveUserId();
+  const monthYear = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // 1. Buscar si ya existe un override para este gasto, año y mes en Dexie
+  const allOverrides = await db.monthly_fixed_overrides.toArray();
+  const existing = allOverrides.find(
+    (o) => (o.fixed_expense_id === cleanExpenseId || (o as any).expense_id === cleanExpenseId) &&
+           o.year === year &&
+           o.month === month
+  );
+
+  // Limpiar registro local huérfano con ID no UUID si existía
+  if (existing && !isValidUuid(existing.id)) {
+    try {
+      await db.monthly_fixed_overrides.delete(existing.id);
+    } catch {
+      // Ignorar error de borrado
+    }
+  }
+
+  let finalId = existing && isValidUuid(existing.id) ? existing.id : generateUuid();
+
   const record: MonthlyFixedOverride = {
-    id,
-    fixed_expense_id: fixedExpenseId,
+    id: finalId,
+    user_id: userId,
+    fixed_expense_id: cleanExpenseId,
     year,
     month,
     is_active: isActive,
-    custom_amount: customAmount !== undefined ? Number(customAmount) : undefined,
-    assumed_by_third_party: assumedByThirdParty,
+    custom_amount: customAmount !== undefined ? Number(customAmount) : existing?.custom_amount,
+    assumed_by_third_party: assumedByThirdParty !== undefined ? assumedByThirdParty : existing?.assumed_by_third_party,
+    notes: existing?.notes,
     sync_status: 'pending',
   };
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUid = user?.id || userId;
+      record.user_id = currentUid;
+
+      // Si no teníamos un ID previo válido, consultar si existe remotamente
+      if (!existing || !isValidUuid(existing.id)) {
+        const { data: remoteExisting } = await supabase
+          .from('monthly_fixed_overrides')
+          .select('id')
+          .eq('expense_id', cleanExpenseId)
+          .eq('month_year', monthYear)
+          .maybeSingle();
+
+        if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
+          finalId = remoteExisting.id;
+          record.id = finalId;
+        }
+      }
+
       const { sync_status, ...rawPayload } = record;
-      const payload = toSupabaseMonthlyOverridePayload(rawPayload);
-      const { error } = await supabase.from('monthly_fixed_overrides').upsert(payload);
-      if (!error) record.sync_status = 'synced';
+      const payload = toSupabaseMonthlyOverridePayload(rawPayload, currentUid);
+
+      const { data, error } = await supabase
+        .from('monthly_fixed_overrides')
+        .upsert(payload, { onConflict: 'id' })
+        .select();
+
+      if (error) {
+        logger.error('[FIXED EXPENSE OVERRIDE ERROR]:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          payload,
+        });
+      } else {
+        record.sync_status = 'synced';
+        if (data && data[0]?.id) {
+          record.id = data[0].id;
+        }
+      }
     } catch (e) {
-      logger.warn('Override upsert notice:', e);
+      logger.warn('[FIXED EXPENSE OVERRIDE EXCEPTION]:', e);
     }
   }
 
   await db.monthly_fixed_overrides.put(record);
+  return record;
 }
 
 export async function saveFixedExpense(

@@ -113,6 +113,7 @@ export interface FixedIncome {
 
 export interface MonthlyFixedIncomeOverride {
   id: string; // `${fixed_income_id}_${year}_${month}`
+  user_id?: string;
   fixed_income_id: string;
   year: number;
   month: number;
@@ -169,6 +170,7 @@ export interface FixedExpense {
 
 export interface MonthlyFixedOverride {
   id: string; // `${fixed_expense_id}_${year}_${month}`
+  user_id?: string;
   fixed_expense_id: string;
   year: number;
   month: number;

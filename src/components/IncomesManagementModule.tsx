@@ -363,13 +363,19 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   };
 
   const handleToggleFixedActive = async (income: typeof processedFixedIncomes[0]) => {
-    await toggleMonthlyFixedIncomeOverride(
-      income.id,
-      selectedYear,
-      selectedMonth,
-      !income.isActive,
-      income.finalAmount
-    );
+    try {
+      await toggleMonthlyFixedIncomeOverride(
+        income.id,
+        selectedYear,
+        selectedMonth,
+        !income.isActive,
+        income.finalAmount
+      );
+      logger.dev(`[FIXED INCOME] Pausa toggled para ingreso ${income.id}: ${!income.isActive}`);
+    } catch (error) {
+      logger.error('[FIXED INCOME PAUSE ERROR]:', error);
+      alert('Error al pausar/activar el ingreso fijo. Por favor intenta de nuevo.');
+    }
   };
 
   // Handlers for Variable Incomes

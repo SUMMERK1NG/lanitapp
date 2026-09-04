@@ -34,6 +34,7 @@ import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { logger } from '../utils/logger.ts';
 
 export const PAYMENT_MODES_LIST: {
   id: FixedExpensePaymentMode;
@@ -325,7 +326,13 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   };
 
   const handleToggleFixedActive = async (id: string, currentStatus: boolean) => {
-    await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, !currentStatus);
+    try {
+      await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, !currentStatus);
+      logger.dev(`[FIXED EXPENSE] Pausa toggled para gasto ${id}: ${!currentStatus}`);
+    } catch (error) {
+      logger.error('[FIXED EXPENSE PAUSE ERROR]:', error);
+      alert('Error al pausar/activar el gasto fijo. Por favor intenta de nuevo.');
+    }
   };
 
   // Open Variable Expense Modal

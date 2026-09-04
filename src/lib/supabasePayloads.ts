@@ -182,22 +182,110 @@ export function toSupabaseSavingContributionPayload(
 
 /**
  * Convert MonthlyFixedOverride to Supabase format.
- * - Renames `fixed_expense_id` → `expense_id`
- * - Removes `year`, `month` (not in DB schema)
+ * - Ensures valid UUID for `id`
+ * - Renames `fixed_expense_id` → `expense_id` (valid UUID)
+ * - Sets `user_id` (valid UUID)
+ * - Converts `year` and `month` → `month_year` ('YYYY-MM')
+ * - Ensures `is_active` is boolean
+ * - Ensures `custom_amount` / `amount` are numbers if present
+ * - Strips local-only fields
  */
 export function toSupabaseMonthlyOverridePayload(
-  record: Omit<MonthlyFixedOverride, 'sync_status'> & Record<string, any>
+  record: Omit<MonthlyFixedOverride, 'sync_status'> & Record<string, any>,
+  fallbackUserId?: string
 ): Record<string, any> {
   const {
+    id,
     fixed_expense_id,
+    expense_id,
+    user_id,
     year,
     month,
-    ...rest
+    month_year,
+    is_active,
+    custom_amount,
+    amount,
+    assumed_by_third_party,
+    notes,
   } = record;
 
+  const validId = ensureValidUuid(id);
+  const targetExpenseId = ensureValidUuid(fixed_expense_id || expense_id);
+  const targetUserId = user_id || fallbackUserId;
+
+  let finalMonthYear = month_year;
+  if (!finalMonthYear && typeof year === 'number' && typeof month === 'number') {
+    finalMonthYear = `${year}-${String(month + 1).padStart(2, '0')}`;
+  }
+
+  const payload: Record<string, any> = {
+    id: validId,
+    expense_id: targetExpenseId,
+    month_year: finalMonthYear || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+    is_active: is_active !== undefined ? Boolean(is_active) : true,
+  };
+
+  if (targetUserId) {
+    payload.user_id = targetUserId;
+  }
+
+  const numAmount = custom_amount !== undefined && custom_amount !== null
+    ? Number(custom_amount)
+    : amount !== undefined && amount !== null
+    ? Number(amount)
+    : undefined;
+
+  if (numAmount !== undefined && !isNaN(numAmount)) {
+    payload.custom_amount = numAmount;
+    payload.amount = numAmount;
+  }
+
+  if (assumed_by_third_party !== undefined) {
+    payload.assumed_by_third_party = Boolean(assumed_by_third_party);
+  }
+
+  if (notes !== undefined && notes !== null) {
+    payload.notes = String(notes);
+  }
+
+  return payload;
+}
+
+/**
+ * Normaliza un registro remoto de Supabase `monthly_fixed_overrides` a la interfaz local `MonthlyFixedOverride`.
+ */
+export function normalizeMonthlyFixedOverrideRow(row: any): MonthlyFixedOverride {
+  let year = typeof row.year === 'number' ? row.year : undefined;
+  let month = typeof row.month === 'number' ? row.month : undefined;
+
+  if (row.month_year && (year === undefined || month === undefined)) {
+    const [yr, mo] = String(row.month_year).split('-').map(Number);
+    if (!isNaN(yr) && yr > 2000) year = yr;
+    if (!isNaN(mo) && mo >= 1 && mo <= 12) month = mo - 1;
+  }
+
+  const now = new Date();
+  const finalYear = year !== undefined ? year : now.getFullYear();
+  const finalMonth = month !== undefined ? month : now.getMonth();
+  const fixedExpenseId = row.fixed_expense_id || row.expense_id || '';
+
+  const numAmount = row.custom_amount !== undefined && row.custom_amount !== null
+    ? Number(row.custom_amount)
+    : row.amount !== undefined && row.amount !== null
+    ? Number(row.amount)
+    : undefined;
+
   return {
-    ...rest,
-    expense_id: fixed_expense_id,
+    id: ensureValidUuid(row.id),
+    user_id: row.user_id,
+    fixed_expense_id: fixedExpenseId,
+    year: finalYear,
+    month: finalMonth,
+    is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
+    custom_amount: numAmount !== undefined && !isNaN(numAmount) ? numAmount : undefined,
+    assumed_by_third_party: Boolean(row.assumed_by_third_party),
+    notes: row.notes || '',
+    sync_status: (row.sync_status as any) || 'synced',
   };
 }
 
@@ -207,22 +295,104 @@ export function toSupabaseMonthlyOverridePayload(
 
 /**
  * Convert MonthlyFixedIncomeOverride to Supabase format.
- * - Renames `fixed_income_id` → `income_id`
- * - Removes `year`, `month` (not in DB schema)
+ * - Ensures valid UUID for `id`
+ * - Renames `fixed_income_id` → `income_id` (valid UUID)
+ * - Sets `user_id` (valid UUID)
+ * - Converts `year` and `month` → `month_year` ('YYYY-MM')
+ * - Ensures `is_active` is boolean
+ * - Ensures `custom_amount` / `amount` are numbers if present
+ * - Strips local-only fields
  */
 export function toSupabaseMonthlyIncomeOverridePayload(
-  record: Omit<MonthlyFixedIncomeOverride, 'sync_status'> & Record<string, any>
+  record: Omit<MonthlyFixedIncomeOverride, 'sync_status'> & Record<string, any>,
+  fallbackUserId?: string
 ): Record<string, any> {
   const {
+    id,
     fixed_income_id,
+    income_id,
+    user_id,
     year,
     month,
-    ...rest
+    month_year,
+    is_active,
+    custom_amount,
+    amount,
+    notes,
   } = record;
 
+  const validId = ensureValidUuid(id);
+  const targetIncomeId = ensureValidUuid(fixed_income_id || income_id);
+  const targetUserId = user_id || fallbackUserId;
+
+  let finalMonthYear = month_year;
+  if (!finalMonthYear && typeof year === 'number' && typeof month === 'number') {
+    finalMonthYear = `${year}-${String(month + 1).padStart(2, '0')}`;
+  }
+
+  const payload: Record<string, any> = {
+    id: validId,
+    income_id: targetIncomeId,
+    month_year: finalMonthYear || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+    is_active: is_active !== undefined ? Boolean(is_active) : true,
+  };
+
+  if (targetUserId) {
+    payload.user_id = targetUserId;
+  }
+
+  const numAmount = custom_amount !== undefined && custom_amount !== null
+    ? Number(custom_amount)
+    : amount !== undefined && amount !== null
+    ? Number(amount)
+    : undefined;
+
+  if (numAmount !== undefined && !isNaN(numAmount)) {
+    payload.custom_amount = numAmount;
+    payload.amount = numAmount;
+  }
+
+  if (notes !== undefined && notes !== null) {
+    payload.notes = String(notes);
+  }
+
+  return payload;
+}
+
+/**
+ * Normaliza un registro remoto de Supabase `monthly_fixed_income_overrides` a la interfaz local `MonthlyFixedIncomeOverride`.
+ */
+export function normalizeMonthlyFixedIncomeOverrideRow(row: any): MonthlyFixedIncomeOverride {
+  let year = typeof row.year === 'number' ? row.year : undefined;
+  let month = typeof row.month === 'number' ? row.month : undefined;
+
+  if (row.month_year && (year === undefined || month === undefined)) {
+    const [yr, mo] = String(row.month_year).split('-').map(Number);
+    if (!isNaN(yr) && yr > 2000) year = yr;
+    if (!isNaN(mo) && mo >= 1 && mo <= 12) month = mo - 1;
+  }
+
+  const now = new Date();
+  const finalYear = year !== undefined ? year : now.getFullYear();
+  const finalMonth = month !== undefined ? month : now.getMonth();
+  const fixedIncomeId = row.fixed_income_id || row.income_id || '';
+
+  const numAmount = row.custom_amount !== undefined && row.custom_amount !== null
+    ? Number(row.custom_amount)
+    : row.amount !== undefined && row.amount !== null
+    ? Number(row.amount)
+    : undefined;
+
   return {
-    ...rest,
-    income_id: fixed_income_id,
+    id: ensureValidUuid(row.id),
+    user_id: row.user_id,
+    fixed_income_id: fixedIncomeId,
+    year: finalYear,
+    month: finalMonth,
+    is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
+    custom_amount: numAmount !== undefined && !isNaN(numAmount) ? numAmount : undefined,
+    notes: row.notes || '',
+    sync_status: (row.sync_status as any) || 'synced',
   };
 }
 
