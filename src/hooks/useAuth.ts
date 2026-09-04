@@ -21,7 +21,10 @@ export function useAuth() {
     setLoading(true);
 
     // 0. Revisar si hay un mensaje de error flash por enlace de recuperación expirado o inválido
-    const flashError = sessionStorage.getItem('lanitapp_auth_flash_error');
+    let flashError: string | null = null;
+    try {
+      flashError = sessionStorage.getItem('lanitapp_auth_flash_error');
+    } catch {}
     if (flashError) {
       logger.warn('[Auth] Enlace expirado detectado vía flash error:', flashError);
       if (isSupabaseConfigured() && supabase) {
@@ -70,8 +73,10 @@ export function useAuth() {
         await supabase.auth.signOut().catch(() => {});
       }
       setActiveUserId('');
-      sessionStorage.clear();
-      sessionStorage.setItem('lanitapp_auth_flash_error', friendlyMsg);
+      try {
+        sessionStorage.clear();
+        sessionStorage.setItem('lanitapp_auth_flash_error', friendlyMsg);
+      } catch {}
       setCurrentUser(null);
       setError(friendlyMsg);
       setLoading(false);
@@ -278,7 +283,11 @@ export function useAuth() {
     if (isSupabaseConfigured() && client) {
       const { data: listener } = client.auth.onAuthStateChange(async (event, session) => {
         // Si hay un error de enlace expirado o inválido activo, bloquear cualquier inicio de sesión automático
-        if (sessionStorage.getItem('lanitapp_auth_flash_error')) {
+        let hasFlash = false;
+        try {
+          hasFlash = Boolean(sessionStorage.getItem('lanitapp_auth_flash_error'));
+        } catch {}
+        if (hasFlash) {
           logger.warn('[Auth] Bloqueando evento onAuthStateChange debido a flash error de enlace expirado.');
           return;
         }
@@ -915,12 +924,18 @@ export function useAuth() {
       }
       setActiveUserId('');
       setLastSyncTimestampInMemory(null);
-      const flash = sessionStorage.getItem('lanitapp_auth_flash_error');
-      sessionStorage.clear();
-      if (flash) {
-        sessionStorage.setItem('lanitapp_auth_flash_error', flash);
-      }
+      let flash: string | null = null;
+      try {
+        flash = sessionStorage.getItem('lanitapp_auth_flash_error');
+        sessionStorage.clear();
+        if (flash) {
+          sessionStorage.setItem('lanitapp_auth_flash_error', flash);
+        }
+      } catch {}
       setCurrentUser(null);
+      if (flash) {
+        setError(flash);
+      }
     } finally {
       setLoading(false);
     }

@@ -362,6 +362,10 @@ export function App() {
       search.includes('error_code=')
     ) {
       setIsResetPasswordModalOpen(false);
+      const msg = 'El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
+      try {
+        sessionStorage.setItem('lanitapp_auth_flash_error', msg);
+      } catch {}
       try {
         window.history.replaceState(null, '', window.location.origin + window.location.pathname);
       } catch {}
