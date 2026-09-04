@@ -232,6 +232,10 @@ export class LanitappDatabase extends Dexie {
       categories: 'id, code, name, type, sync_status',
     });
 
+    this.version(13).stores({
+      categories: 'id, user_id, code, name, type, sync_status',
+    });
+
     this.on('populate', async () => {
       await this.categories.bulkAdd(DEFAULT_CATEGORIES);
     });
@@ -1688,13 +1692,52 @@ export async function deleteVariableExpense(id: string): Promise<void> {
 }
 
 /**
- * Categorías
+ * Categorías individuales por usuario
  */
+export async function seedUserDefaultCategories(userId: string): Promise<Category[]> {
+  if (!userId) return [];
+  try {
+    const existing = await db.categories
+      .filter((c) => c.user_id === userId)
+      .toArray();
+
+    if (existing.length > 0) {
+      return existing;
+    }
+
+    const userDefaults: Category[] = DEFAULT_CATEGORIES.map((def) => ({
+      ...def,
+      id: generateUuid(),
+      user_id: userId,
+      sync_status: 'pending',
+    }));
+
+    await db.categories.bulkPut(userDefaults);
+
+    if (navigator.onLine && isSupabaseConfigured() && supabase) {
+      try {
+        const payloads = userDefaults.map(({ sync_status, ...rest }) => rest);
+        const { error } = await supabase.from('categories').upsert(payloads);
+        if (!error) {
+          await db.categories.bulkPut(userDefaults.map((c) => ({ ...c, sync_status: 'synced' })));
+        }
+      } catch {}
+    }
+
+    return userDefaults;
+  } catch (err) {
+    logger.error('Error seeding user default categories:', err);
+    return [];
+  }
+}
+
 export async function saveCategory(category: Partial<Category> & { name: string; type: Category['type']; icon: string; color: string }): Promise<Category> {
   const id = category.id || ensureValidUuid();
+  const userId = category.user_id || getActiveUserId();
   const record: Category = {
     ...category,
     id,
+    user_id: userId,
     name: category.name,
     type: category.type,
     icon: category.icon,
@@ -1706,7 +1749,14 @@ export async function saveCategory(category: Partial<Category> & { name: string;
     try {
       const { sync_status, ...payload } = record;
       const { error } = await supabase.from('categories').upsert(payload);
-      if (!error) record.sync_status = 'synced';
+      if (!error) {
+        record.sync_status = 'synced';
+      } else if (error.code === '42703' || error.message?.toLowerCase().includes('user_id')) {
+        // Fallback resiliente si la columna user_id está en proceso de creación en Supabase
+        const { user_id: _, ...legacyPayload } = payload;
+        const legacyRes = await supabase.from('categories').upsert(legacyPayload);
+        if (!legacyRes.error) record.sync_status = 'synced';
+      }
     } catch (e) {
       logger.warn('Category upsert notice:', e);
     }
@@ -1717,10 +1767,23 @@ export async function saveCategory(category: Partial<Category> & { name: string;
 }
 
 export async function deleteCategory(id: string): Promise<void> {
+  const activeUid = getActiveUserId();
   await db.categories.delete(id);
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      await supabase.from('categories').delete().eq('id', id);
+      if (activeUid) {
+        const { error } = await supabase
+          .from('categories')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', activeUid);
+
+        if (error && (error.code === '42703' || error.message?.toLowerCase().includes('user_id'))) {
+          await supabase.from('categories').delete().eq('id', id);
+        }
+      } else {
+        await supabase.from('categories').delete().eq('id', id);
+      }
     } catch (e) {
       logger.warn('Delete remote category err:', e);
     }

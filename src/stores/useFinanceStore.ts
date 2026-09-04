@@ -337,9 +337,18 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredStates = fortnightItemStates.filter(matchesUser);
       const filteredTxs = transactions.filter(matchesUser);
 
+      const userCategories = categories.filter((c) => c.user_id === userId);
+      const fallbackCategories = categories.filter((c) => !c.user_id);
+      const resolvedCategories =
+        userCategories.length > 0
+          ? userCategories
+          : fallbackCategories.length > 0
+          ? fallbackCategories
+          : DEFAULT_CATEGORIES;
+
       set({
         accounts: filteredAccounts,
-        categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES,
+        categories: resolvedCategories,
         fixedIncomes: filteredFixedIncomes,
         monthlyIncomeOverrides,
         variableIncomes: filteredVarIncomes,
@@ -399,7 +408,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         rawTxs,
       ] = await Promise.all([
         safeQuery('profiles', () => client.from('profiles').select('*').eq('id', userId)),
-        safeQuery('categories', () => client.from('categories').select('*')),
+        safeQuery('categories', async () => {
+          try {
+            const res = await client
+              .from('categories')
+              .select('*')
+              .or(`user_id.eq.${userId},user_id.is.null`);
+            if (!res.error) return res;
+          } catch {}
+          return client.from('categories').select('*');
+        }),
         safeQuery('accounts', () => client.from('accounts').select('*').eq('user_id', userId)),
         safeQuery('fixed_incomes', () => client.from('fixed_incomes').select('*').eq('user_id', userId)),
         safeQuery('monthly_fixed_income_overrides', () => client.from('monthly_fixed_income_overrides').select('*')),
@@ -415,7 +433,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       ]);
 
       const profiles: UserProfile[] = rawProfiles;
-      const categories: Category[] = rawCategories.length > 0 ? rawCategories : DEFAULT_CATEGORIES;
+      const userCats = rawCategories.filter((c: any) => c.user_id === userId);
+      const fallbackCats = rawCategories.filter((c: any) => !c.user_id);
+      const categories: Category[] =
+        userCats.length > 0
+          ? userCats
+          : fallbackCats.length > 0
+          ? fallbackCats
+          : DEFAULT_CATEGORIES;
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({
         id: ensureValidUuid(a.id),
@@ -578,13 +603,43 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ accounts: s.accounts.filter((a) => a.id !== oldRow.id) }));
           await db.accounts.delete(oldRow.id);
         } else if (newRow?.id) {
-          const acc = normalizeAcc(newRow);
-          set((s) => ({
-            accounts: s.accounts.some((a) => a.id === acc.id)
-              ? s.accounts.map((a) => (a.id === acc.id ? acc : a))
-              : [...s.accounts, acc],
-          }));
-          await db.accounts.put(acc);
+          const accItem = normalizeAcc(newRow);
+          set((s) => {
+            const exists = s.accounts.some((a) => a.id === accItem.id);
+            return {
+              accounts: exists ? s.accounts.map((a) => (a.id === accItem.id ? accItem : a)) : [...s.accounts, accItem],
+            };
+          });
+          await db.accounts.put(accItem);
+        }
+        break;
+      }
+      case 'categories': {
+        if (eventType === 'DELETE' && oldRow?.id) {
+          set((s) => ({ categories: s.categories.filter((c) => c.id !== oldRow.id) }));
+          await db.categories.delete(oldRow.id);
+        } else if (newRow?.id) {
+          if (!newRow.user_id || newRow.user_id === userId) {
+            const catItem: Category = {
+              id: ensureValidUuid(newRow.id),
+              user_id: newRow.user_id || userId,
+              name: newRow.name,
+              type: newRow.type || 'expense',
+              icon: newRow.icon || 'tag',
+              color: newRow.color || '#147DF0',
+              code: newRow.code,
+              sync_status: 'synced',
+            };
+            set((s) => {
+              const exists = s.categories.some((c) => c.id === catItem.id);
+              return {
+                categories: exists
+                  ? s.categories.map((c) => (c.id === catItem.id ? catItem : c))
+                  : [...s.categories, catItem],
+              };
+            });
+            await db.categories.put(catItem);
+          }
         }
         break;
       }

@@ -6,9 +6,10 @@ import {
   Trash2,
   Check,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import type { Category, TransactionType } from '../types/index.ts';
-import { saveCategory, deleteCategory } from '../lib/db.ts';
+import { saveCategory, deleteCategory, seedUserDefaultCategories, getActiveUserId } from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 
 interface CategoriesModuleProps {
@@ -38,12 +39,12 @@ const AVAILABLE_ICONS = [
 const PRESET_COLORS = [
   '#147DF0',
   '#00C2C7',
-  '#FF914D',
-  '#EC4899',
-  '#8B5CF6',
   '#10B981',
-  '#EF4444',
   '#F59E0B',
+  '#FF914D',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
   '#6366F1',
   '#9BA3AF',
 ];
@@ -83,8 +84,10 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     e.preventDefault();
     if (!name.trim()) return;
 
+    const userId = getActiveUserId();
     await saveCategory({
       id: editingCategory?.id,
+      user_id: editingCategory?.user_id || userId,
       name: name.trim(),
       type,
       icon,
@@ -95,8 +98,16 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Seguro que deseas eliminar esta categoría?')) {
+    if (window.confirm('¿Seguro que deseas eliminar esta categoría? Solo se eliminará de tu cuenta personal y no afectará a los demás usuarios.')) {
       await deleteCategory(id);
+    }
+  };
+
+  const handleRestoreDefaults = async () => {
+    const userId = getActiveUserId();
+    if (!userId) return;
+    if (window.confirm('¿Deseas restaurar las categorías sugeridas para tu cuenta?')) {
+      await seedUserDefaultCategories(userId);
     }
   };
 
@@ -142,6 +153,15 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
           </div>
 
           <button
+            onClick={handleRestoreDefaults}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-app text-muted hover:text-app text-xs font-bold transition-all cursor-pointer"
+            title="Restaurar las categorías sugeridas del sistema para tu cuenta"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Sugeridas</span>
+          </button>
+
+          <button
             onClick={handleOpenAdd}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md hover:opacity-95 transition-all cursor-pointer"
           >
@@ -151,47 +171,73 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
         </div>
       </div>
 
-      {/* Categories Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {filteredCategories.map((cat) => (
-          <div
-            key={cat.id}
-            className="p-3.5 rounded-2xl bg-surface border border-app flex items-center justify-between shadow-sm hover:border-primary-custom transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
-                style={{ backgroundColor: cat.color }}
-              >
-                <CategoryIcon iconName={cat.icon} size={20} className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-app">{cat.name}</h4>
-                <span className="text-[10px] text-muted uppercase font-semibold">
-                  {cat.type === 'expense' ? 'Gasto' : 'Ingreso'}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleOpenEdit(cat)}
-                className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
-                title="Editar categoría"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => handleDelete(cat.id)}
-                className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
-                title="Eliminar categoría"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
+      {/* Categories Grid or Empty State */}
+      {filteredCategories.length === 0 ? (
+        <div className="p-8 text-center rounded-3xl bg-surface border border-dashed border-app">
+          <Layers className="w-10 h-10 text-muted mx-auto mb-2 opacity-50" />
+          <h4 className="text-sm font-bold text-app">No tienes categorías de {activeTab === 'expense' ? 'gastos' : 'ingresos'}</h4>
+          <p className="text-xs text-muted mt-1 max-w-sm mx-auto">
+            Puedes crear tus propias categorías personalizadas o restaurar el paquete sugerido del sistema.
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-custom text-white text-xs font-bold shadow-md cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Crear Categoría
+            </button>
+            <button
+              onClick={handleRestoreDefaults}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card border border-app text-app text-xs font-bold shadow-sm cursor-pointer hover:bg-surface"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Restaurar Sugeridas
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {filteredCategories.map((cat) => (
+            <div
+              key={cat.id}
+              className="p-3.5 rounded-2xl bg-surface border border-app flex items-center justify-between shadow-sm hover:border-primary-custom transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
+                  style={{ backgroundColor: cat.color }}
+                >
+                  <CategoryIcon iconName={cat.icon} size={20} className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-app">{cat.name}</h4>
+                  <span className="text-[10px] text-muted uppercase font-semibold">
+                    {cat.type === 'expense' ? 'Gasto' : 'Ingreso'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleOpenEdit(cat)}
+                  className="p-1.5 rounded-lg text-muted hover:text-app hover:bg-card transition-colors cursor-pointer"
+                  title="Editar categoría"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(cat.id)}
+                  className="p-1.5 rounded-lg text-muted hover:text-[#ef4444] hover:bg-card transition-colors cursor-pointer"
+                  title="Eliminar categoría"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add / Edit Category Modal */}
       {isModalOpen && (

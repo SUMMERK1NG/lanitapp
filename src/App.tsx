@@ -4,6 +4,7 @@ import {
   db,
   addTransaction,
   DEFAULT_CATEGORIES,
+  seedUserDefaultCategories,
   migrateLocalDataToCloud,
   subscribeToRealtimeChanges,
 } from './lib/db.ts';
@@ -199,6 +200,16 @@ export function App() {
         setKeepConnected(currentUser.keep_session);
       }
 
+      // Inicializar categorías individuales para el usuario si no han sido sembradas aún
+      const catFlag = 'lanitapp_cat_seeded_' + currentUser.id;
+      if (!localStorage.getItem(catFlag)) {
+        seedUserDefaultCategories(currentUser.id).then(() => {
+          try {
+            localStorage.setItem(catFlag, 'true');
+          } catch {}
+        });
+      }
+
       // Fetch fresh preferences from profiles in Supabase
       getUserPreferences(currentUser.id).then((prefs) => {
         if (prefs) {
@@ -389,9 +400,16 @@ export function App() {
     };
   }, [activeUserId]);
 
-  // Reactive IndexedDB queries using Dexie
   const liveTransactions = useLiveQuery(() => db.transactions.toArray(), []) || [];
-  const liveCategories = useLiveQuery(() => db.categories.toArray(), []) || [];
+  const liveCategories = useLiveQuery(
+    () => {
+      if (!activeUserId) return db.categories.toArray();
+      return db.categories
+        .filter((c) => !c.user_id || c.user_id === activeUserId)
+        .toArray();
+    },
+    [activeUserId]
+  ) || [];
   const liveAccounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
   const liveFixedIncomes = useLiveQuery(() => db.fixed_incomes.toArray(), []) || [];
   const liveMonthlyIncomeOverrides = useLiveQuery(() => db.monthly_fixed_income_overrides.toArray(), []) || [];
@@ -404,8 +422,16 @@ export function App() {
   const liveSavingsGoals = useLiveQuery(() => db.savings_goals.toArray(), []) || [];
   const liveSavingContributions = useLiveQuery(() => db.saving_contributions.toArray(), []) || [];
 
-  // System Categories & Accounts
-  const categories: Category[] = liveCategories.length > 0 ? liveCategories : DEFAULT_CATEGORIES;
+  // Categorías individuales por usuario
+  const userCategories = liveCategories.filter((c) => c.user_id === activeUserId);
+  const fallbackCategories = liveCategories.filter((c) => !c.user_id);
+  const hasUserCustom = activeUserId ? Boolean(localStorage.getItem('lanitapp_cat_seeded_' + activeUserId)) : false;
+  const categories: Category[] =
+    userCategories.length > 0 || hasUserCustom
+      ? userCategories
+      : fallbackCategories.length > 0
+      ? fallbackCategories
+      : DEFAULT_CATEGORIES;
   // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
   const isUserMatch = (item: { user_id?: string | null }) =>
     Boolean(activeUserId && item.user_id && item.user_id === activeUserId);
