@@ -485,6 +485,42 @@ export function useAuth() {
       return { success: false, error: msg };
     }
 
+    const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setLoading(false);
+      const msg = 'Por favor ingresa un correo electrónico válido.';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    const NAME_REGEX = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]{2,35}$/;
+    if (!NAME_REGEX.test(cleanFirstName)) {
+      setLoading(false);
+      const msg = 'El nombre solo debe contener letras (sin números ni símbolos).';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    if (cleanLastName && !NAME_REGEX.test(cleanLastName)) {
+      setLoading(false);
+      const msg = 'Los apellidos solo deben contener letras (sin números ni símbolos).';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    const hasMinLength = data.password.length >= 8;
+    const hasUpper = /[A-Z]/.test(data.password);
+    const hasLower = /[a-z]/.test(data.password);
+    const hasNumber = /[0-9]/.test(data.password);
+    const hasSpecial = /[^A-Za-z0-9\s]/.test(data.password);
+
+    if (!hasMinLength || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+      setLoading(false);
+      const msg = 'La contraseña debe tener mínimo 8 caracteres e incluir mayúscula, minúscula, número y un carácter especial (@, #, $, *, etc.).';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
     if (!isSupabaseConfigured() || !supabase) {
       setLoading(false);
       const msg = 'Supabase no está configurado.';

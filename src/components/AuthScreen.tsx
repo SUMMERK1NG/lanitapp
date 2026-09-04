@@ -11,8 +11,54 @@ import {
   ShieldCheck,
   AlertCircle,
   Sparkles,
+  Check,
 } from 'lucide-react';
 import { ForgotPasswordModal } from './ForgotPasswordModal.tsx';
+
+const NAME_ALLOWED_REGEX = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/;
+const EMAIL_VALID_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+const cleanNameInput = (val: string): string =>
+  val.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]/g, '').slice(0, 35);
+
+const cleanEmailInput = (val: string): string =>
+  val.replace(/\s/g, '').slice(0, 80);
+
+export interface PasswordStrength {
+  hasMinLength: boolean;
+  hasUpper: boolean;
+  hasLower: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+  score: number;
+  isValid: boolean;
+}
+
+export const evaluatePasswordStrength = (password: string): PasswordStrength => {
+  const hasMinLength = password.length >= 8;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9\s]/.test(password);
+
+  let score = 0;
+  if (hasMinLength) score++;
+  if (hasUpper && hasLower) score++;
+  if (hasNumber) score++;
+  if (hasSpecial) score++;
+
+  const isValid = hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
+
+  return {
+    hasMinLength,
+    hasUpper,
+    hasLower,
+    hasNumber,
+    hasSpecial,
+    score,
+    isValid,
+  };
+};
 
 interface AuthScreenProps {
   onSignIn: (cedula: string, password: string, keepConnected?: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -65,6 +111,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const errorToDisplay = formError || externalError;
 
+  const pwdStrength = evaluatePasswordStrength(regPassword);
+
+  const getStrengthMeta = (score: number, length: number) => {
+    if (length === 0) return { label: '', colorText: '', barColor: '' };
+    if (score <= 1) return { label: 'Muy Débil', colorText: 'text-rose-400', barColor: 'bg-rose-500' };
+    if (score === 2) return { label: 'Débil', colorText: 'text-amber-400', barColor: 'bg-amber-500' };
+    if (score === 3) return { label: 'Aceptable', colorText: 'text-cyan-400', barColor: 'bg-cyan-500' };
+    return { label: 'Segura y Robusta', colorText: 'text-emerald-400', barColor: 'bg-emerald-500' };
+  };
+
+  const strengthMeta = getStrengthMeta(pwdStrength.score, regPassword.length);
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawNumber = loginCedula.trim();
@@ -94,18 +152,44 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const rawFirstName = regFirstName.trim();
-    const rawLastName = regLastName.trim();
+    const rawFirstName = regFirstName.replace(/\s+/g, ' ').trim();
+    const rawLastName = regLastName.replace(/\s+/g, ' ').trim();
     const rawCedula = regCedula.trim();
-    const rawEmail = regEmail.trim();
+    const rawEmail = regEmail.trim().toLowerCase();
 
     if (!rawFirstName || !rawCedula || !rawEmail || !regPassword) {
       setFormError('Por favor completa todos los campos requeridos para crear tu cuenta.');
       return;
     }
 
-    if (regPassword.length < 6) {
-      setFormError('La contraseña debe contener al menos 6 caracteres.');
+    if (rawFirstName.length < 2 || !NAME_ALLOWED_REGEX.test(rawFirstName)) {
+      setFormError('El nombre debe contener solo letras (sin números ni símbolos especiales).');
+      return;
+    }
+
+    if (rawLastName && (rawLastName.length < 2 || !NAME_ALLOWED_REGEX.test(rawLastName))) {
+      setFormError('Los apellidos deben contener solo letras (sin números ni símbolos especiales).');
+      return;
+    }
+
+    if (!EMAIL_VALID_REGEX.test(rawEmail)) {
+      setFormError('Por favor ingresa un formato de correo electrónico válido (ejemplo: usuario@correo.com).');
+      return;
+    }
+
+    const pwdStrength = evaluatePasswordStrength(regPassword);
+    if (!pwdStrength.isValid) {
+      if (!pwdStrength.hasMinLength) {
+        setFormError('La contraseña debe tener al menos 8 caracteres.');
+      } else if (!pwdStrength.hasUpper || !pwdStrength.hasLower) {
+        setFormError('La contraseña debe incluir al menos una letra mayúscula y una minúscula.');
+      } else if (!pwdStrength.hasNumber) {
+        setFormError('La contraseña debe incluir al menos un número.');
+      } else if (!pwdStrength.hasSpecial) {
+        setFormError('La contraseña debe incluir al menos un carácter especial (@, #, $, *, -, etc.).');
+      } else {
+        setFormError('La contraseña no cumple con los requisitos mínimos de seguridad.');
+      }
       return;
     }
 
@@ -333,28 +417,36 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
-                  <User className="w-3 h-3 text-[#147DF0]" /> Nombres
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+                    <User className="w-3 h-3 text-[#147DF0]" /> Nombres
+                  </label>
+                  <span className="text-[9px] text-slate-400 font-medium">Solo letras</span>
+                </div>
                 <input
                   type="text"
                   required
+                  maxLength={35}
                   placeholder="Tu nombre"
                   value={regFirstName}
-                  onChange={(e) => setRegFirstName(e.target.value)}
+                  onChange={(e) => setRegFirstName(cleanNameInput(e.target.value))}
                   className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  Apellidos
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-300">
+                    Apellidos
+                  </label>
+                  <span className="text-[9px] text-slate-400 font-medium">Solo letras</span>
+                </div>
                 <input
                   type="text"
+                  maxLength={35}
                   placeholder="Tus apellidos"
                   value={regLastName}
-                  onChange={(e) => setRegLastName(e.target.value)}
+                  onChange={(e) => setRegLastName(cleanNameInput(e.target.value))}
                   className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
                 />
               </div>
@@ -393,46 +485,95 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
-                <Mail className="w-3 h-3 text-[#00C2C7]" /> Correo Electrónico
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+                  <Mail className="w-3 h-3 text-[#00C2C7]" /> Correo Electrónico
+                </label>
+                <span className="text-[9px] text-slate-400 font-medium">Máx. 80 caracteres</span>
+              </div>
               <input
                 type="email"
                 required
+                maxLength={80}
                 placeholder="nombre@ejemplo.com"
                 value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
+                onChange={(e) => setRegEmail(cleanEmailInput(e.target.value))}
                 className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
-                <Lock className="w-3 text-[#10B981]" /> Contraseña
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+                  <Lock className="w-3 text-[#10B981]" /> Contraseña Segura
+                </label>
+                <span className="text-[9px] text-slate-400 font-medium">Mín. 8 caracteres</span>
+              </div>
               <div className="relative">
                 <input
                   type={showRegPassword ? 'text' : 'password'}
                   required
-                  placeholder="Mínimo 6 caracteres"
+                  maxLength={64}
+                  placeholder="Mínimo 8 caract., mayús., núm. y símbolo"
                   value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
+                  onChange={(e) => setRegPassword(e.target.value.slice(0, 64))}
                   className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowRegPassword(!showRegPassword)}
-                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white"
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                  title={showRegPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
                   {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
+
+              {/* Indicador interactivo y dinámico de seguridad de la contraseña */}
+              {regPassword.length > 0 && (
+                <div className="mt-2.5 p-3 bg-[#0B132B]/95 border border-white/15 rounded-2xl space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center justify-between text-[10px] font-bold">
+                    <span className="text-slate-400">Nivel de seguridad:</span>
+                    <span className={`text-[10px] font-extrabold ${strengthMeta.colorText}`}>
+                      {strengthMeta.label}
+                    </span>
+                  </div>
+
+                  {/* Barra de progreso de 4 segmentos */}
+                  <div className="grid grid-cols-4 gap-1.5 h-1.5 w-full">
+                    <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 1 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                    <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 2 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                    <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 3 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                    <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 4 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                  </div>
+
+                  {/* Checklist interactivo de requisitos */}
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[10px]">
+                    <div className={`flex items-center gap-1.5 transition-colors ${pwdStrength.hasMinLength ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                      <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasMinLength ? 'text-emerald-400' : 'text-slate-600'}`} />
+                      <span>Mínimo 8 caracteres</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                      <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400' : 'text-slate-600'}`} />
+                      <span>Mayús. y minús.</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${pwdStrength.hasNumber ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                      <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasNumber ? 'text-emerald-400' : 'text-slate-600'}`} />
+                      <span>Al menos un número</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 transition-colors ${pwdStrength.hasSpecial ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                      <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasSpecial ? 'text-emerald-400' : 'text-slate-600'}`} />
+                      <span>Carácter especial (!@#$...)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
               type="submit"
               disabled={isSubmitting || isLoading}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#147DF0] to-[#00C2C7] text-white text-xs font-black shadow-lg shadow-[#147DF0]/30 hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#147DF0] to-[#00C2C7] text-white text-xs font-black shadow-lg shadow-[#147DF0]/30 hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 mt-1"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>{isSubmitting || isLoading ? 'Creando cuenta...' : 'Crear mi Cuenta'}</span>
