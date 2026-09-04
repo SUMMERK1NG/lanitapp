@@ -26,11 +26,11 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-surface border border-app rounded-t-3xl sm:rounded-3xl shadow-2xl text-app max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 cursor-default"
+        className="w-full max-w-md bg-surface border border-app rounded-3xl shadow-2xl text-app max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 cursor-default"
         role="dialog"
         onClick={(e) => e.stopPropagation()}
       >

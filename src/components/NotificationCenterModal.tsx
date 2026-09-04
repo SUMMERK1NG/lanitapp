@@ -286,12 +286,12 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Backdrop click to close */}
-      <div className="fixed inset-0" onClick={onClose} />
+      <div className="fixed inset-0 cursor-pointer" onClick={onClose} />
 
       {/* Main Responsive Modal Window */}
-      <div className="relative z-10 w-full sm:max-w-lg bg-surface border border-app rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="relative z-10 w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl text-app max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-app mb-3 shrink-0">
           <div className="flex items-center gap-2.5">
