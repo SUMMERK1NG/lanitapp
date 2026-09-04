@@ -15,6 +15,47 @@ export function useAuth() {
     setLoading(true);
     setError(null);
 
+    // 0. Detectar si el usuario aterrizó con un enlace de recuperación inválido o expirado
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    if (
+      hash.includes('error=') ||
+      hash.includes('error_code=') ||
+      search.includes('error=') ||
+      search.includes('error_code=')
+    ) {
+      const hashParams = new URLSearchParams(hash.replace(/^#/, '?'));
+      const searchParams = new URLSearchParams(search);
+      const errCode = hashParams.get('error_code') || searchParams.get('error_code') || '';
+      const errDesc = hashParams.get('error_description') || searchParams.get('error_description') || '';
+      const errName = hashParams.get('error') || searchParams.get('error') || '';
+
+      let friendlyMsg = 'El enlace de recuperación es inválido o ha expirado. Por favor solicita uno nuevo.';
+      if (errCode === 'otp_expired' || errDesc.toLowerCase().includes('expired')) {
+        friendlyMsg = 'El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
+      } else if (errName === 'access_denied') {
+        friendlyMsg = 'Acceso denegado. El enlace no es válido o ha caducado.';
+      }
+
+      logger.warn('[Auth] Enlace de recuperación inválido o expirado detectado en URL:', { errCode, errDesc, errName });
+
+      // Limpiar inmediatamente el hash/parámetros de la URL para que no quede residuo
+      try {
+        window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+      } catch {}
+
+      // FORZAR CIERRE DE CUALQUIER SESIÓN PREVIA: No debe abrir el menú ni el dashboard
+      if (isSupabaseConfigured() && supabase) {
+        await supabase.auth.signOut().catch(() => {});
+      }
+      setActiveUserId('');
+      sessionStorage.clear();
+      setCurrentUser(null);
+      setError(friendlyMsg);
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isSupabaseConfigured() && supabase) {
         // 1. Obtener la sesión almacenada en el cliente

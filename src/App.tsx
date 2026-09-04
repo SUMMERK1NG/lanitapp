@@ -350,12 +350,28 @@ export function App() {
 
   // Detect Password Recovery URL / Events
   useEffect(() => {
+    const path = window.location.pathname;
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+
+    // Si la URL contiene un error (ej. otp_expired, access_denied), cancelar recuperación y limpiar URL
+    if (
+      hash.includes('error=') ||
+      hash.includes('error_code=') ||
+      search.includes('error=') ||
+      search.includes('error_code=')
+    ) {
+      setIsResetPasswordModalOpen(false);
+      try {
+        window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+      } catch {}
+      signOut().catch(() => {});
+      return;
+    }
+
     const checkRecovery = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
       if (path.includes('reset-password') || hash.includes('type=recovery')) {
         setIsResetPasswordModalOpen(true);
-        // Limpiar inmediatamente el hash/parámetros para que el botón "Atrás" del navegador no reabra el modal
         try {
           window.history.replaceState(null, '', window.location.origin + window.location.pathname);
         } catch {}
@@ -376,7 +392,7 @@ export function App() {
         authSub.subscription.unsubscribe();
       };
     }
-  }, []);
+  }, [signOut]);
 
   // Current active user ID
   const activeUserId = currentUser?.id || '';
