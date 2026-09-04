@@ -17,6 +17,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   refetchAuth: () => Promise<void>;
+  changePassword?: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  checkCedulaExists?: (cedula: string) => Promise<boolean>;
+  checkEmailExists?: (email: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

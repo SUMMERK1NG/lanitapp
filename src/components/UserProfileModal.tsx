@@ -9,9 +9,16 @@ import {
   Mail,
   ShieldCheck,
   CheckCircle2,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import type { UserProfile, ThemeMode, AccentColor } from '../types/index.ts';
 import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
+import { evaluatePasswordStrength } from './AuthScreen.tsx';
 import { saveUserProfile } from '../lib/db.ts';
 import { supabase } from '../lib/supabase.ts';
 import { logger } from '../utils/logger.ts';
@@ -25,6 +32,7 @@ interface UserProfileModalProps {
   onChangeThemeMode: (mode: ThemeMode) => void;
   onChangeAccentColor: (color: AccentColor) => void;
   onUpdateProfile?: (updates: Partial<UserProfile>) => Promise<void>;
+  onChangePassword?: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   onShowToast?: (msg: string) => void;
   onNavigateToSettings?: (tab?: 'themes' | 'categories' | 'users' | 'backup') => void;
   isAdmin?: boolean;
@@ -66,6 +74,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onChangeThemeMode,
   onChangeAccentColor,
   onUpdateProfile,
+  onChangePassword,
   onShowToast,
   onNavigateToSettings,
   isAdmin: propIsAdmin,
@@ -81,6 +90,29 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   });
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
+  // Estados para cambio de contraseña
+  const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState<boolean>(false);
+  const [currentPassword, setCurrentPassword] = useState<string>('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState<boolean>(false);
+
+  const pwdStrength = evaluatePasswordStrength(newPassword);
+
+  const getStrengthMeta = (score: number, length: number) => {
+    if (length === 0) return { label: '', colorText: '', barColor: '' };
+    if (score <= 1) return { label: 'Muy Débil', colorText: 'text-rose-400', barColor: 'bg-rose-500' };
+    if (score === 2) return { label: 'Débil', colorText: 'text-amber-400', barColor: 'bg-amber-500' };
+    if (score === 3) return { label: 'Aceptable', colorText: 'text-cyan-400', barColor: 'bg-cyan-500' };
+    return { label: 'Segura y Robusta', colorText: 'text-emerald-400', barColor: 'bg-emerald-500' };
+  };
+  const strengthMeta = getStrengthMeta(pwdStrength.score, newPassword.length);
+
   // Seguridad: El rol debe provenir estrictamente de Supabase Auth / Profiles.
   // NO se permite validación de rol desde localStorage para prevenir escalada de privilegios.
   const isAdmin = propIsAdmin ?? (profile?.role === 'admin');
@@ -91,6 +123,107 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setAvatar(profile.avatar_url || profile.avatar || '👨‍💻');
     }
   }, [profile, isOpen]);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setIsPasswordSectionOpen(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError(null);
+      setPasswordSuccess(null);
+    }
+  }, [isOpen]);
+
+  const handleChangePasswordSubmit = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    const curPwd = currentPassword.trim();
+    const newPwd = newPassword.trim();
+    const confPwd = confirmPassword.trim();
+
+    if (!curPwd) {
+      setPasswordError('Por favor ingresa tu contraseña actual.');
+      return;
+    }
+
+    if (!newPwd || !confPwd) {
+      setPasswordError('Por favor completa todos los campos requeridos.');
+      return;
+    }
+
+    if (curPwd === newPwd) {
+      setPasswordError('La nueva contraseña debe ser diferente a la contraseña actual.');
+      return;
+    }
+
+    if (!pwdStrength.isValid) {
+      if (!pwdStrength.hasMinLength) {
+        setPasswordError('La nueva contraseña debe tener al menos 8 caracteres.');
+      } else if (!pwdStrength.hasUpper || !pwdStrength.hasLower) {
+        setPasswordError('La nueva contraseña debe incluir al menos una letra mayúscula y una minúscula.');
+      } else if (!pwdStrength.hasNumber) {
+        setPasswordError('La nueva contraseña debe incluir al menos un número.');
+      } else if (!pwdStrength.hasSpecial) {
+        setPasswordError('La nueva contraseña debe incluir al menos un carácter especial (@, #, $, *, -, etc.).');
+      } else {
+        setPasswordError('La nueva contraseña no cumple con los requisitos mínimos de seguridad.');
+      }
+      return;
+    }
+
+    if (newPwd !== confPwd) {
+      setPasswordError('Las nuevas contraseñas no coinciden. Por favor verifica que ambas sean iguales.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      let res: { success: boolean; error?: string };
+      if (onChangePassword) {
+        res = await onChangePassword(curPwd, newPwd);
+      } else if (supabase) {
+        const userEmail = profile?.email || (await supabase.auth.getUser()).data?.user?.email;
+        if (userEmail) {
+          const { error: verifyErr } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: curPwd,
+          });
+          if (verifyErr) {
+            res = { success: false, error: 'La contraseña actual ingresada no es correcta.' };
+          } else {
+            const { error: updateErr } = await supabase.auth.updateUser({ password: newPwd });
+            res = { success: !updateErr, error: updateErr?.message };
+          }
+        } else {
+          res = { success: false, error: 'No se pudo identificar la sesión del usuario.' };
+        }
+      } else {
+        res = { success: false, error: 'Servicio de autenticación no disponible.' };
+      }
+
+      if (!res.success) {
+        setPasswordError(res.error || 'No se pudo actualizar la contraseña.');
+      } else {
+        setPasswordSuccess('¡Contraseña actualizada con éxito!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        if (onShowToast) {
+          onShowToast('Contraseña actualizada con éxito');
+        }
+        setTimeout(() => {
+          setIsPasswordSectionOpen(false);
+          setPasswordSuccess(null);
+        }, 2200);
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || 'Error inesperado al cambiar la contraseña.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -406,6 +539,226 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          {/* SECCIÓN SEGURIDAD: CAMBIO DE CONTRASEÑA (Para cualquier usuario y admin) */}
+          <div className="p-4 rounded-2xl bg-card border border-app space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-primary-custom/15 text-primary-custom flex items-center justify-center font-bold shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-app flex items-center gap-1.5">
+                    Seguridad y Acceso
+                  </h4>
+                  <p className="text-[10px] text-muted">Cambia tu contraseña de ingreso cuando lo desees</p>
+                </div>
+              </div>
+              {!isPasswordSectionOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasswordSectionOpen(true);
+                    setPasswordError(null);
+                    setPasswordSuccess(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-primary-custom/30 bg-primary-custom/10 hover:bg-primary-custom/20 text-primary-custom text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Cambiar Contraseña</span>
+                </button>
+              )}
+            </div>
+
+            {isPasswordSectionOpen && (
+              <div className="pt-3 border-t border-app space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                {/* Mensajes de feedback */}
+                {passwordError && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-2 text-xs text-rose-400 animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="leading-snug text-[11px]">{passwordError}</span>
+                  </div>
+                )}
+
+                {passwordSuccess && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2 text-xs text-emerald-400 animate-in fade-in font-semibold">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="text-[11px]">{passwordSuccess}</span>
+                  </div>
+                )}
+
+                {/* Campo 1: Contraseña Actual (Validación de Seguridad) */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#FF914D]" /> Contraseña Actual
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      maxLength={64}
+                      placeholder="Ingresa tu contraseña actual"
+                      value={currentPassword}
+                      onChange={(e) => {
+                        setCurrentPassword(e.target.value.slice(0, 64));
+                        if (passwordError) setPasswordError(null);
+                      }}
+                      className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                      title={showCurrentPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campo 2: Nueva Contraseña */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#10B981]" /> Nueva Contraseña
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      maxLength={64}
+                      placeholder="Escribe tu nueva contraseña"
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value.slice(0, 64));
+                        if (passwordError) setPasswordError(null);
+                      }}
+                      className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                      title={showNewPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {/* Indicador interactivo y dinámico de seguridad */}
+                  {newPassword.length > 0 && (
+                    <div className="mt-2 p-2.5 bg-[#0B132B]/95 border border-white/15 rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between text-[10px] font-bold">
+                        <span className="text-slate-400">Nivel de seguridad:</span>
+                        <span className={`text-[10px] font-extrabold ${strengthMeta.colorText}`}>
+                          {strengthMeta.label}
+                        </span>
+                      </div>
+
+                      {/* Barra de progreso de 4 segmentos */}
+                      <div className="grid grid-cols-4 gap-1 h-1.5 w-full">
+                        <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 1 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                        <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 2 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                        <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 3 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                        <div className={`h-full rounded-full transition-all duration-300 ${pwdStrength.score >= 4 ? strengthMeta.barColor : 'bg-white/10'}`} />
+                      </div>
+
+                      {/* Checklist interactivo de requisitos */}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[9px]">
+                        <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasMinLength ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasMinLength ? 'text-emerald-400' : 'text-slate-600'}`} />
+                          <span>Mín. 8 caracteres</span>
+                        </div>
+                        <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasUpper && pwdStrength.hasLower ? 'text-emerald-400' : 'text-slate-600'}`} />
+                          <span>Mayús. y minús.</span>
+                        </div>
+                        <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasNumber ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasNumber ? 'text-emerald-400' : 'text-slate-600'}`} />
+                          <span>Al menos un número</span>
+                        </div>
+                        <div className={`flex items-center gap-1 transition-colors ${pwdStrength.hasSpecial ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <Check className={`w-3 h-3 shrink-0 ${pwdStrength.hasSpecial ? 'text-emerald-400' : 'text-slate-600'}`} />
+                          <span>Carácter especial (@#$...)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Campo 3: Confirmar Nueva Contraseña */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#10B981]" /> Confirmar Nueva Contraseña
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      maxLength={64}
+                      placeholder="Repite la nueva contraseña"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value.slice(0, 64));
+                        if (passwordError) setPasswordError(null);
+                      }}
+                      className={`w-full bg-[#0B132B]/90 border rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 ${
+                        confirmPassword.length > 0
+                          ? newPassword === confirmPassword
+                            ? 'border-emerald-500/60 focus:ring-emerald-500'
+                            : 'border-rose-500/60 focus:ring-rose-500'
+                          : 'border-white/15 focus:ring-[#147DF0]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                      title={showConfirmPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {confirmPassword.length > 0 && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                      {newPassword === confirmPassword ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Las contraseñas coinciden
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" /> Las contraseñas no coinciden
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Botón de Actualizar Contraseña */}
+                <div className="pt-1 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPasswordSectionOpen(false);
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      setPasswordError(null);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-surface hover:bg-surface-hover text-muted hover:text-app text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleChangePasswordSubmit}
+                    disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#147DF0] to-[#00C2C7] text-white text-xs font-bold shadow-md hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isChangingPassword ? 'Verificando...' : 'Actualizar Contraseña'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Accesos Rápidos de Administrador (Solo en móvil para no saturar en desktop donde ya está el menú Configuración) */}

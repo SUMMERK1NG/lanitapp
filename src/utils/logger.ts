@@ -47,6 +47,24 @@ export const logger: Logger = {
       const sanitized = args.map((arg) => {
         if (arg instanceof Error) return arg.message;
         if (typeof arg === 'string') return arg;
+        if (typeof arg === 'object' && arg !== null) {
+          const sanitizedObj: Record<string, any> = {};
+          Object.keys(arg).forEach((key) => {
+            const lowerKey = key.toLowerCase();
+            if (
+              lowerKey.includes('email') ||
+              lowerKey.includes('password') ||
+              lowerKey.includes('token') ||
+              lowerKey.includes('secret') ||
+              lowerKey.includes('key')
+            ) {
+              sanitizedObj[key] = '[REDACTED]';
+            } else {
+              sanitizedObj[key] = (arg as any)[key];
+            }
+          });
+          return sanitizedObj;
+        }
         return '[Protected Data]';
       });
       console.error('[LANITAPP Error]:', ...sanitized);

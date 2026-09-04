@@ -124,8 +124,11 @@ export function App() {
     signInWithCedula,
     signUp,
     resetPassword,
+    changePassword,
     signOut,
     updateProfile,
+    checkCedulaExists,
+    checkEmailExists,
   } = useAuth();
 
   const handleViewChange = useCallback((newView: ActiveViewType) => {
@@ -452,11 +455,6 @@ export function App() {
   const savingsGoals: SavingsGoal[] = liveSavingsGoals.filter(isUserMatch);
   const savingContributions: SavingContribution[] = liveSavingContributions.filter(isUserMatch);
 
-  // If standard user lands on settings view, automatically redirect to dashboard
-  if (!isAdmin && activeView === 'settings') {
-    setActiveView('dashboard');
-  }
-
   // Verificación proactiva de déficit quincenal y notificación por email
   useEffect(() => {
     if (currentUser?.id && !isStoreLoading) {
@@ -544,6 +542,8 @@ export function App() {
           onSignIn={signInWithCedula}
           onSignUp={signUp}
           onResetPassword={resetPassword}
+          checkCedulaExists={checkCedulaExists}
+          checkEmailExists={checkEmailExists}
           externalError={authError}
         />
         <ResetPasswordModal
@@ -854,10 +854,11 @@ export function App() {
             </div>
           )}
 
-          {/* VIEW 9: CONFIGURACIÓN & BACKUP (ADMIN ONLY) */}
-          {activeView === 'settings' && isAdmin && (
+          {/* VIEW 9: CONFIGURACIÓN */}
+          {activeView === 'settings' && (
             <div className="w-full">
               <SettingsView
+                isAdmin={isAdmin}
                 categories={categories}
                 accounts={accounts}
                 transactions={transactions}
@@ -896,6 +897,7 @@ export function App() {
         onChangeThemeMode={handleChangeThemeMode}
         onChangeAccentColor={handleChangeAccentColor}
         onUpdateProfile={updateProfile}
+        onChangePassword={changePassword}
         onShowToast={showToast}
         onNavigateToSettings={handleNavigateToSettings}
         onSignOut={signOut}

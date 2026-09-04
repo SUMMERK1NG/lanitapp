@@ -27,6 +27,7 @@ import { UserManagementCard } from './UserManagementCard.tsx';
 import { AdminBackup } from './AdminBackup.tsx';
 
 interface SettingsViewProps {
+  isAdmin?: boolean;
   categories: Category[];
   accounts: Account[];
   transactions: Transaction[];
@@ -50,6 +51,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
+  isAdmin = false,
   categories,
   accounts,
   rates,
@@ -68,9 +70,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   React.useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      if (!isAdmin && (initialTab === 'users' || initialTab === 'backup')) {
+        setActiveTab('themes');
+      } else {
+        setActiveTab(initialTab);
+      }
     }
-  }, [initialTab]);
+  }, [initialTab, isAdmin]);
+
+  React.useEffect(() => {
+    if (!isAdmin && (activeTab === 'users' || activeTab === 'backup')) {
+      setActiveTab('themes');
+    }
+  }, [isAdmin, activeTab]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -82,12 +94,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           <div>
             <h2 className="text-base font-bold text-app">Configuración</h2>
-            <p className="text-xs text-muted mt-0.5">Ajustes visuales, usuarios y respaldo</p>
+            <p className="text-xs text-muted mt-0.5">
+              {isAdmin ? 'Ajustes visuales, usuarios y respaldo' : 'Ajustes visuales y categorías'}
+            </p>
           </div>
         </div>
 
         {/* Navigation Tabs (Centrada y balanceada sin espacios vacíos) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 p-1.5 bg-card rounded-2xl border border-app gap-1.5">
+        <div className={`grid ${isAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'} p-1.5 bg-card rounded-2xl border border-app gap-1.5`}>
           <button
             onClick={() => setActiveTab('themes')}
             className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -100,17 +114,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="truncate">Personalización</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'users'
-                ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app hover:bg-surface/50'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Gestión de Usuarios</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'users'
+                  ? 'bg-primary-custom text-white shadow-md'
+                  : 'text-muted hover:text-app hover:bg-surface/50'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Gestión de Usuarios</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('categories')}
@@ -124,22 +140,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="truncate">Categorías</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('backup')}
-            className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'backup'
-                ? 'bg-primary-custom text-white shadow-md'
-                : 'text-muted hover:text-app hover:bg-surface/50'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Respaldo</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('backup')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'backup'
+                  ? 'bg-primary-custom text-white shadow-md'
+                  : 'text-muted hover:text-app hover:bg-surface/50'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Respaldo</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* TAB 1: GESTIÓN DE USUARIOS (ADMIN) */}
-      {activeTab === 'users' && (
+      {/* TAB 1: GESTIÓN DE USUARIOS (ADMIN ONLY) */}
+      {activeTab === 'users' && isAdmin && (
         <div className="animate-in fade-in duration-200">
           <UserManagementCard currentUserId={currentUserId} />
         </div>
@@ -228,8 +246,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: SINCRONIZACIÓN & BACKUP (ADMIN) */}
-      {activeTab === 'backup' && (
+      {/* TAB 4: SINCRONIZACIÓN & BACKUP (ADMIN ONLY) */}
+      {activeTab === 'backup' && isAdmin && (
         <div className="animate-in fade-in duration-200">
           <AdminBackup
             categories={categories}

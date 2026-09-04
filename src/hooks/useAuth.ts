@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserProfile, UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
+import { db, saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
+import { sendPasswordResetEmail } from '../lib/emailConfig.ts';
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -264,30 +265,78 @@ export function useAuth() {
    * Helper para buscar perfil por documento
    */
   const findProfileByDocument = async (fullCedula: string) => {
-    if (!supabase) return null;
     const clean = fullCedula.trim();
+    if (!clean) return null;
 
-    // 1. ILIKE exact search on cedula (e.g. 'V-28322083')
-    const { data: direct } = await supabase
-      .from('profiles')
-      .select('*')
-      .ilike('cedula', clean)
-      .maybeSingle();
-    if (direct) return direct;
+    // 1. Verificación local en Dexie (inmediata)
+    try {
+      const local = await db.user_profiles
+        .where('cedula')
+        .equalsIgnoreCase(clean)
+        .first();
+      if (local) return local;
+    } catch {}
 
-    // 2. Secondary fallback with prefix variants
-    const rawNumber = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
-    if (rawNumber) {
-      const prefixes = ['V-', 'E-', 'J-', 'G-', ''];
-      for (const p of prefixes) {
-        const queryVal = `${p}${rawNumber}`;
-        const { data: variant } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('cedula', queryVal)
-          .maybeSingle();
-        if (variant) return variant;
+    if (!supabase) return null;
+
+    // 2. ILIKE exact search on cedula (e.g. 'V-28322083')
+    try {
+      const { data: direct } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('cedula', clean)
+        .maybeSingle();
+      if (direct) return direct;
+
+      // 3. Secondary fallback with prefix variants
+      const rawNumber = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
+      if (rawNumber) {
+        const prefixes = ['V-', 'E-', 'J-', 'G-', ''];
+        for (const p of prefixes) {
+          const queryVal = `${p}${rawNumber}`;
+          const { data: variant } = await supabase
+            .from('profiles')
+            .select('*')
+            .ilike('cedula', queryVal)
+            .maybeSingle();
+          if (variant) return variant;
+        }
       }
+    } catch (err) {
+      logger.warn('[Auth] Error consultando perfil por documento:', err);
+    }
+
+    return null;
+  };
+
+  /**
+   * Helper para buscar perfil por correo electrónico
+   */
+  const findProfileByEmail = async (email: string) => {
+    const clean = email.trim().toLowerCase();
+    if (!clean) return null;
+
+    // 1. Verificación local en Dexie (inmediata)
+    try {
+      const local = await db.user_profiles
+        .where('email')
+        .equalsIgnoreCase(clean)
+        .first();
+      if (local) return local;
+    } catch {}
+
+    if (!supabase) return null;
+
+    // 2. Búsqueda en Supabase profiles
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('email', clean)
+        .maybeSingle();
+      if (data) return data;
+    } catch (err) {
+      logger.warn('[Auth] Error consultando perfil por correo:', err);
     }
 
     return null;
@@ -529,16 +578,25 @@ export function useAuth() {
     }
 
     try {
-      // 1. Verificar si la cédula ya existe
+      // 1. Verificar si la cédula ya existe en la base de datos o localmente
       const existingProfile = await findProfileByDocument(fullCedula);
       if (existingProfile) {
         setLoading(false);
-        const msg = `El documento de identidad ${fullCedula} ya se encuentra registrado en el sistema.`;
+        const msg = 'La cédula ya se encuentra registrada. Por favor inicia sesión con tu cédula o recupera tu contraseña.';
         setError(msg);
         return { success: false, error: msg };
       }
 
-      // 2. Enviar metadata directamente a Supabase Auth
+      // 2. Verificar si el correo ya existe en profiles o localmente
+      const existingEmailProfile = await findProfileByEmail(cleanEmail);
+      if (existingEmailProfile) {
+        setLoading(false);
+        const msg = 'El correo ya se encuentra registrado. Por favor inicia sesión o utiliza otro correo.';
+        setError(msg);
+        return { success: false, error: msg };
+      }
+
+      // 3. Enviar metadata directamente a Supabase Auth
       const { data: authData, error: signUpErr } = await supabase.auth.signUp({
         email: cleanEmail,
         password: data.password,
@@ -554,8 +612,30 @@ export function useAuth() {
 
       if (signUpErr) {
         setLoading(false);
-        setError(signUpErr.message);
-        return { success: false, error: signUpErr.message };
+        let errorMsg = signUpErr.message;
+        const lowerErr = errorMsg.toLowerCase();
+        if (
+          lowerErr.includes('already registered') ||
+          lowerErr.includes('already in use') ||
+          lowerErr.includes('unique constraint') ||
+          lowerErr.includes('already exists')
+        ) {
+          errorMsg = 'El correo ya se encuentra registrado en el sistema. Por favor inicia sesión con tu cédula o recupera tu contraseña.';
+        }
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+
+      // 4. Detección de usuario ya existente en Supabase Auth cuando anti-user-enumeration está activo
+      if (
+        authData.user &&
+        Array.isArray(authData.user.identities) &&
+        authData.user.identities.length === 0
+      ) {
+        setLoading(false);
+        const msg = 'El correo ya se encuentra registrado en el sistema. Por favor inicia sesión con tu cédula o recupera tu contraseña.';
+        setError(msg);
+        return { success: false, error: msg };
       }
 
       if (authData.user) {
@@ -611,52 +691,145 @@ export function useAuth() {
   };
 
   /**
-   * Recuperación de Contraseña por Cédula o Email (Segura contra enumeración de usuarios)
+   * Helper con timeout para evitar congelamientos de la app (Promise hanging)
+   */
+  const withTimeout = <T>(promise: Promise<T>, timeoutMs = 8000, errorMsg = 'TIMEOUT'): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), timeoutMs)),
+    ]);
+  };
+
+  /**
+   * Recuperación de Contraseña por Cédula o Email (Segura, con protección de timeout y soporte Resend)
    */
   const resetPassword = async (
-    identifier: string
-  ): Promise<{ success: boolean; error?: string; message?: string }> => {
-    const cleanId = identifier.trim();
-    if (!cleanId) {
-      return { success: false, error: 'Por favor ingresa tu documento o correo electrónico.' };
-    }
-
-    if (!isSupabaseConfigured() || !supabase) {
-      return { success: false, error: 'El servicio de autenticación no está disponible en este momento.' };
-    }
-
-    const safeGenericMessage =
-      'Si existe una cuenta asociada a ese correo o cédula, recibirás un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada y spam.';
-
+    document: string,
+    documentType?: 'cedula' | 'email'
+  ): Promise<{ success: boolean; message: string; error?: string }> => {
     try {
-      let targetEmail = cleanId;
-
-      if (!cleanId.includes('@')) {
-        const profile = await findProfileByDocument(cleanId);
-        if (profile && profile.email) {
-          targetEmail = profile.email;
-        } else {
-          // Protección contra enumeración: Retornar mensaje genérico con éxito
-          return {
-            success: true,
-            message: safeGenericMessage,
-          };
-        }
+      const cleanDoc = document.trim();
+      if (!cleanDoc) {
+        return {
+          success: false,
+          message: 'Por favor ingresa tu cédula o correo electrónico.',
+          error: 'EMPTY_INPUT',
+        };
       }
 
-      await supabase.auth.resetPasswordForEmail(targetEmail, {
+      if (!isSupabaseConfigured() || !supabase) {
+        return {
+          success: false,
+          message: 'El servicio de autenticación no está disponible en este momento.',
+          error: 'AUTH_UNAVAILABLE',
+        };
+      }
+
+      logger.dev('[RESET PASSWORD] Iniciando recuperación para:', cleanDoc);
+
+      const isEmail = documentType === 'email' || cleanDoc.includes('@');
+      let userEmail: string | null = null;
+
+      if (isEmail) {
+        userEmail = cleanDoc.toLowerCase();
+      } else {
+        // Buscar por cédula en perfiles con timeout de 6 segundos
+        const profile = await withTimeout(
+          findProfileByDocument(cleanDoc),
+          6000,
+          'DB_TIMEOUT'
+        ).catch(() => null);
+
+        if (!profile || !profile.email) {
+          logger.warn('[RESET PASSWORD] No se encontró perfil con cédula:', cleanDoc);
+          return {
+            success: false,
+            message: 'No se encontró una cuenta asociada a esta cédula.',
+            error: 'PROFILE_NOT_FOUND',
+          };
+        }
+
+        userEmail = profile.email;
+      }
+
+      if (!userEmail) {
+        return {
+          success: false,
+          message: 'No se pudo determinar el correo del usuario.',
+          error: 'NO_EMAIL',
+        };
+      }
+
+      logger.dev('[RESET PASSWORD] Enviando enlace a:', userEmail);
+
+      // 1. Enviar solicitud de recuperación a Supabase Auth con timeout de 8 segundos
+      const resetPromise = supabase.auth.resetPasswordForEmail(userEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
+      const { error: authError } = await withTimeout(resetPromise, 8000, 'AUTH_TIMEOUT').catch(
+        (timeoutErr) => ({
+          error: {
+            message: timeoutErr.message === 'AUTH_TIMEOUT' ? 'TIMEOUT' : timeoutErr.message,
+            status: 408,
+          },
+        })
+      );
+
+      if (authError) {
+        const errMsg = authError.message?.toLowerCase() || '';
+
+        // Manejar Rate Limit 429
+        if (
+          authError.status === 429 ||
+          errMsg.includes('429') ||
+          errMsg.includes('rate limit') ||
+          errMsg.includes('security purposes') ||
+          errMsg.includes('seconds') ||
+          errMsg.includes('too many')
+        ) {
+          logger.warn('[RESET PASSWORD] Rate limit excedido para:', userEmail);
+          return {
+            success: false,
+            message: 'Por motivos de seguridad, debes esperar 60 segundos antes de solicitar otro enlace.',
+            error: 'RATE_LIMIT',
+          };
+        }
+
+        if (errMsg === 'timeout' || authError.status === 408) {
+          logger.warn('[RESET PASSWORD] Timeout de respuesta:', userEmail);
+          return {
+            success: false,
+            message: 'El servidor tardó demasiado en responder. Por favor verifica tu conexión e intenta de nuevo.',
+            error: 'TIMEOUT',
+          };
+        }
+
+        logger.error('[RESET PASSWORD ERROR]:', authError);
+        return {
+          success: false,
+          message: 'Error al procesar la solicitud. Por favor intenta de nuevo.',
+          error: authError.message,
+        };
+      }
+
+      // 2. Intentar además el envío directo vía Resend Edge Function
+      sendPasswordResetEmail(userEmail).catch((resendErr) => {
+        logger.dev('[RESET PASSWORD] Resend Edge Function notice:', resendErr);
+      });
+
+      logger.dev('[RESET PASSWORD SUCCESS] Enlace enviado a:', userEmail);
+
       return {
         success: true,
-        message: safeGenericMessage,
+        message: 'Si existe una cuenta asociada, recibirás un enlace de recuperación en tu correo.',
       };
-    } catch {
-      // Protección contra enumeración: Nunca filtrar errores que revelen existencia de usuarios
+    } catch (error: any) {
+      logger.error('[RESET PASSWORD UNEXPECTED ERROR]:', error);
       return {
-        success: true,
-        message: safeGenericMessage,
+        success: false,
+        message: 'Ocurrió un error inesperado. Por favor intenta de nuevo.',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   };
@@ -763,6 +936,86 @@ export function useAuth() {
     }
   };
 
+  /**
+   * Cambio de contraseña para el usuario actualmente autenticado (con validación de contraseña actual)
+   */
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const curPwd = currentPassword.trim();
+    const newPwd = newPassword.trim();
+
+    if (!curPwd) {
+      return { success: false, error: 'Por favor ingresa tu contraseña actual.' };
+    }
+
+    if (!newPwd) {
+      return { success: false, error: 'Por favor ingresa tu nueva contraseña.' };
+    }
+
+    if (curPwd === newPwd) {
+      return { success: false, error: 'La nueva contraseña debe ser diferente a la contraseña actual.' };
+    }
+
+    const hasMinLength = newPwd.length >= 8;
+    const hasUpper = /[A-Z]/.test(newPwd);
+    const hasLower = /[a-z]/.test(newPwd);
+    const hasNumber = /[0-9]/.test(newPwd);
+    const hasSpecial = /[^A-Za-z0-9\s]/.test(newPwd);
+
+    if (!hasMinLength || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+      return {
+        success: false,
+        error: 'La nueva contraseña debe tener mínimo 8 caracteres e incluir mayúscula, minúscula, número y un carácter especial (@, #, $, *, -, etc.).',
+      };
+    }
+
+    if (!isSupabaseConfigured() || !supabase) {
+      return { success: false, error: 'Supabase no está configurado.' };
+    }
+
+    try {
+      // 1. Obtener email de la sesión activa del usuario
+      const userEmail = currentUser?.email || (await supabase.auth.getUser()).data?.user?.email;
+
+      if (!userEmail) {
+        return { success: false, error: 'No se pudo verificar la sesión actual del usuario.' };
+      }
+
+      // 2. Validar que la contraseña actual ingresada sea 100% correcta
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: curPwd,
+      });
+
+      if (verifyErr) {
+        logger.warn('[Auth] Validación fallida de contraseña actual:', verifyErr.message);
+        return { success: false, error: 'La contraseña actual ingresada no es correcta. Por favor verifica.' };
+      }
+
+      // 3. Proceder a actualizar la contraseña
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPwd,
+      });
+
+      if (updateErr) {
+        let msg = updateErr.message;
+        const lower = msg.toLowerCase();
+        if (lower.includes('should be different')) {
+          msg = 'La nueva contraseña debe ser diferente a la contraseña anterior.';
+        } else if (lower.includes('at least')) {
+          msg = 'La contraseña debe tener al menos 8 caracteres.';
+        }
+        return { success: false, error: msg };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al actualizar la contraseña.' };
+    }
+  };
+
   return {
     currentUser,
     isAuthenticated: Boolean(currentUser && currentUser.id),
@@ -772,8 +1025,11 @@ export function useAuth() {
     signInWithCedula,
     signUp,
     resetPassword,
+    changePassword,
     signOut,
     updateProfile,
     refetchAuth: initAuth,
+    checkCedulaExists: async (cedula: string) => Boolean(await findProfileByDocument(cedula)),
+    checkEmailExists: async (email: string) => Boolean(await findProfileByEmail(email)),
   };
 }

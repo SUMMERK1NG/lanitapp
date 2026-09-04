@@ -69,7 +69,12 @@ interface AuthScreenProps {
     email: string;
     password: string;
   }) => Promise<{ success: boolean; error?: string }>;
-  onResetPassword: (identifier: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  onResetPassword: (
+    identifier: string,
+    documentType?: 'cedula' | 'email'
+  ) => Promise<{ success: boolean; message: string; error?: string }>;
+  checkCedulaExists?: (cedula: string) => Promise<boolean>;
+  checkEmailExists?: (email: string) => Promise<boolean>;
   isLoading?: boolean;
   externalError?: string | null;
 }
@@ -78,6 +83,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onSignIn,
   onSignUp,
   onResetPassword,
+  checkCedulaExists,
+  checkEmailExists,
   isLoading = false,
   externalError = null,
 }) => {
@@ -104,12 +111,53 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [regEmail, setRegEmail] = useState<string>('');
   const [regPassword, setRegPassword] = useState<string>('');
   const [showRegPassword, setShowRegPassword] = useState<boolean>(false);
+  const [regConfirmPassword, setRegConfirmPassword] = useState<string>('');
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState<boolean>(false);
 
   const [formError, setFormError] = useState<string | null>(null);
+  const [cedulaDuplicateError, setCedulaDuplicateError] = useState<string | null>(null);
+  const [emailDuplicateError, setEmailDuplicateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isForgotModalOpen, setIsForgotModalOpen] = useState<boolean>(false);
 
   const errorToDisplay = formError || externalError;
+
+  const handleCedulaBlur = async () => {
+    const rawCedula = regCedula.trim();
+    if (!checkCedulaExists || !rawCedula || rawCedula.length < 5) {
+      setCedulaDuplicateError(null);
+      return;
+    }
+    const full = rawCedula.includes('-') ? rawCedula.toUpperCase() : `${regPrefix}-${rawCedula}`;
+    try {
+      const exists = await checkCedulaExists(full);
+      if (exists) {
+        setCedulaDuplicateError('La cédula ya se encuentra registrada.');
+      } else {
+        setCedulaDuplicateError(null);
+      }
+    } catch {
+      setCedulaDuplicateError(null);
+    }
+  };
+
+  const handleEmailBlur = async () => {
+    const rawEmail = regEmail.trim().toLowerCase();
+    if (!checkEmailExists || !rawEmail || !EMAIL_VALID_REGEX.test(rawEmail)) {
+      setEmailDuplicateError(null);
+      return;
+    }
+    try {
+      const exists = await checkEmailExists(rawEmail);
+      if (exists) {
+        setEmailDuplicateError('El correo ya se encuentra registrado.');
+      } else {
+        setEmailDuplicateError(null);
+      }
+    } catch {
+      setEmailDuplicateError(null);
+    }
+  };
 
   const pwdStrength = evaluatePasswordStrength(regPassword);
 
@@ -157,7 +205,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     const rawCedula = regCedula.trim();
     const rawEmail = regEmail.trim().toLowerCase();
 
-    if (!rawFirstName || !rawCedula || !rawEmail || !regPassword) {
+    if (!rawFirstName || !rawCedula || !rawEmail || !regPassword || !regConfirmPassword) {
       setFormError('Por favor completa todos los campos requeridos para crear tu cuenta.');
       return;
     }
@@ -190,6 +238,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       } else {
         setFormError('La contraseña no cumple con los requisitos mínimos de seguridad.');
       }
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setFormError('Las contraseñas no coinciden. Por favor verifica que ambas sean idénticas.');
+      return;
+    }
+
+    if (cedulaDuplicateError) {
+      setFormError(cedulaDuplicateError);
+      return;
+    }
+
+    if (emailDuplicateError) {
+      setFormError(emailDuplicateError);
       return;
     }
 
@@ -417,12 +480,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
-                    <User className="w-3 h-3 text-[#147DF0]" /> Nombres
-                  </label>
-                  <span className="text-[9px] text-slate-400 font-medium">Solo letras</span>
-                </div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                  <User className="w-3 h-3 text-[#147DF0]" /> Nombres
+                </label>
                 <input
                   type="text"
                   required
@@ -435,12 +495,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold text-slate-300">
-                    Apellidos
-                  </label>
-                  <span className="text-[9px] text-slate-400 font-medium">Solo letras</span>
-                </div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  Apellidos
+                </label>
                 <input
                   type="text"
                   maxLength={35}
@@ -459,7 +516,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <div className="flex gap-2">
                 <select
                   value={regPrefix}
-                  onChange={(e) => setRegPrefix(e.target.value)}
+                  onChange={(e) => {
+                    setRegPrefix(e.target.value);
+                    if (cedulaDuplicateError) setCedulaDuplicateError(null);
+                  }}
                   className="bg-[#0B132B]/90 border border-white/15 rounded-xl px-2.5 py-2 text-xs text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#147DF0] cursor-pointer shrink-0"
                 >
                   <option value="V" className="bg-[#0B132B] text-white">V</option>
@@ -475,46 +535,83 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   onChange={(e) => {
                     const numericVal = e.target.value.replace(/\D/g, '').slice(0, 9);
                     setRegCedula(numericVal);
+                    if (cedulaDuplicateError) setCedulaDuplicateError(null);
+                    if (formError) setFormError(null);
                   }}
+                  onBlur={handleCedulaBlur}
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={9}
-                  className="flex-1 min-w-0 bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
+                  className={`flex-1 min-w-0 bg-[#0B132B]/90 border rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 ${
+                    cedulaDuplicateError
+                      ? 'border-rose-500/60 focus:ring-rose-500 text-rose-200'
+                      : 'border-white/15 focus:ring-[#147DF0]'
+                  }`}
                 />
               </div>
+              {cedulaDuplicateError && (
+                <div className="mt-1.5 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-between text-[11px] text-rose-400 animate-in fade-in">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    {cedulaDuplicateError}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setLoginCedula(regCedula);
+                      setLoginPrefix(regPrefix);
+                      setFormError(null);
+                      setCedulaDuplicateError(null);
+                    }}
+                    className="text-blue-400 hover:text-blue-300 font-bold ml-2 shrink-0 underline cursor-pointer text-[10px]"
+                  >
+                    Iniciar Sesión &rarr;
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
-                  <Mail className="w-3 h-3 text-[#00C2C7]" /> Correo Electrónico
-                </label>
-                <span className="text-[9px] text-slate-400 font-medium">Máx. 80 caracteres</span>
-              </div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                <Mail className="w-3 h-3 text-[#00C2C7]" /> Correo Electrónico
+              </label>
               <input
                 type="email"
                 required
                 maxLength={80}
                 placeholder="nombre@ejemplo.com"
                 value={regEmail}
-                onChange={(e) => setRegEmail(cleanEmailInput(e.target.value))}
-                className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
+                onChange={(e) => {
+                  setRegEmail(cleanEmailInput(e.target.value));
+                  if (emailDuplicateError) setEmailDuplicateError(null);
+                  if (formError) setFormError(null);
+                }}
+                onBlur={handleEmailBlur}
+                className={`w-full bg-[#0B132B]/90 border rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 ${
+                  emailDuplicateError
+                    ? 'border-rose-500/60 focus:ring-rose-500 text-rose-200'
+                    : 'border-white/15 focus:ring-[#147DF0]'
+                }`}
               />
+              {emailDuplicateError && (
+                <div className="mt-1.5 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center gap-1.5 text-[11px] text-rose-400 font-medium animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{emailDuplicateError}</span>
+                </div>
+              )}
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
-                  <Lock className="w-3 text-[#10B981]" /> Contraseña Segura
-                </label>
-                <span className="text-[9px] text-slate-400 font-medium">Mín. 8 caracteres</span>
-              </div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                <Lock className="w-3 text-[#10B981]" /> Contraseña
+              </label>
               <div className="relative">
                 <input
                   type={showRegPassword ? 'text' : 'password'}
                   required
                   maxLength={64}
-                  placeholder="Mínimo 8 caract., mayús., núm. y símbolo"
+                  placeholder="Escribe tu contraseña"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value.slice(0, 64))}
                   className="w-full bg-[#0B132B]/90 border border-white/15 rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#147DF0]"
@@ -566,6 +663,53 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       <span>Carácter especial (!@#$...)</span>
                     </div>
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Confirmar Contraseña (Doble check) */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center gap-1">
+                <Lock className="w-3 text-[#10B981]" /> Confirmar Contraseña
+              </label>
+              <div className="relative">
+                <input
+                  type={showRegConfirmPassword ? 'text' : 'password'}
+                  required
+                  maxLength={64}
+                  placeholder="Repite tu contraseña"
+                  value={regConfirmPassword}
+                  onChange={(e) => setRegConfirmPassword(e.target.value.slice(0, 64))}
+                  className={`w-full bg-[#0B132B]/90 border rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 ${
+                    regConfirmPassword.length > 0
+                      ? regPassword === regConfirmPassword
+                        ? 'border-emerald-500/60 focus:ring-emerald-500'
+                        : 'border-rose-500/60 focus:ring-rose-500'
+                      : 'border-white/15 focus:ring-[#147DF0]'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                  title={showRegConfirmPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {showRegConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {/* Validación visual de coincidencia en tiempo real */}
+              {regConfirmPassword.length > 0 && (
+                <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                  {regPassword === regConfirmPassword ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Las contraseñas coinciden
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 font-medium flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" /> Las contraseñas no coinciden
+                    </span>
+                  )}
                 </div>
               )}
             </div>
