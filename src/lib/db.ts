@@ -1411,6 +1411,9 @@ export async function toggleMonthlyFixedIncomeOverride(
     sync_status: 'pending',
   };
 
+  // 1. Guardar inmediatamente en Dexie local para reactividad instantánea en UI (<5ms)
+  await db.monthly_fixed_income_overrides.put(record);
+
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1453,13 +1456,13 @@ export async function toggleMonthlyFixedIncomeOverride(
         if (data && data[0]?.id) {
           record.id = data[0].id;
         }
+        await db.monthly_fixed_income_overrides.put(record);
       }
     } catch (e) {
       logger.warn('[FIXED INCOME OVERRIDE EXCEPTION]:', e);
     }
   }
 
-  await db.monthly_fixed_income_overrides.put(record);
   return record;
 }
 
@@ -1912,6 +1915,9 @@ export async function toggleMonthlyFixedOverride(
     sync_status: 'pending',
   };
 
+  // 1. Guardar inmediatamente en Dexie local para reactividad instantánea en UI (<5ms)
+  await db.monthly_fixed_overrides.put(record);
+
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1954,13 +1960,13 @@ export async function toggleMonthlyFixedOverride(
         if (data && data[0]?.id) {
           record.id = data[0].id;
         }
+        await db.monthly_fixed_overrides.put(record);
       }
     } catch (e) {
       logger.warn('[FIXED EXPENSE OVERRIDE EXCEPTION]:', e);
     }
   }
 
-  await db.monthly_fixed_overrides.put(record);
   return record;
 }
 

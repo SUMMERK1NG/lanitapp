@@ -109,12 +109,6 @@ export function App() {
     return 'dashboard';
   });
 
-  const handleViewChange = useCallback((newView: ActiveViewType) => {
-    setActiveView(newView);
-    try {
-      localStorage.setItem('lanitapp_last_active_view', newView);
-    } catch {}
-  }, []);
   const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
   const isStoreLoading = useFinanceStore((state) => state.isLoading);
@@ -133,17 +127,15 @@ export function App() {
     updateProfile,
   } = useAuth();
 
-  // Sincronizar vista activa inicial si existe en el perfil del usuario y no hay en localStorage
-  useEffect(() => {
-    if (currentUser?.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
-      try {
-        const local = localStorage.getItem('lanitapp_last_active_view');
-        if (!local) {
-          setActiveView(currentUser.last_active_view as ActiveViewType);
-        }
-      } catch {}
+  const handleViewChange = useCallback((newView: ActiveViewType) => {
+    setActiveView(newView);
+    try {
+      localStorage.setItem('lanitapp_last_active_view', newView);
+    } catch {}
+    if (currentUser?.id) {
+      updateProfile({ last_active_view: newView }).catch(() => {});
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, updateProfile]);
 
   // Selected period state (Month: 0-11, Year)
   const now = new Date();
@@ -197,9 +189,12 @@ export function App() {
   // Synchronize all user preferences from Supabase profiles on login or session restore
   useEffect(() => {
     if (currentUser?.id) {
-      if (currentUser.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
-        setActiveView(currentUser.last_active_view as ActiveViewType);
-      }
+      try {
+        const localSaved = localStorage.getItem('lanitapp_last_active_view');
+        if (!localSaved && currentUser.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
+          setActiveView(currentUser.last_active_view as ActiveViewType);
+        }
+      } catch {}
       if (currentUser.keep_session !== undefined) {
         setKeepConnected(currentUser.keep_session);
       }

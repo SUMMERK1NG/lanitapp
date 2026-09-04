@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Receipt,
   Plus,
@@ -165,19 +165,38 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
 
   const expenseCategories = categories.filter((c) => c.type === 'expense');
 
+  // Estado optimista para actualización visual instantánea (0ms) sin depender de red o recarga
+  const [optimisticStatus, setOptimisticStatus] = useState<Record<string, boolean>>({});
+
+  // Limpiar estados optimistas cuando cambia el periodo seleccionado
+  useEffect(() => {
+    setOptimisticStatus({});
+  }, [selectedYear, selectedMonth]);
+
   // --- FIXED EXPENSES CALCULATIONS ---
   const overrideMap = useMemo(() => {
     return new Map(
       monthlyOverrides
-        .filter((o) => o.year === selectedYear && o.month === selectedMonth)
-        .map((o) => [o.fixed_expense_id, o])
+        .filter((o) => {
+          let yr = o.year;
+          let mo = o.month;
+          if ((yr === undefined || mo === undefined) && (o as any).month_year) {
+            const [y, m] = String((o as any).month_year).split('-').map(Number);
+            if (!isNaN(y)) yr = y;
+            if (!isNaN(m)) mo = m - 1;
+          }
+          return yr === selectedYear && mo === selectedMonth;
+        })
+        .map((o) => [o.fixed_expense_id || (o as any).expense_id, o])
     );
   }, [monthlyOverrides, selectedYear, selectedMonth]);
 
   const processedFixedExpenses = useMemo(() => {
     return fixedExpenses.map((fe) => {
       const override = overrideMap.get(fe.id);
-      const isActive = override?.is_active !== undefined ? override.is_active : fe.is_active;
+      const isOverrideActive = override?.is_active !== undefined ? override.is_active : fe.is_active;
+      // El estado optimista local tiene prioridad inmediata antes de la propagación de red
+      const isActive = optimisticStatus[fe.id] !== undefined ? optimisticStatus[fe.id] : isOverrideActive;
 
       let mode: FixedExpensePaymentMode = fe.payment_mode || 'ves_bcv';
       if (mode === 'cash') mode = 'usd_cash';
@@ -209,7 +228,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
         appliedCurrency: rawCurrency,
       };
     });
-  }, [fixedExpenses, overrideMap, bcvUsd, bcvEur]);
+  }, [fixedExpenses, overrideMap, optimisticStatus, bcvUsd, bcvEur]);
 
   const activeFixedExpenses = processedFixedExpenses.filter((e) => e.computedIsActive);
 
@@ -326,10 +345,20 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   };
 
   const handleToggleFixedActive = async (id: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    // Actualización visual inmediata e instantánea (0ms)
+    setOptimisticStatus((prev) => ({ ...prev, [id]: newStatus }));
+
     try {
-      await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, !currentStatus);
-      logger.dev(`[FIXED EXPENSE] Pausa toggled para gasto ${id}: ${!currentStatus}`);
+      await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, newStatus);
+      logger.dev(`[FIXED EXPENSE] Pausa toggled para gasto ${id}: ${newStatus}`);
     } catch (error) {
+      // Revertir estado si ocurre error
+      setOptimisticStatus((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
       logger.error('[FIXED EXPENSE PAUSE ERROR]:', error);
       alert('Error al pausar/activar el gasto fijo. Por favor intenta de nuevo.');
     }
@@ -540,7 +569,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-app flex items-center gap-2">
               <Layers className="w-4 h-4 text-primary-custom" />
-              <span>Plantilla de Gastos Fijos ({processedFixedExpenses.length})</span>
+              <span>Gastos Fijos Asignados ({processedFixedExpenses.length})</span>
             </h3>
           </div>
 
