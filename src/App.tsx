@@ -407,30 +407,19 @@ export function App() {
   const { isOnline, isSyncing, syncStatus, lastSyncTime, syncNow } = useRealtimeSync(activeUserId);
   const { lastSyncResult } = useNetworkStatus();
   const { rates, loading: ratesLoading, isRefreshing: ratesRefreshing, refreshRates } = useExchangeRates();
-  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(true);
-
   // Cloud-First Initial Consolidation & Realtime Subscriptions
   useEffect(() => {
-    if (!activeUserId) {
-      setIsCloudLoading(false);
-      return;
-    }
+    if (!activeUserId) return;
 
-    let isMounted = true;
-    setIsCloudLoading(true);
-
-    // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud
-    migrateLocalDataToCloud(activeUserId)
-      .catch((e) => logger.error('Cloud migration error:', e))
-      .finally(() => {
-        if (isMounted) setIsCloudLoading(false);
-      });
+    // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud en segundo plano
+    migrateLocalDataToCloud(activeUserId).catch((e) =>
+      logger.error('Cloud migration error:', e)
+    );
 
     // 2. Realtime listener para sincronización cruzada instantánea
     const unsubscribe = subscribeToRealtimeChanges(activeUserId);
 
     return () => {
-      isMounted = false;
       unsubscribe();
     };
   }, [activeUserId]);
@@ -548,12 +537,12 @@ export function App() {
     settings: 'Configuración',
   };
 
-  // Auth & Cloud Data Initial Loading Screen (Frases Motivacionales & Control Financiero)
-  if (authLoading || (isAuthenticated && currentUser && isCloudLoading)) {
+  // Auth Initial Loading Screen
+  if (authLoading) {
     return (
       <LoadingScreen
-        initialMessage={authLoading ? 'Iniciando LANITAPP...' : undefined}
-        initialSubtext={authLoading ? 'Bienvenido de vuelta 👋' : undefined}
+        initialMessage="Iniciando LANITAPP..."
+        initialSubtext="Bienvenido de vuelta 👋"
       />
     );
   }

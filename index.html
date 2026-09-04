@@ -17,6 +17,27 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>LANITAPP</title>
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('lanitapp_theme_mode') || 'navy';
+          var color = localStorage.getItem('lanitapp_accent_color') || '#147DF0';
+          var root = document.documentElement;
+          root.classList.remove('theme-navy', 'theme-dark', 'theme-emerald', 'theme-purple', 'theme-moca', 'theme-light');
+          root.classList.add('theme-' + mode);
+          root.style.setProperty('--primary', color);
+          root.style.setProperty('--primary-custom', color);
+          if (mode === 'light') {
+            root.classList.remove('dark');
+            root.style.backgroundColor = '#f8fafc';
+            root.style.colorScheme = 'light';
+          } else {
+            root.classList.add('dark');
+            root.style.colorScheme = 'dark';
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body style="background-color: #0b132b; color: #f1f5f9; margin: 0; min-height: 100vh;" class="bg-[#0b132b] text-slate-100 antialiased selection:bg-[#147df0] selection:text-white">
     <div id="root" style="min-height: 100vh; background-color: #0b132b;"></div>
