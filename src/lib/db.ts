@@ -1694,37 +1694,35 @@ export async function deleteVariableExpense(id: string): Promise<void> {
 /**
  * Categorías individuales por usuario
  */
-export async function seedUserDefaultCategories(userId: string): Promise<Category[]> {
+export async function seedUserDefaultCategories(userId: string, force?: boolean): Promise<Category[]> {
   if (!userId) return [];
   try {
     const existing = await db.categories
       .filter((c) => c.user_id === userId)
       .toArray();
 
-    if (existing.length > 0) {
+    if (existing.length > 0 && !force) {
       return existing;
     }
 
-    const userDefaults: Category[] = DEFAULT_CATEGORIES.map((def) => ({
+    const existingCodes = new Set(existing.map((c) => c.code || c.name.toLowerCase()));
+    const missingDefaults = DEFAULT_CATEGORIES.filter(
+      (def) => !(def.code && existingCodes.has(def.code)) && !existingCodes.has(def.name.toLowerCase())
+    );
+
+    if (missingDefaults.length === 0) {
+      return existing;
+    }
+
+    const userDefaults: Category[] = missingDefaults.map((def) => ({
       ...def,
       id: generateUuid(),
       user_id: userId,
-      sync_status: 'pending',
+      sync_status: 'synced',
     }));
 
     await db.categories.bulkPut(userDefaults);
-
-    if (navigator.onLine && isSupabaseConfigured() && supabase) {
-      try {
-        const payloads = userDefaults.map(({ sync_status, ...rest }) => rest);
-        const { error } = await supabase.from('categories').upsert(payloads);
-        if (!error) {
-          await db.categories.bulkPut(userDefaults.map((c) => ({ ...c, sync_status: 'synced' })));
-        }
-      } catch {}
-    }
-
-    return userDefaults;
+    return [...existing, ...userDefaults];
   } catch (err) {
     logger.error('Error seeding user default categories:', err);
     return [];

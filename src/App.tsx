@@ -203,9 +203,12 @@ export function App() {
       // Inicializar categorías individuales para el usuario si no han sido sembradas aún
       const catFlag = 'lanitapp_cat_seeded_' + currentUser.id;
       if (!localStorage.getItem(catFlag)) {
-        seedUserDefaultCategories(currentUser.id).then(() => {
+        seedUserDefaultCategories(currentUser.id).then((seeded) => {
           try {
             localStorage.setItem(catFlag, 'true');
+            if (seeded && seeded.length > 0) {
+              useFinanceStore.getState().loadFromLocalCache(currentUser.id);
+            }
           } catch {}
         });
       }

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { Category, TransactionType } from '../types/index.ts';
 import { saveCategory, deleteCategory, seedUserDefaultCategories, getActiveUserId } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 
 interface CategoriesModuleProps {
@@ -94,12 +95,20 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
       color,
     });
 
+    if (userId) {
+      await useFinanceStore.getState().loadFromLocalCache(userId);
+    }
+
     setIsModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Seguro que deseas eliminar esta categoría? Solo se eliminará de tu cuenta personal y no afectará a los demás usuarios.')) {
       await deleteCategory(id);
+      const userId = getActiveUserId();
+      if (userId) {
+        await useFinanceStore.getState().loadFromLocalCache(userId);
+      }
     }
   };
 
@@ -107,7 +116,8 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     const userId = getActiveUserId();
     if (!userId) return;
     if (window.confirm('¿Deseas restaurar las categorías sugeridas para tu cuenta?')) {
-      await seedUserDefaultCategories(userId);
+      await seedUserDefaultCategories(userId, true);
+      await useFinanceStore.getState().loadFromLocalCache(userId);
     }
   };
 
