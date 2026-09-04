@@ -49,78 +49,107 @@ export const generateSuggestions = (deficit: number, balance: number): string[] 
  * Envía email con diseño corporativo alertando sobre el déficit detectado
  */
 export const sendDeficitAlertEmail = async (email: string, alert: DeficitAlert): Promise<void> => {
-  const quincenaLabel = alert.quincena === 'Q1' ? 'Quincena 15' : 'Quincena 30';
-  const subject = `⚠️ Alerta de Déficit - ${quincenaLabel} de ${alert.mes} - LANITAPP`;
+  const quincenaNum = alert.quincena === 'Q1' ? '15' : '30';
+  const subject = `⚠️ Alerta de Déficit - Quincena ${quincenaNum} de ${alert.mes || 'Septiembre'}`;
+  const appUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://lanitapp.xyz';
 
   const html = `
     <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b132b; margin: 0; padding: 20px; color: #ffffff; }
-          .container { max-width: 580px; margin: 0 auto; background-color: #1c2541; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-          .header { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); padding: 28px 24px; text-align: center; }
-          .header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
-          .badge { display: inline-block; background: rgba(0,0,0,0.25); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 8px; letter-spacing: 0.5px; }
-          .content { padding: 24px; }
-          .card { background: rgba(11, 19, 43, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0; }
-          .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-          .stat-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; }
-          .stat-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 600; }
-          .stat-val { font-size: 18px; font-weight: 800; margin-top: 4px; }
-          .deficit-val { color: #f87171; }
-          .balance-val { color: #38bdf8; }
-          .suggestions-title { font-size: 14px; font-weight: 700; color: #f59e0b; margin: 20px 0 10px 0; display: flex; align-items: center; gap: 6px; }
-          .suggestions-list { padding-left: 20px; margin: 0; }
-          .suggestions-list li { margin-bottom: 8px; font-size: 13px; color: #cbd5e1; line-height: 1.5; }
-          .cta-btn { display: inline-block; background: #147df0; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 13px; text-align: center; margin-top: 20px; width: calc(100% - 48px); }
-          .footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; font-size: 11px; color: #64748b; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>⚠️ Alerta de Déficit Proyectado</h1>
-            <div class="badge">${quincenaLabel} • ${alert.mes} ${alert.year}</div>
-          </div>
-          <div class="content">
-            <p style="margin-top: 0; font-size: 14px; line-height: 1.5; color: #e2e8f0;">
-              Hola, hemos detectado que los compromisos planificados para tu próxima <strong>${quincenaLabel} (Día ${alert.fecha})</strong> exceden tus ingresos proyectados.
-            </p>
-
-            <div class="card">
-              <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">Resumen del Periodo:</div>
-              <div class="stat-grid">
-                <div class="stat-item">
-                  <div class="stat-label">Déficit Proyectado</div>
-                  <div class="stat-val deficit-val">-$${alert.deficit.toFixed(2)}</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-label">Balance Disponible</div>
-                  <div class="stat-val balance-val">$${alert.balance.toFixed(2)}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="suggestions-title">
-              💡 Sugerencias inteligentes de LANITAPP:
-            </div>
-            <ul class="suggestions-list">
-              ${alert.sugerencias.map((s) => `<li>${s}</li>`).join('')}
-            </ul>
-
-            <center>
-              <a href="http://localhost:5173" class="cta-btn">
-                Abrir Planificador Quincenal en LANITAPP
-              </a>
-            </center>
-          </div>
-          <div class="footer">
-            LANITAPP • Notificación financiera preventiva automática.
-          </div>
-        </div>
-      </body>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Alerta de Déficit - LANITAPP</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 1px solid #334155;">
+              
+              <!-- Header con Alerta -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 36px 30px; text-align: center;">
+                  <div style="font-size: 42px; margin-bottom: 8px;">⚠️</div>
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Alerta de Déficit Proyectado</h1>
+                  <div style="background: rgba(0,0,0,0.25); display: inline-block; padding: 6px 16px; border-radius: 20px; margin-top: 14px;">
+                    <span style="color: #ffffff; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                      QUINCENA ${quincenaNum} • ${(alert.mes || 'SEPTIEMBRE').toUpperCase()} ${alert.year || new Date().getFullYear()}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Cuerpo -->
+              <tr>
+                <td style="padding: 36px 30px;">
+                  <p style="color: #e2e8f0; font-size: 15px; line-height: 1.6; margin: 0 0 26px 0;">
+                    Hola, hemos detectado que los compromisos planificados para tu próxima 
+                    <strong style="color: #ffffff;">Quincena ${quincenaNum} (Día ${alert.fecha})</strong> 
+                    exceden tus ingresos proyectados.
+                  </p>
+                  
+                  <!-- Resumen del Período -->
+                  <div style="background-color: #0f172a; border: 1px solid #334155; border-radius: 14px; padding: 22px; margin-bottom: 26px;">
+                    <div style="color: #94a3b8; font-size: 12px; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Resumen del Período:
+                    </div>
+                    
+                    <!-- Déficit -->
+                    <div style="background-color: #1e293b; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; border-left: 4px solid #dc2626;">
+                      <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; font-weight: 700;">Déficit Proyectado</div>
+                      <div style="color: #ef4444; font-size: 26px; font-weight: 800;">-$${Math.abs(alert.deficit).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                    </div>
+                    
+                    <!-- Balance Disponible -->
+                    <div style="background-color: #1e293b; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #06b6d4;">
+                      <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; font-weight: 700;">Balance Disponible en Cuentas</div>
+                      <div style="color: #06b6d4; font-size: 26px; font-weight: 800;">$${alert.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Sugerencias -->
+                  <div style="margin-bottom: 28px;">
+                    <div style="color: #f59e0b; font-size: 15px; margin: 0 0 14px 0; font-weight: 700;">
+                      💡 Sugerencias inteligentes para solventarlo:
+                    </div>
+                    <ul style="color: #cbd5e1; font-size: 13px; line-height: 1.7; margin: 0; padding-left: 20px;">
+                      ${alert.sugerencias.map((s) => `<li style="margin-bottom: 8px;">${s}</li>`).join('')}
+                    </ul>
+                  </div>
+                  
+                  <!-- Botón de Acción -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 25px;">
+                    <tr>
+                      <td align="center">
+                        <a href="${appUrl}" 
+                           style="display: inline-block; background: linear-gradient(135deg, #147DF0 0%, #00C0FA 100%); color: #ffffff; padding: 14px 34px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 15px rgba(20,125,240,0.35);">
+                          Ver en LANITAPP →
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="background-color: #0f172a; padding: 24px 30px; text-align: center; border-top: 1px solid #334155;">
+                  <p style="color: #64748b; font-size: 12px; line-height: 1.6; margin: 0;">
+                    Este es un mensaje automático de <strong style="color: #94a3b8;">LANITAPP</strong> • Sistema de Control Financiero Inteligente<br>
+                    Por favor no respondas a este correo.
+                  </p>
+                  <p style="color: #475569; font-size: 11px; margin: 12px 0 0 0;">
+                    © ${new Date().getFullYear()} LANITAPP. Todos los derechos reservados.
+                  </p>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
     </html>
   `;
 

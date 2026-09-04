@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const RESEND_FROM = Deno.env.get("RESEND_FROM") || "LANITAPP <onboarding@resend.dev>";
+const RESEND_FROM = Deno.env.get("RESEND_FROM") || "LANITAPP <notificaciones@lanitapp.xyz>";
 
 serve(async (req) => {
   // Manejo de preflight CORS

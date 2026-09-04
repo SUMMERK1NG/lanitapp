@@ -12,11 +12,13 @@ export const sendPasswordResetEmail = async (email: string): Promise<boolean> =>
 
   try {
     const resetLink = `${window.location.origin}/reset-password`;
+    const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <notificaciones@lanitapp.xyz>';
 
     // Intentar usar la Edge Function de Resend
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: {
         to: email,
+        from: EMAIL_FROM,
         subject: '🔐 Recuperación de Contraseña - LANITAPP',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0b132b; color: #ffffff; padding: 25px; border-radius: 16px;">

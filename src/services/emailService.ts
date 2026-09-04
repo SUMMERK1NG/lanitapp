@@ -14,8 +14,8 @@ export interface BiweeklyEmailPayload {
   bcvRate: number;
 }
 
-// Remitente configurable con fallback al dominio sandbox de Resend para desarrollo
-const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <onboarding@resend.dev>';
+// Remitente configurado con fallback al dominio personalizado oficial
+const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <notificaciones@lanitapp.xyz>';
 
 /**
  * Envío seguro de correos electrónicos a través de Supabase Edge Function 'send-email'.
