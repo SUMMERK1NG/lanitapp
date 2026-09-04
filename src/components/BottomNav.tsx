@@ -39,7 +39,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 }) => {
   const [isMoreOpen, setIsMoreOpen] = useState<boolean>(false);
 
-  const moreViews: ActiveViewType[] = ['accounts', 'savings', 'debts', 'incomes', 'rates', 'settings'];
+  const moreViews: ActiveViewType[] = ['fixed_expenses', 'savings', 'debts', 'incomes', 'rates', 'settings', 'transactions'];
   const isMoreActive = moreViews.includes(activeView);
 
   const handleSelectMoreOption = (action: () => void) => {
@@ -49,13 +49,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const moreMenuItems = [
     {
-      id: 'accounts',
-      title: 'Capital',
-      description: 'Fondos en efectivo, bancos y billeteras',
-      icon: Wallet,
-      color: '#00C2C7',
-      action: () => onChangeView('accounts'),
-      active: activeView === 'accounts',
+      id: 'fixed_expenses',
+      title: 'Gastos Fijos',
+      description: 'Alquiler, servicios, suscripciones y compromisos',
+      icon: Receipt,
+      color: '#FF914D',
+      action: () => onChangeView('fixed_expenses'),
+      active: activeView === 'fixed_expenses',
     },
     {
       id: 'savings',
@@ -71,7 +71,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       title: 'Deudas & Cuotas',
       description: 'Cashea, préstamos y seguimiento de pagos',
       icon: CreditCard,
-      color: '#FF914D',
+      color: '#F59E0B',
       action: () => onChangeView('debts'),
       active: activeView === 'debts',
     },
@@ -208,26 +208,23 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             </button>
           </div>
 
-          {/* 4. Gastos Tab */}
+          {/* 4. Capital Tab */}
           <button
-            onClick={() => onChangeView('fixed_expenses')}
+            onClick={() => onChangeView('accounts')}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer relative ${
-              activeView === 'fixed_expenses'
-                ? 'text-[#FF914D] font-bold'
+              activeView === 'accounts'
+                ? 'text-primary-custom font-bold'
                 : 'text-muted hover:text-app font-normal'
             }`}
           >
-            <Receipt className="w-5 h-5" />
-            <span className="text-[9px] mt-1 font-semibold">Gastos</span>
-            {pendingCount > 0 && (
-              <span className="absolute top-0.5 right-3 w-2 h-2 rounded-full bg-[#FF914D] animate-ping" />
-            )}
+            <Wallet className="w-5 h-5" />
+            <span className="text-[9px] mt-1 font-semibold">Capital</span>
           </button>
 
           {/* 5. Más Tab */}
           <button
             onClick={() => setIsMoreOpen(true)}
-            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer relative ${
               isMoreActive
                 ? 'text-primary-custom font-bold'
                 : 'text-muted hover:text-app font-normal'
@@ -235,6 +232,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <MoreHorizontal className="w-5 h-5" />
             <span className="text-[9px] mt-1 font-semibold">Más</span>
+            {pendingCount > 0 && (
+              <span className="absolute top-0.5 right-3 w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            )}
           </button>
         </div>
       </div>
