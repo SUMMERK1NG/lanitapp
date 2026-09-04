@@ -544,7 +544,7 @@ export function App() {
     savings: 'Planes de Ahorro',
     accounts: 'Capital',
     transactions: 'Historial de Movimientos',
-    rates: 'Tasas BCV & Divisas',
+    rates: 'Tasas BCV y Divisas',
     settings: 'Configuración',
   };
 
