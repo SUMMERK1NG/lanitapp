@@ -629,7 +629,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
             <div className="p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
               <div className="flex items-center gap-1.5 text-muted text-xs font-semibold">
                 <ArrowUpRight className="w-4 h-4 text-[#FF914D]" />
-                <span>Egresos & Gastos</span>
+                <span>Egresos y Gastos</span>
               </div>
               <p className="text-xl sm:text-2xl font-black text-[#FF914D]">
                 -${formatCurrencyVE(totalExpense)}
@@ -947,7 +947,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-app">Control de Deudas & Cuotas</h3>
+                  <h3 className="text-sm font-bold text-app">Control de Deudas y Cuotas</h3>
                   <p className="text-xs text-muted">{debts.filter((d) => d.status === 'active').length} deudas activas</p>
                 </div>
               </div>

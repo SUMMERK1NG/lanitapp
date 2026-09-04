@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useMemo, useEffect, useCallback, lazy, Suspense, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   db,
@@ -49,6 +49,7 @@ import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
+import { PullToRefresh } from './components/PullToRefresh.tsx';
 import { Skeleton } from './components/ui/Skeleton.tsx';
 import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2, WifiOff } from 'lucide-react';
 
@@ -111,6 +112,7 @@ export function App() {
     return 'dashboard';
   });
 
+  const mainScrollRef = useRef<HTMLElement>(null);
   const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
   const isStoreLoading = useFinanceStore((state) => state.isLoading);
@@ -596,7 +598,10 @@ export function App() {
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto pb-safe lg:pb-8">
+      <main ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto pb-safe lg:pb-8">
+        {/* Pull to Refresh Gesture Indicator for Mobile PWA */}
+        <PullToRefresh scrollRef={mainScrollRef} />
+
         {/* Streamlined Top Header with Notification Bell & Sync Status */}
         <Header
           activeViewTitle={viewTitles[activeView]}

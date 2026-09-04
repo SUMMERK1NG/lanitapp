@@ -88,7 +88,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#ff914d]/20 border border-[#ff914d]/30 flex items-center justify-center text-[#ff914d]">
               <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <span className="text-xs font-semibold text-[#9ba3af]">Gastos & Pagos</span>
+            <span className="text-xs font-semibold text-[#9ba3af]">Gastos y Pagos</span>
           </div>
           <p className="text-base sm:text-xl font-black text-[#ff914d]">
             -{formatCurrency(totalExpense)}

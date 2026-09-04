@@ -68,7 +68,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'debts',
-      title: 'Deudas & Cuotas',
+      title: 'Deudas y Cuotas',
       description: 'Cashea, préstamos y seguimiento de pagos',
       icon: CreditCard,
       color: '#F59E0B',
@@ -77,7 +77,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'savings',
-      title: 'Ahorros & Metas',
+      title: 'Ahorros y Metas',
       description: 'Metas quincenales y aportes acumulados',
       icon: PiggyBank,
       color: '#10B981',

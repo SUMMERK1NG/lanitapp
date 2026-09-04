@@ -1047,7 +1047,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         {/* Total Committed Card (Expenses + Debts) */}
         <div className="p-3 sm:p-4 rounded-2xl bg-surface border border-app shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span className="text-[11px] sm:text-xs font-semibold">Gastos & Cuotas</span>
+            <span className="text-[11px] sm:text-xs font-semibold">Gastos y Cuotas</span>
             <div className="w-6 h-6 rounded-lg bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold">
               <Receipt className="w-3.5 h-3.5" />
             </div>

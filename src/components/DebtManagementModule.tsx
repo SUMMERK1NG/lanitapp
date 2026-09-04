@@ -115,7 +115,7 @@ export const DebtManagementModule: React.FC<DebtManagementModuleProps> = ({
             <div className="w-8 h-8 rounded-xl bg-[#FF914D]/20 text-[#FF914D] flex items-center justify-center font-bold">
               <CreditCard className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-app">Control de Deudas & Créditos</h3>
+            <h3 className="text-base font-bold text-app">Control de Deudas y Créditos</h3>
           </div>
           <p className="text-xs text-muted mt-0.5">
             Seguimiento de cuotas, compromisos y pagos

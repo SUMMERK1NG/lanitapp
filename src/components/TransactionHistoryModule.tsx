@@ -367,7 +367,7 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
         type: 'expense',
         subtype: 'saving_contrib',
         description: `Aporte Ahorro: ${goal?.name || 'Meta'}`,
-        categoryName: 'Ahorro & Metas',
+        categoryName: 'Ahorros y Metas',
         categoryIcon: 'PiggyBank',
         categoryColor: '#10B981',
         accountName: 'Fondo de Ahorro',
@@ -777,7 +777,7 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
                     <div>
                       <h1 className="text-2xl font-black tracking-tight text-slate-900">LANITAPP</h1>
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
-                        Reporte de Auditoría & Historial de Movimientos
+                        Reporte de Auditoría e Historial de Movimientos
                       </p>
                     </div>
                   </div>

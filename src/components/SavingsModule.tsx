@@ -338,7 +338,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
             <div className="w-8 h-8 rounded-xl bg-[#00C2C7]/20 text-[#00C2C7] flex items-center justify-center font-bold">
               <PiggyBank className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-bold text-app">Planes de Ahorro & Metas Financieras</h3>
+            <h3 className="text-base font-bold text-app">Planes de Ahorro y Metas Financieras</h3>
           </div>
           <p className="text-xs text-muted mt-0.5">
             Metas financieras y fondos de reserva
@@ -530,7 +530,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
                 {/* Expanded Contribution History */}
                 {isExpanded && (
                   <div className="p-3 bg-card/60 rounded-2xl border border-app space-y-2 animate-in fade-in duration-150">
-                    <span className="text-xs font-bold text-app block">Historial de Aportes & Periodos</span>
+                    <span className="text-xs font-bold text-app block">Historial de Aportes y Periodos</span>
                     {contributions.length === 0 ? (
                       <p className="text-xs text-muted py-1">Sin aportes registrados aún.</p>
                     ) : (

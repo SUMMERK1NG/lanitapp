@@ -655,7 +655,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                   className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
                 >
                   <option value="user">Usuario Estándar (Acceso personal)</option>
-                  <option value="admin">Administrador (Acceso total & Configuración)</option>
+                  <option value="admin">Administrador (Acceso total y Configuración)</option>
                 </select>
               </div>
 
