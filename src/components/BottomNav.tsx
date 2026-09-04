@@ -42,9 +42,25 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const moreViews: ActiveViewType[] = ['fixed_expenses', 'savings', 'debts', 'incomes', 'rates', 'settings', 'transactions'];
   const isMoreActive = moreViews.includes(activeView);
 
+  const handleSelectView = (view: ActiveViewType) => {
+    onChangeView(view);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+      document.documentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+      document.body?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const handleSelectMoreOption = (action: () => void) => {
     setIsMoreOpen(false);
     action();
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+      document.documentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+      document.body?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const moreMenuItems = [
@@ -54,7 +70,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       description: 'Sueldos fijos y extras por quincena',
       icon: Briefcase,
       color: '#147DF0',
-      action: () => onChangeView('incomes'),
+      action: () => handleSelectView('incomes'),
       active: activeView === 'incomes',
     },
     {
@@ -63,7 +79,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       description: 'Alquiler, servicios, suscripciones y compromisos',
       icon: Receipt,
       color: '#FF914D',
-      action: () => onChangeView('fixed_expenses'),
+      action: () => handleSelectView('fixed_expenses'),
       active: activeView === 'fixed_expenses',
     },
     {
@@ -72,7 +88,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       description: 'Cashea, préstamos y seguimiento de pagos',
       icon: CreditCard,
       color: '#F59E0B',
-      action: () => onChangeView('debts'),
+      action: () => handleSelectView('debts'),
       active: activeView === 'debts',
     },
     {
@@ -81,7 +97,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       description: 'Metas quincenales y aportes acumulados',
       icon: PiggyBank,
       color: '#10B981',
-      action: () => onChangeView('savings'),
+      action: () => handleSelectView('savings'),
       active: activeView === 'savings',
     },
     {
@@ -90,7 +106,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       description: 'Histórico de cotizaciones, brecha y calculadora',
       icon: TrendingUp,
       color: '#8B5CF6',
-      action: () => onChangeView('rates'),
+      action: () => handleSelectView('rates'),
       active: activeView === 'rates',
     },
     {
@@ -101,7 +117,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         : 'Personalización y categorías',
       icon: Settings,
       color: '#94A3B8',
-      action: () => onChangeView('settings'),
+      action: () => handleSelectView('settings'),
       active: activeView === 'settings',
     },
   ];
@@ -172,7 +188,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <div className="max-w-md mx-auto flex items-center justify-around relative">
           {/* 1. Inicio Tab */}
           <button
-            onClick={() => onChangeView('dashboard')}
+            onClick={() => handleSelectView('dashboard')}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
               activeView === 'dashboard'
                 ? 'text-primary-custom font-bold'
@@ -185,7 +201,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
           {/* 2. Planificación Tab */}
           <button
-            onClick={() => onChangeView('fortnight')}
+            onClick={() => handleSelectView('fortnight')}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer ${
               activeView === 'fortnight'
                 ? 'text-primary-custom font-bold'
@@ -210,7 +226,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
           {/* 4. Capital Tab */}
           <button
-            onClick={() => onChangeView('accounts')}
+            onClick={() => handleSelectView('accounts')}
             className={`flex flex-col items-center justify-center flex-1 py-1 transition-all cursor-pointer relative ${
               activeView === 'accounts'
                 ? 'text-primary-custom font-bold'

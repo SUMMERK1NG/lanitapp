@@ -143,6 +143,16 @@ export function App() {
     if (currentUser?.id) {
       updateProfile({ last_active_view: newView }).catch(() => {});
     }
+
+    // Scroll inmediato a la parte superior de la vista (móvil y escritorio)
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.documentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+      document.body?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [currentUser?.id, updateProfile]);
 
   // Selected period state (Month: 0-11, Year)

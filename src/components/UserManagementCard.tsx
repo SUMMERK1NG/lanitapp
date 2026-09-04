@@ -293,17 +293,22 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
           });
 
           if (rpcErr) {
-            logger.warn('RPC set_user_password_by_admin not found, falling back to reset email:', rpcErr.message);
-            if (passwordTargetUser.email) {
-              await supabase.auth.resetPasswordForEmail(passwordTargetUser.email, {
-                redirectTo: `${window.location.origin}/reset-password`,
-              });
-              showToast('success', `Se ha enviado el enlace de restablecimiento a ${passwordTargetUser.email}.`);
+            logger.warn('RPC set_user_password_by_admin notice:', rpcErr.message);
+            if (rpcErr.code === 'PGRST202' || rpcErr.message?.includes('not found') || rpcErr.message?.includes('schema cache')) {
+              if (passwordTargetUser.email) {
+                await supabase.auth.resetPasswordForEmail(passwordTargetUser.email, {
+                  redirectTo: `${window.location.origin}/reset-password`,
+                });
+                showToast('error', `Función directa no instalada en Supabase SQL. Se envió un enlace de restablecimiento a ${passwordTargetUser.email} como alternativa.`);
+              } else {
+                throw new Error('Debes ejecutar el script admin_rpc_functions.sql en el SQL Editor de Supabase para habilitar la asignación directa.');
+              }
             } else {
               throw rpcErr;
             }
           } else {
             showToast('success', `Contraseña actualizada con éxito para ${passwordTargetUser.name || passwordTargetUser.cedula}.`);
+            setPasswordTargetUser(null);
           }
         } else {
           showToast('success', 'Contraseña actualizada localmente.');
