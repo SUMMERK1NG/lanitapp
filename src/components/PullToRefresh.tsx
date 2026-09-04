@@ -126,9 +126,9 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({
 
   return (
     <div
-      className="fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-transform duration-100 ease-out"
+      className="fixed top-14 inset-x-0 flex justify-center z-50 pointer-events-none transition-transform duration-100 ease-out"
       style={{
-        transform: `translate(-50%, ${isRefreshing ? 12 : Math.max(0, pullDistance - 25)}px)`,
+        transform: `translateY(${isRefreshing ? 12 : Math.max(0, pullDistance - 25)}px)`,
       }}
     >
       <div
