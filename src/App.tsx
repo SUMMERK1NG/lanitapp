@@ -355,6 +355,10 @@ export function App() {
       const hash = window.location.hash;
       if (path.includes('reset-password') || hash.includes('type=recovery')) {
         setIsResetPasswordModalOpen(true);
+        // Limpiar inmediatamente el hash/parámetros para que el botón "Atrás" del navegador no reabra el modal
+        try {
+          window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+        } catch {}
       }
     };
     checkRecovery();
@@ -363,6 +367,9 @@ export function App() {
       const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setIsResetPasswordModalOpen(true);
+          try {
+            window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+          } catch {}
         }
       });
       return () => {
@@ -550,6 +557,7 @@ export function App() {
           isOpen={isResetPasswordModalOpen}
           onClose={() => setIsResetPasswordModalOpen(false)}
           onSuccessToast={showToast}
+          onSignOut={signOut}
         />
       </>
     );
@@ -908,6 +916,7 @@ export function App() {
         isOpen={isResetPasswordModalOpen}
         onClose={() => setIsResetPasswordModalOpen(false)}
         onSuccessToast={showToast}
+        onSignOut={signOut}
       />
 
       {/* Unified Quick Action Floating Modal (+) */}
