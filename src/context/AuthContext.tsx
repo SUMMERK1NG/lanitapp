@@ -12,6 +12,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   signInWithCedula: (cedula: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signUp: (data: any) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (cedulaOrEmail: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   signOut: () => Promise<void>;

@@ -15,8 +15,9 @@ import {
   EyeOff,
   AlertCircle,
   Sparkles,
+  Crown,
 } from 'lucide-react';
-import type { UserProfile, ThemeMode, AccentColor } from '../types/index.ts';
+import { isSuperAdmin, type UserProfile, type ThemeMode, type AccentColor } from '../types/index.ts';
 import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
 import { evaluatePasswordStrength } from './AuthScreen.tsx';
 import { saveUserProfile } from '../lib/db.ts';
@@ -345,7 +346,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <ShieldCheck className="w-4 h-4 text-primary-custom" />
               <span className="text-xs font-bold text-app">Tipo de Cuenta</span>
             </div>
-            {profile?.role === 'admin' ? (
+            {isSuperAdmin(profile) ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-400 border border-amber-500/40 shadow-sm flex items-center gap-1">
+                <Crown className="w-3 h-3 text-amber-400" />
+                SUPERADMINISTRADOR
+              </span>
+            ) : profile?.role === 'admin' ? (
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-primary-custom/20 text-primary-custom border border-primary-custom/30">
                 ADMINISTRADOR
               </span>
@@ -357,7 +363,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-muted">
-            {profile?.cedula && (
+            {profile?.cedula && profile.cedula !== 'V-0' && profile.cedula !== '0' && (
               <div className="flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5 text-[#FF914D]" />
                 <span>C.I: <strong className="text-app">{profile.cedula}</strong></span>

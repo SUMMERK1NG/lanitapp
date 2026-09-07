@@ -20,8 +20,9 @@ import {
   Clock,
   Globe,
   Check,
+  Crown,
 } from 'lucide-react';
-import type { UserProfile, UserRole } from '../types/index.ts';
+import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
@@ -154,12 +155,13 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         if (authError || !user) {
           throw new Error('Usuario administrador no autenticado en Supabase');
         }
+        const finalRole: UserRole = isSuperAdmin(editingUser) ? 'admin' : editRole;
         const profileUpdatePayload = {
           email: editEmail.trim().toLowerCase(),
           cedula: fullCedula,
           first_name: editFirstName.trim(),
           last_name: editLastName.trim(),
-          role: editRole,
+          role: finalRole,
           updated_at: new Date().toISOString(),
         };
         logger.dev('[UPDATE] Admin:', user.id, 'Editando usuario:', editingUser.id, 'Tabla: profiles');
@@ -171,13 +173,14 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         if (error) throw error;
       }
 
+      const finalRole: UserRole = isSuperAdmin(editingUser) ? 'admin' : editRole;
       await db.user_profiles.update(editingUser.id, {
         cedula: fullCedula,
         first_name: editFirstName.trim(),
         last_name: editLastName.trim(),
         name: fullName,
         email: editEmail.trim().toLowerCase(),
-        role: editRole,
+        role: finalRole,
       });
 
       showToast('success', `Datos de ${fullName} actualizados con éxito.`);
@@ -192,6 +195,11 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
   // Quick Toggle Role
   const handleToggleRole = async (profile: UserProfile) => {
+    if (isSuperAdmin(profile)) {
+      showToast('error', 'El rol de Superadministrador es permanente y no puede ser modificado.');
+      return;
+    }
+
     const newRole: UserRole = profile.role === 'admin' ? 'user' : 'admin';
     const roleLabel = newRole === 'admin' ? 'Administrador' : 'Usuario Estándar';
 
@@ -326,6 +334,11 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
   // Delete User Confirmation
   const handleConfirmDelete = async () => {
     if (!deletingUser) return;
+    if (isSuperAdmin(deletingUser)) {
+      showToast('error', 'El Superadministrador está protegido y no puede ser eliminado por ningún usuario.');
+      setDeletingUser(null);
+      return;
+    }
     if (deletingUser.id === currentUserId) {
       showToast('error', 'No puedes eliminar tu propia cuenta activa.');
       return;
@@ -434,14 +447,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
             ) : (
               users.map((p) => {
                 const isCurrent = p.id === currentUserId;
-                const dateFormatted = p.created_at
-                  ? new Date(p.created_at).toLocaleDateString('es-VE', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })
-                  : 'N/A';
-
+                const isSuper = isSuperAdmin(p);
                 const hasLastAccess = Boolean(p.last_sign_in_at || p.last_login_at);
                 const lastAccessFormatted = hasLastAccess
                   ? new Date(p.last_sign_in_at || p.last_login_at!).toLocaleString('es-VE', {
@@ -450,13 +456,22 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                       year: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit',
+                      hour12: true,
                     })
-                  : 'Sin accesos registrados';
+                  : 'Nunca';
+
+                const dateFormatted = p.created_at
+                  ? new Date(p.created_at).toLocaleDateString('es-VE', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '—';
 
                 return (
                   <tr
                     key={p.id}
-                    className={`hover:bg-card/50 transition-colors ${
+                    className={`hover:bg-card/30 transition-colors ${
                       isCurrent ? 'bg-primary-custom/5 font-medium' : ''
                     }`}
                   >
@@ -499,7 +514,15 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
 
                     {/* Rol */}
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {p.role === 'admin' ? (
+                      {isSuper ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-400 border border-amber-500/40 shadow-sm cursor-default select-none"
+                          title="Superadministrador - Rol protegido e inalterable"
+                        >
+                          <Crown className="w-3 h-3 text-amber-400" />
+                          SUPERADMIN
+                        </span>
+                      ) : p.role === 'admin' ? (
                         <button
                           onClick={() => handleToggleRole(p)}
                           disabled={updatingId === p.id}
@@ -569,18 +592,27 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                         </button>
 
                         {/* Botón Eliminar */}
-                        <button
-                          onClick={() => setDeletingUser(p)}
-                          disabled={isCurrent}
-                          className={`p-1.5 rounded-xl border transition-all ${
-                            isCurrent
-                              ? 'bg-card text-muted border-app opacity-30 cursor-not-allowed'
-                              : 'bg-[#ef4444]/10 hover:bg-[#ef4444]/25 text-[#ef4444] border-[#ef4444]/30 hover:scale-105 active:scale-95 cursor-pointer'
-                          }`}
-                          title={isCurrent ? 'No puedes eliminar tu propia cuenta' : 'Eliminar usuario'}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isSuper ? (
+                          <span
+                            className="p-1.5 rounded-xl border border-app bg-card text-muted/30 cursor-not-allowed opacity-30 inline-flex items-center justify-center"
+                            title="El Superadministrador está protegido y no puede ser eliminado por nadie"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingUser(p)}
+                            disabled={isCurrent}
+                            className={`p-1.5 rounded-xl border transition-all ${
+                              isCurrent
+                                ? 'bg-card text-muted border-app opacity-30 cursor-not-allowed'
+                                : 'bg-[#ef4444]/10 hover:bg-[#ef4444]/25 text-[#ef4444] border-[#ef4444]/30 hover:scale-105 active:scale-95 cursor-pointer'
+                            }`}
+                            title={isCurrent ? 'No puedes eliminar tu propia cuenta' : 'Eliminar usuario'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -700,14 +732,24 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
                 <label className="block text-xs font-semibold text-muted mb-1 flex items-center gap-1">
                   <Shield className="w-3.5 h-3.5 text-primary-custom" /> Rol de Acceso
                 </label>
-                <select
-                  value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as UserRole)}
-                  className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
-                >
-                  <option value="user">Usuario Estándar (Acceso personal)</option>
-                  <option value="admin">Administrador (Acceso total y Configuración)</option>
-                </select>
+                {isSuperAdmin(editingUser) ? (
+                  <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <p className="font-black text-amber-300">SUPERADMINISTRADOR</p>
+                      <p className="text-[10px] text-amber-400/80 font-normal">Rol vitalicio protegido. No puede ser degradado a usuario estándar.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                    className="w-full bg-card border border-app rounded-xl px-3 py-2 text-xs text-app font-bold focus:outline-none focus:ring-2 focus:ring-primary-custom cursor-pointer"
+                  >
+                    <option value="user">Usuario Estándar (Acceso personal)</option>
+                    <option value="admin">Administrador (Acceso total y Configuración)</option>
+                  </select>
+                )}
               </div>
 
               {/* Action Buttons */}

@@ -40,6 +40,7 @@ import { AuthScreen } from './components/AuthScreen.tsx';
 import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx';
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
+import { CompleteCedulaModal } from './components/CompleteCedulaModal.tsx';
 import { SignOutConfirmModal } from './components/SignOutConfirmModal.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
@@ -126,6 +127,7 @@ export function App() {
     loading: authLoading,
     error: authError,
     signInWithCedula,
+    signInWithGoogle,
     signUp,
     resetPassword,
     changePassword,
@@ -567,6 +569,7 @@ export function App() {
       <>
         <AuthScreen
           onSignIn={signInWithCedula}
+          onSignInWithGoogle={signInWithGoogle}
           onSignUp={signUp}
           onResetPassword={resetPassword}
           checkCedulaExists={checkCedulaExists}
@@ -1046,6 +1049,32 @@ export function App() {
           currentUser={currentUser}
         />
       </Suspense>
+
+      {/* Modal para completar Cédula de Identidad en usuarios de Google OAuth */}
+      <CompleteCedulaModal
+        isOpen={Boolean(
+          isAuthenticated &&
+          currentUser &&
+          (!currentUser.cedula ||
+            currentUser.cedula === 'V-0' ||
+            currentUser.cedula === '0' ||
+            currentUser.cedula === 'V-' ||
+            currentUser.cedula.trim() === '')
+        )}
+        userName={currentUser?.name}
+        userEmail={currentUser?.email}
+        onSaveCedula={async (fullCedula: string) => {
+          try {
+            await updateProfile({ cedula: fullCedula });
+            showToast('¡Cédula vinculada exitosamente!');
+            return { success: true };
+          } catch (err: any) {
+            return { success: false, error: err.message || 'Error guardando la cédula.' };
+          }
+        }}
+        onSignOut={signOut}
+        checkCedulaExists={checkCedulaExists}
+      />
 
       {/* Modal de Advertencia de Timeout (5 min de inactividad, 2 min de advertencia) */}
       {showTimeoutWarning && currentUser && (

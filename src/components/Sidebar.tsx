@@ -11,8 +11,9 @@ import {
   PiggyBank,
   Wallet,
   LogOut,
+  Crown,
 } from 'lucide-react';
-import type { ExchangeRatesData, UserProfile } from '../types/index.ts';
+import { isSuperAdmin, type ExchangeRatesData, type UserProfile } from '../types/index.ts';
 
 export type ActiveViewType =
   | 'dashboard'
@@ -185,15 +186,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="text-xs font-bold text-app block truncate group-hover:text-primary-custom transition-colors">
                   {activeProfile?.name || 'Usuario'}
                 </span>
-                <span
-                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full inline-block ${
-                    isAdmin
-                      ? 'bg-[#FF914D]/20 text-[#FF914D] border border-[#FF914D]/40'
-                      : 'bg-[#00C2C7]/20 text-[#00C2C7] border border-[#00C2C7]/40'
-                  }`}
-                >
-                  {isAdmin ? 'ADMIN' : 'USUARIO'}
-                </span>
+                {isSuperAdmin(activeProfile) ? (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-400 border border-amber-500/40 shadow-sm">
+                    <Crown className="w-2.5 h-2.5 text-amber-400" />
+                    SUPERADMIN
+                  </span>
+                ) : (
+                  <span
+                    className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full inline-block ${
+                      isAdmin
+                        ? 'bg-[#FF914D]/20 text-[#FF914D] border border-[#FF914D]/40'
+                        : 'bg-[#00C2C7]/20 text-[#00C2C7] border border-[#00C2C7]/40'
+                    }`}
+                  >
+                    {isAdmin ? 'ADMIN' : 'USUARIO'}
+                  </span>
+                )}
               </div>
             </button>
 
@@ -213,7 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={onOpenProfile}
               className="w-9 h-9 rounded-xl bg-card hover:bg-surface border border-app flex items-center justify-center text-base transition-transform hover:scale-105 cursor-pointer overflow-hidden p-0.5"
-              title={`${activeProfile?.name || 'Usuario'} (${isAdmin ? 'ADMIN' : 'USUARIO'})`}
+              title={`${activeProfile?.name || 'Usuario'} (${isSuperAdmin(activeProfile) ? 'SUPERADMIN' : isAdmin ? 'ADMIN' : 'USUARIO'})`}
             >
               {(() => {
                 const av = activeProfile?.avatar_url || activeProfile?.avatar || '👨‍💻';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { UserProfile, UserRole } from '../types/index.ts';
+import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db, saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
@@ -77,6 +77,25 @@ export const recordUserAccess = async (userId: string, explicitIp?: string) => {
   } catch (err) {
     logger.warn('[RECORD ACCESS EXCEPTION]:', err);
   }
+};
+
+/**
+ * Limpia y normaliza el valor de cédula descartando valores nulos o placeholders por defecto como 'V-0'
+ */
+export const normalizeCedula = (val?: string | null): string => {
+  if (!val) return '';
+  const clean = val.trim();
+  if (
+    clean === 'V-0' ||
+    clean === '0' ||
+    clean === 'V-' ||
+    clean === 'E-0' ||
+    clean === 'J-0' ||
+    clean === 'G-0'
+  ) {
+    return '';
+  }
+  return clean;
 };
 
 export function useAuth() {
@@ -250,15 +269,27 @@ export function useAuth() {
           }
 
           if (profileData) {
-            const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
-            const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
+            const isSuper = isSuperAdmin({ email: profileData.email || authUser.email, cedula: profileData.cedula || authUser.user_metadata?.cedula });
+            const role: UserRole = isSuper ? 'admin' : (profileData.role === 'admin' ? 'admin' : 'user');
+            const rawFullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
+            const nameParts = rawFullName.trim().split(/\s+/);
+            const googleFirstName = authUser.user_metadata?.first_name || (nameParts.length > 0 && nameParts[0] ? nameParts[0] : '');
+            const googleLastName = authUser.user_metadata?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+            const googleAvatar = authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture;
+
+            const avatarResolved = profileData.avatar_url || profileData.avatar || googleAvatar || '👑';
+            const resolvedFirstName = profileData.first_name || googleFirstName || '';
+            const resolvedLastName = profileData.last_name || googleLastName || '';
+            const resolvedName = profileData.name || (resolvedFirstName ? `${resolvedFirstName} ${resolvedLastName}`.trim() : authUser.email?.split('@')[0] || 'Usuario');
+            const resolvedCedula = normalizeCedula(profileData.cedula || authUser.user_metadata?.cedula);
+
             const userProfile: UserProfile = {
               id: profileData.id,
               email: profileData.email || authUser.email,
-              cedula: profileData.cedula || authUser.user_metadata?.cedula || '',
-              first_name: profileData.first_name || authUser.user_metadata?.first_name || '',
-              last_name: profileData.last_name || authUser.user_metadata?.last_name || '',
-              name: profileData.name || (profileData.first_name ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario'),
+              cedula: resolvedCedula,
+              first_name: resolvedFirstName,
+              last_name: resolvedLastName,
+              name: resolvedName,
               avatar: avatarResolved,
               avatar_url: avatarResolved,
               role,
@@ -289,18 +320,35 @@ export function useAuth() {
 
             // Registrar acceso e IP del usuario en segundo plano al restaurar sesión
             recordUserAccess(userProfile.id).catch(() => {});
+
+            // Limpiar hash residual de tokens OAuth de la URL
+            if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
+              try {
+                window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+              } catch {}
+            }
             return;
           } else if (!profileErr) {
             // Solo si NO hubo error de red/auth pero la fila no existe aún, se inicializa el perfil
             const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
-            const defaultAvatar = '👑';
+            const rawFullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
+            const nameParts = rawFullName.trim().split(/\s+/);
+            const googleFirstName = authUser.user_metadata?.first_name || (nameParts.length > 0 && nameParts[0] ? nameParts[0] : '');
+            const googleLastName = authUser.user_metadata?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+            const googleAvatar = authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture;
+            const defaultAvatar = googleAvatar || '👤';
+
+            const resolvedFirstName = googleFirstName;
+            const resolvedLastName = googleLastName;
+            const resolvedName = rawFullName || (googleFirstName ? `${googleFirstName} ${googleLastName}`.trim() : authUser.email?.split('@')[0] || 'Usuario');
+
             const newProfile: UserProfile = {
               id: authUser.id,
               email: authUser.email,
               cedula: authUser.user_metadata?.cedula || '',
-              first_name: authUser.user_metadata?.first_name || '',
-              last_name: authUser.user_metadata?.last_name || '',
-              name: authUser.user_metadata?.first_name ? `${authUser.user_metadata.first_name || ''} ${authUser.user_metadata.last_name || ''}`.trim() : authUser.email?.split('@')[0] || 'Usuario',
+              first_name: resolvedFirstName,
+              last_name: resolvedLastName,
+              name: resolvedName,
               avatar: defaultAvatar,
               avatar_url: defaultAvatar,
               role,
@@ -317,8 +365,9 @@ export function useAuth() {
                 id: authUser.id,
                 email: authUser.email || `${authUser.id}@lanitapp.local`,
                 cedula: authUser.user_metadata?.cedula || '',
-                first_name: authUser.user_metadata?.first_name || '',
-                last_name: authUser.user_metadata?.last_name || '',
+                first_name: resolvedFirstName,
+                last_name: resolvedLastName,
+                avatar_url: defaultAvatar,
                 role,
                 updated_at: new Date().toISOString(),
               };
@@ -335,6 +384,13 @@ export function useAuth() {
             setActiveUserId(newProfile.id);
             setCurrentUser(newProfile);
             setLoading(false);
+
+            // Limpiar hash residual de tokens OAuth de la URL
+            if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
+              try {
+                window.history.replaceState(null, '', window.location.origin + window.location.pathname);
+              } catch {}
+            }
             return;
           }
         }
@@ -378,16 +434,28 @@ export function useAuth() {
             .eq('id', authUser.id)
             .maybeSingle();
 
+          const rawFullName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
+          const nameParts = rawFullName.trim().split(/\s+/);
+          const googleFirstName = authUser.user_metadata?.first_name || (nameParts.length > 0 && nameParts[0] ? nameParts[0] : '');
+          const googleLastName = authUser.user_metadata?.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+          const googleAvatar = authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture;
+
           if (profileData && !profileErr) {
-            const role: UserRole = profileData.role === 'admin' ? 'admin' : 'user';
-            const avatarResolved = profileData.avatar_url || profileData.avatar || '👑';
+            const isSuper = isSuperAdmin({ email: profileData.email || authUser.email, cedula: profileData.cedula || authUser.user_metadata?.cedula });
+            const role: UserRole = isSuper ? 'admin' : (profileData.role === 'admin' ? 'admin' : 'user');
+            const avatarResolved = profileData.avatar_url || profileData.avatar || googleAvatar || '👑';
+            const resolvedFirstName = profileData.first_name || googleFirstName || '';
+            const resolvedLastName = profileData.last_name || googleLastName || '';
+            const resolvedName = profileData.name || (resolvedFirstName ? `${resolvedFirstName} ${resolvedLastName}`.trim() : 'Usuario');
+            const resolvedCedula = normalizeCedula(profileData.cedula || authUser.user_metadata?.cedula);
+
             const userProfile: UserProfile = {
               id: profileData.id,
               email: profileData.email || authUser.email,
-              cedula: profileData.cedula || authUser.user_metadata?.cedula || '',
-              first_name: profileData.first_name || authUser.user_metadata?.first_name || '',
-              last_name: profileData.last_name || authUser.user_metadata?.last_name || '',
-              name: profileData.name || (profileData.first_name ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() : 'Usuario'),
+              cedula: resolvedCedula,
+              first_name: resolvedFirstName,
+              last_name: resolvedLastName,
+              name: resolvedName,
               avatar: avatarResolved,
               avatar_url: avatarResolved,
               role,
@@ -403,6 +471,47 @@ export function useAuth() {
             await saveUserProfile(userProfile);
             setActiveUserId(userProfile.id);
             setCurrentUser(userProfile);
+          } else if (!profileErr) {
+            // Usuario nuevo proveniente de Google OAuth
+            const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
+            const defaultAvatar = googleAvatar || '👤';
+            const newProfile: UserProfile = {
+              id: authUser.id,
+              email: authUser.email,
+              cedula: authUser.user_metadata?.cedula || '',
+              first_name: googleFirstName,
+              last_name: googleLastName,
+              name: rawFullName || (googleFirstName ? `${googleFirstName} ${googleLastName}`.trim() : authUser.email?.split('@')[0] || 'Usuario'),
+              avatar: defaultAvatar,
+              avatar_url: defaultAvatar,
+              role,
+              is_active: true,
+              currency: 'USD',
+              theme_mode: 'navy',
+              accent_color: '#147DF0',
+              sync_status: 'synced',
+              created_at: new Date().toISOString(),
+            };
+
+            try {
+              const profilePayload = {
+                id: authUser.id,
+                email: authUser.email || `${authUser.id}@lanitapp.local`,
+                cedula: authUser.user_metadata?.cedula || '',
+                first_name: googleFirstName,
+                last_name: googleLastName,
+                avatar_url: defaultAvatar,
+                role,
+                updated_at: new Date().toISOString(),
+              };
+              await client.from('profiles').upsert(profilePayload);
+            } catch (e) {
+              logger.warn('OAuth profile upsert notice:', e);
+            }
+
+            await saveUserProfile(newProfile);
+            setActiveUserId(newProfile.id);
+            setCurrentUser(newProfile);
           }
         } else if (event === 'SIGNED_OUT') {
           setActiveUserId('');
@@ -634,6 +743,50 @@ export function useAuth() {
     } catch (err: any) {
       setLoading(false);
       const msg = err.message || 'Error inesperado durante el inicio de sesión.';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  };
+
+  /**
+   * Inicio de Sesión o Registro con Google OAuth
+   */
+  const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
+    setError(null);
+    setLoading(true);
+
+    if (!isSupabaseConfigured() || !supabase) {
+      setLoading(false);
+      const msg = 'Supabase no está configurado. Verifica las credenciales en .env.';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) {
+        setLoading(false);
+        logger.error('[OAuth Google Error]:', error.message);
+        setError(error.message);
+        return { success: false, error: error.message };
+      }
+
+      // Supabase redirige la pestaña del navegador automáticamente a Google Accounts
+      return { success: true };
+    } catch (err: any) {
+      setLoading(false);
+      logger.error('[OAuth Google Exception]:', err);
+      const msg = err.message || 'Error al conectar con Google.';
       setError(msg);
       return { success: false, error: msg };
     }
@@ -998,6 +1151,9 @@ export function useAuth() {
    */
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!currentUser) return;
+    if (isSuperAdmin(currentUser)) {
+      updates.role = 'admin';
+    }
     const avatarVal = updates.avatar_url || updates.avatar || currentUser.avatar_url || currentUser.avatar || '👑';
     const updated: UserProfile = {
       ...currentUser,
@@ -1034,6 +1190,7 @@ export function useAuth() {
         if (updates.accent_color !== undefined) updatePayload.accent_color = updates.accent_color;
         if (updates.first_name !== undefined) updatePayload.first_name = updates.first_name;
         if (updates.last_name !== undefined) updatePayload.last_name = updates.last_name;
+        if (updates.cedula !== undefined) updatePayload.cedula = updates.cedula;
         if (updates.name !== undefined) {
           updatePayload.first_name = updates.first_name || updates.name.split(' ')[0] || '';
           updatePayload.last_name = updates.last_name || updates.name.split(' ').slice(1).join(' ') || '';
@@ -1164,6 +1321,7 @@ export function useAuth() {
     loading,
     error,
     signInWithCedula,
+    signInWithGoogle,
     signUp,
     resetPassword,
     changePassword,

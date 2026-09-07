@@ -28,6 +28,27 @@ export type AccentColor =
 
 export type UserRole = 'admin' | 'user';
 
+export const SUPERADMIN_EMAILS: readonly string[] = ['luiginortrechi@gmail.com'];
+export const SUPERADMIN_CEDULAS: readonly string[] = ['V-28322083', '28322083'];
+
+export const isSuperAdmin = (
+  user?: { email?: string | null; cedula?: string | null } | null
+): boolean => {
+  if (!user) return false;
+  const email = (user.email || '').trim().toLowerCase();
+  const cedula = (user.cedula || '').trim().toUpperCase();
+  if (email && SUPERADMIN_EMAILS.some((e) => e.toLowerCase() === email)) return true;
+  if (
+    cedula &&
+    SUPERADMIN_CEDULAS.some(
+      (c) => c.toUpperCase() === cedula || cedula.replace(/^[VEJGvejg][- ]?/, '') === c.replace(/^[VEJGvejg][- ]?/, '')
+    )
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export interface UserProfile {
   id: string;
   email?: string;
