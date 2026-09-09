@@ -306,7 +306,11 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
     };
 
     // Enviar correo
-    await sendDeficitAlertEmail(userEmail, alertData);
+    try {
+      await sendDeficitAlertEmail(userEmail, alertData);
+    } catch (emailErr) {
+      logger.warn('Aviso: no se pudo enviar correo de déficit:', emailErr);
+    }
 
     // Registrar en local
     try {

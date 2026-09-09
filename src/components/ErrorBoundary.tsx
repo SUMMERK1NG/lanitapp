@@ -115,6 +115,28 @@ export class ErrorBoundary extends Component<Props, State> {
               No te preocupes, tus datos están a salvo. Puedes recargar o regresar al inicio de sesión.
             </p>
 
+            {this.state.errorMessage && (
+              <details
+                style={{
+                  marginBottom: '1.25rem',
+                  textAlign: 'left',
+                  fontSize: '0.75rem',
+                  color: '#ef4444',
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  wordBreak: 'break-word',
+                  cursor: 'pointer',
+                }}
+              >
+                <summary style={{ fontWeight: 600, color: '#f87171' }}>Ver detalle del error</summary>
+                <p style={{ marginTop: '0.5rem', fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                  {this.state.errorMessage}
+                </p>
+              </details>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <button
                 type="button"

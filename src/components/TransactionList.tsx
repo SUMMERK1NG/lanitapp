@@ -8,6 +8,7 @@ import {
   Inbox,
   Calendar,
   ChevronDown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { Transaction, Category, Account } from '../types/index.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
@@ -95,6 +96,28 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         setDeletingId(null);
       }
     }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Fecha', 'Tipo', 'Descripción', 'Categoría', 'Cuenta', 'Monto'];
+    const rows = filteredTransactions.map((tx) => [
+      `"${tx.transaction_date}"`,
+      `"${tx.type === 'income' ? 'Ingreso' : 'Gasto'}"`,
+      `"${tx.description.replace(/"/g, '""')}"`,
+      `"${categoryMap.get(tx.category_id)?.name || 'Sin Categoría'}"`,
+      `"${accountMap.get(tx.account_id)?.name || 'Sin Cuenta'}"`,
+      tx.amount.toFixed(2),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Movimientos_LanitApp_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -212,6 +235,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 </>
               )}
             </div>
+
+            {/* Botón de Exportar CSV */}
+            {filteredTransactions.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                title="Descargar movimientos filtrados en Excel / CSV"
+                className="bg-[#1c2e4a] hover:bg-[#253d61] text-emerald-400 hover:text-emerald-300 text-xs font-bold rounded-lg px-2.5 py-1 border border-[#2a4365] flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            )}
           </div>
         </div>
       )}

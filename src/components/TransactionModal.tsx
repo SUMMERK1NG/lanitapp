@@ -212,7 +212,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               placeholder="0,00"
               autoFocus
               required
-              className="!py-3 !text-2xl !font-black !bg-card !border-app !text-app"
+              className="!py-3 !text-2xl !font-black !bg-card !border-emerald-500/40 hover:!border-emerald-500/70 focus:!border-emerald-400 focus:!ring-2 focus:!ring-emerald-400/20 !text-app"
             />
           </div>
 
@@ -241,11 +241,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         : 'border-app bg-card text-muted hover:bg-surface hover:text-app'
                     }`}
                   >
-                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center mb-1 transition-all ${
-                      isSelected
-                        ? 'bg-transparent text-primary-custom'
-                        : 'bg-primary-custom/15 text-primary-custom'
-                    }`}>
+                    <div
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center mb-1 transition-all ${
+                        isSelected ? 'bg-transparent text-primary-custom' : ''
+                      }`}
+                      style={
+                        !isSelected
+                          ? {
+                              backgroundColor: `${cat.color || '#3B82F6'}20`,
+                              color: cat.color || '#3B82F6',
+                            }
+                          : undefined
+                      }
+                    >
                       <CategoryIcon iconName={cat.icon} size={16} className="w-4 h-4" />
                     </div>
                     <span className="text-[11px] font-bold truncate w-full">

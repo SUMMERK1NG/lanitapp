@@ -32,6 +32,8 @@ import {
   toSupabaseMonthlyIncomeOverridePayload,
   toSupabaseVariableIncomePayload,
   toSupabaseTransactionPayload,
+  toSupabaseFixedIncomePayload,
+  toSupabaseFixedExpensePayload,
   normalizeMonthlyFixedOverrideRow,
   normalizeMonthlyFixedIncomeOverrideRow,
 } from './supabasePayloads.ts';
@@ -157,24 +159,89 @@ export const resolveCategoryUuidToCode = async (uuid: string): Promise<string> =
   return uuid;
 };
 
-export const DEFAULT_CATEGORIES: Category[] = [
+export const PALETTE_COLORS = [
+  '#3B82F6', // Azul vibrante
+  '#10B981', // Verde esmeralda
+  '#F59E0B', // Ámbar dorado
+  '#EC4899', // Rosa vibrante
+  '#8B5CF6', // Violeta / Púrpura
+  '#06B6D4', // Cyan eléctrico
+  '#EF4444', // Rojo coral
+  '#00C2C7', // Turquesa Lanitapp
+  '#F97316', // Naranja brillante
+  '#6366F1', // Índigo profundo
+  '#84CC16', // Lima fresco
+  '#64748B', // Pizarra / Gris neutro
+];
+
+export const DEFAULT_CATEGORY_COLOR_MAP: Record<string, string> = {
   // Gastos
-  { id: 'cat_housing', code: 'cat_housing', name: 'Vivienda y Alquiler', type: 'expense', icon: 'Home', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_food', code: 'cat_food', name: 'Comida y Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_services', code: 'cat_services', name: 'Servicios y Fibra', type: 'expense', icon: 'Wifi', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_transport', code: 'cat_transport', name: 'Transporte y Gasolina', type: 'expense', icon: 'Car', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_debt', code: 'cat_debt', name: 'Pago de Deudas y Cuotas', type: 'expense', icon: 'CreditCard', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_health', code: 'cat_health', name: 'Salud y Farmacia', type: 'expense', icon: 'HeartPulse', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_entertainment', code: 'cat_entertainment', name: 'Ocio y Salidas', type: 'expense', icon: 'Film', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_savings', code: 'cat_savings', name: 'Ahorro y Metas', type: 'expense', icon: 'PiggyBank', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_other_exp', code: 'cat_other_exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#FF914D', sync_status: 'synced' },
+  cat_housing: '#3B82F6',        // Azul vibrante (Vivienda y Alquiler)
+  cat_food: '#10B981',           // Verde esmeralda (Comida y Supermercado)
+  cat_services: '#06B6D4',       // Cyan eléctrico (Servicios y Fibra)
+  cat_transport: '#F59E0B',      // Ámbar dorado (Transporte y Gasolina)
+  cat_debt: '#EF4444',           // Rojo coral (Pago de Deudas y Cuotas)
+  cat_health: '#EC4899',         // Rosa vibrante (Salud y Farmacia)
+  cat_entertainment: '#8B5CF6',  // Violeta / Púrpura (Ocio y Salidas)
+  cat_savings: '#00C2C7',        // Turquesa Lanitapp (Ahorro y Metas)
+  cat_other_exp: '#64748B',      // Pizarra (Otros Gastos)
 
   // Ingresos
-  { id: 'cat_salary', code: 'cat_salary', name: 'Sueldo Base', type: 'income', icon: 'Briefcase', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_bonus', code: 'cat_bonus', name: 'Plus y Bonos', type: 'income', icon: 'TrendingUp', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_guard', code: 'cat_guard', name: 'Guardias / Turnos', type: 'income', icon: 'Clock', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_tickets', code: 'cat_tickets', name: 'Tickets Alimentación', type: 'income', icon: 'UtensilsCrossed', color: '#FF914D', sync_status: 'synced' },
-  { id: 'cat_extras', code: 'cat_extras', name: 'Extras y Freelance', type: 'income', icon: 'Laptop', color: '#FF914D', sync_status: 'synced' },
+  cat_salary: '#10B981',         // Verde esmeralda (Sueldo Base)
+  cat_bonus: '#00C2C7',          // Turquesa (Plus y Bonos)
+  cat_guard: '#6366F1',          // Índigo (Guardias / Turnos)
+  cat_tickets: '#F59E0B',        // Ámbar (Tickets Alimentación)
+  cat_extras: '#EC4899',         // Rosa (Extras y Freelance)
+};
+
+export const DEFAULT_CATEGORY_COLOR_BY_NAME: Record<string, string> = {
+  'vivienda y alquiler': '#3B82F6',
+  'vivienda & alquiler': '#3B82F6',
+  'comida y supermercado': '#10B981',
+  'comida & supermercado': '#10B981',
+  'servicios y fibra': '#06B6D4',
+  'servicios & fibra': '#06B6D4',
+  'transporte y gasolina': '#F59E0B',
+  'transporte & gasolina': '#F59E0B',
+  'pago de deudas y cuotas': '#EF4444',
+  'pago de deudas & cuotas': '#EF4444',
+  'pago de deudas': '#EF4444',
+  'deudas': '#EF4444',
+  'salud y farmacia': '#EC4899',
+  'salud & farmacia': '#EC4899',
+  'ocio y salidas': '#8B5CF6',
+  'ocio & salidas': '#8B5CF6',
+  'ahorro y metas': '#00C2C7',
+  'ahorro & metas': '#00C2C7',
+  'otros gastos': '#64748B',
+  'sueldo base': '#10B981',
+  'plus y bonos': '#00C2C7',
+  'plus & bonos': '#00C2C7',
+  'guardias / turnos': '#6366F1',
+  'tickets alimentación': '#F59E0B',
+  'tickets alimentacion': '#F59E0B',
+  'extras y freelance': '#EC4899',
+  'extras & freelance': '#EC4899',
+};
+
+export const DEFAULT_CATEGORIES: Category[] = [
+  // Gastos
+  { id: 'cat_housing', code: 'cat_housing', name: 'Vivienda y Alquiler', type: 'expense', icon: 'Home', color: '#3B82F6', sync_status: 'synced' },
+  { id: 'cat_food', code: 'cat_food', name: 'Comida y Supermercado', type: 'expense', icon: 'ShoppingCart', color: '#10B981', sync_status: 'synced' },
+  { id: 'cat_services', code: 'cat_services', name: 'Servicios y Fibra', type: 'expense', icon: 'Wifi', color: '#06B6D4', sync_status: 'synced' },
+  { id: 'cat_transport', code: 'cat_transport', name: 'Transporte y Gasolina', type: 'expense', icon: 'Car', color: '#F59E0B', sync_status: 'synced' },
+  { id: 'cat_debt', code: 'cat_debt', name: 'Pago de Deudas y Cuotas', type: 'expense', icon: 'CreditCard', color: '#EF4444', sync_status: 'synced' },
+  { id: 'cat_health', code: 'cat_health', name: 'Salud y Farmacia', type: 'expense', icon: 'HeartPulse', color: '#EC4899', sync_status: 'synced' },
+  { id: 'cat_entertainment', code: 'cat_entertainment', name: 'Ocio y Salidas', type: 'expense', icon: 'Film', color: '#8B5CF6', sync_status: 'synced' },
+  { id: 'cat_savings', code: 'cat_savings', name: 'Ahorro y Metas', type: 'expense', icon: 'PiggyBank', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_other_exp', code: 'cat_other_exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#64748B', sync_status: 'synced' },
+
+  // Ingresos
+  { id: 'cat_salary', code: 'cat_salary', name: 'Sueldo Base', type: 'income', icon: 'Briefcase', color: '#10B981', sync_status: 'synced' },
+  { id: 'cat_bonus', code: 'cat_bonus', name: 'Plus y Bonos', type: 'income', icon: 'TrendingUp', color: '#00C2C7', sync_status: 'synced' },
+  { id: 'cat_guard', code: 'cat_guard', name: 'Guardias / Turnos', type: 'income', icon: 'Clock', color: '#6366F1', sync_status: 'synced' },
+  { id: 'cat_tickets', code: 'cat_tickets', name: 'Tickets Alimentación', type: 'income', icon: 'UtensilsCrossed', color: '#F59E0B', sync_status: 'synced' },
+  { id: 'cat_extras', code: 'cat_extras', name: 'Extras y Freelance', type: 'income', icon: 'Laptop', color: '#EC4899', sync_status: 'synced' },
 ];
 
 export const DEFAULT_ACCOUNTS: Account[] = [];
@@ -244,12 +311,28 @@ export class LanitappDatabase extends Dexie {
 
 export const db = new LanitappDatabase();
 
-// Ensure initialization on cold start: ensure default categories exist
+// Ensure initialization on cold start: ensure default categories exist and migrate colors
 export async function initializeDatabase(): Promise<void> {
   try {
     const categoriesCount = await db.categories.count();
     if (categoriesCount === 0) {
       await db.categories.bulkPut(DEFAULT_CATEGORIES);
+    } else {
+      // Auto-migrar categorías locales que quedaron en #FF914D al nuevo set vibrante
+      const allCats = await db.categories.toArray();
+      const needsMigration = allCats.filter((c) => !c.color || c.color === '#FF914D');
+      if (needsMigration.length > 0) {
+        for (let i = 0; i < needsMigration.length; i++) {
+          const cat = needsMigration[i];
+          const normName = (cat.name || '').toLowerCase().trim();
+          cat.color =
+            (cat.code && DEFAULT_CATEGORY_COLOR_MAP[cat.code]) ||
+            DEFAULT_CATEGORY_COLOR_BY_NAME[normName] ||
+            PALETTE_COLORS[i % PALETTE_COLORS.length];
+          cat.sync_status = 'pending';
+          await db.categories.put(cat);
+        }
+      }
     }
   } catch (err) {
     logger.error('Database init error:', err);
@@ -604,7 +687,7 @@ export async function fetchAndConsolidateUserCloudData(userId?: string): Promise
 /**
  * Envia automáticamente a Supabase los registros locales que estén en estado 'pending'.
  */
-async function pushPendingLocalRecords(targetUid: string): Promise<number> {
+export async function pushPendingLocalRecords(targetUid: string): Promise<number> {
   if (!supabase) return 0;
   let pushed = 0;
 
@@ -641,15 +724,12 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Ingresos Fijos
     const pendingIncomes = await db.fixed_incomes.where('sync_status').equals('pending').toArray();
     for (const item of pendingIncomes.filter((i) => !i.user_id || i.user_id === targetUid)) {
-      const { sync_status, is_active, payment_mode, original_amount, ...rest } = item as any;
-      const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
-      const { error } = await supabase.from('fixed_incomes').upsert({
-        ...rest,
-        category_id: await resolveCategoryCodeToUuid(item.category_id || 'cat_salary'),
-        default_fortnight: fortnightNum,
-        user_id: targetUid,
-        amount: Number(item.amount),
-      });
+      const payload = toSupabaseFixedIncomePayload(item, targetUid);
+      if (!payload.category_id && item.category_id) {
+        const catUuid = await resolveCategoryCodeToUuid(item.category_id);
+        if (isValidUuid(catUuid)) payload.category_id = catUuid;
+      }
+      const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {
         await db.fixed_incomes.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -684,15 +764,12 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
     // Gastos Fijos
     const pendingExpenses = await db.fixed_expenses.where('sync_status').equals('pending').toArray();
     for (const item of pendingExpenses.filter((e) => !e.user_id || e.user_id === targetUid)) {
-      const { sync_status, default_quincena, ...rest } = item as any;
-      const fortnightNum = (item.default_fortnight as any) === 'q1' || (item.default_fortnight as any) === 15 ? 15 : (item.default_fortnight as any) === 'q2' || (item.default_fortnight as any) === 30 ? 30 : null;
-      const { error } = await supabase.from('fixed_expenses').upsert({
-        ...rest,
-        category_id: await resolveCategoryCodeToUuid(item.category_id || 'cat_services'),
-        default_fortnight: fortnightNum,
-        user_id: targetUid,
-        amount: Number(item.amount),
-      });
+      const payload = toSupabaseFixedExpensePayload(item, targetUid);
+      if (!payload.category_id && item.category_id) {
+        const catUuid = await resolveCategoryCodeToUuid(item.category_id);
+        if (isValidUuid(catUuid)) payload.category_id = catUuid;
+      }
+      const { error } = await supabase.from('fixed_expenses').upsert(payload);
       if (!error) {
         await db.fixed_expenses.update(item.id, { sync_status: 'synced' });
         pushed++;
@@ -817,6 +894,57 @@ async function pushPendingLocalRecords(targetUid: string): Promise<number> {
   }
 
   return pushed;
+}
+
+export interface PendingSyncSummary {
+  total: number;
+  transactions: number;
+  fixedExpenses: number;
+  debts: number;
+  incomes: number;
+  others: number;
+}
+
+/**
+ * Obtiene el conteo desglosado de registros pendientes de sincronizar en IndexedDB
+ */
+export async function getPendingSyncSummary(targetUid?: string): Promise<PendingSyncSummary> {
+  const uid = targetUid || getActiveUserId();
+  try {
+    const [txs, expenses, debts, incomes, varIncomes, accounts, savings, payments, states] = await Promise.all([
+      db.transactions.where('sync_status').equals('pending').toArray(),
+      db.fixed_expenses.where('sync_status').equals('pending').toArray(),
+      db.debts.where('sync_status').equals('pending').toArray(),
+      db.fixed_incomes.where('sync_status').equals('pending').toArray(),
+      db.variable_incomes.where('sync_status').equals('pending').toArray(),
+      db.accounts.where('sync_status').equals('pending').toArray(),
+      db.savings_goals.where('sync_status').equals('pending').toArray(),
+      db.debt_payments.where('sync_status').equals('pending').toArray(),
+      db.fortnight_item_states.where('sync_status').equals('pending').toArray(),
+    ]);
+
+    const filterUid = (items: Array<{ user_id?: string }>) =>
+      !uid ? items : items.filter((i) => !i.user_id || i.user_id === uid);
+
+    const txCount = filterUid(txs).length;
+    const expCount = filterUid(expenses).length;
+    const debtCount = filterUid(debts).length + filterUid(payments).length;
+    const incCount = filterUid(incomes).length + filterUid(varIncomes).length;
+    const otherCount = filterUid(accounts).length + filterUid(savings).length + filterUid(states).length;
+    const total = txCount + expCount + debtCount + incCount + otherCount;
+
+    return {
+      total,
+      transactions: txCount,
+      fixedExpenses: expCount,
+      debts: debtCount,
+      incomes: incCount,
+      others: otherCount,
+    };
+  } catch (err) {
+    logger.warn('Error fetching pending sync summary:', err);
+    return { total: 0, transactions: 0, fixedExpenses: 0, debts: 0, incomes: 0, others: 0 };
+  }
 }
 
 /**
@@ -1331,15 +1459,11 @@ export async function saveFixedIncome(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
-      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15
-        ? 15
-        : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30
-        ? 30
-        : isSplit
-        ? 50
-        : null;
-      payload.notes = notesWithTag;
+      const payload = toSupabaseFixedIncomePayload(record, userId);
+      if (!payload.category_id && record.category_id) {
+        const catUuid = await resolveCategoryCodeToUuid(record.category_id);
+        if (isValidUuid(catUuid)) payload.category_id = catUuid;
+      }
       const { error } = await supabase.from('fixed_incomes').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
@@ -1701,18 +1825,24 @@ export async function seedUserDefaultCategories(userId: string, force?: boolean)
       .filter((c) => c.user_id === userId)
       .toArray();
 
-    // Auto-sanitize any existing categories containing '&' to 'y' and standardize color
-    for (const cat of existing) {
+    // Auto-sanitize: ensure ampersands are replaced and colors are restored to vibrant palette
+    for (let i = 0; i < existing.length; i++) {
+      const cat = existing[i];
       let updated = false;
       if (cat.name && cat.name.includes('&')) {
         cat.name = cat.name.replace(/\s*&\s*/g, ' y ');
         updated = true;
       }
-      if (cat.color !== '#FF914D') {
-        cat.color = '#FF914D';
+      if (!cat.color || cat.color === '#FF914D') {
+        const normName = (cat.name || '').toLowerCase().trim();
+        cat.color =
+          (cat.code && DEFAULT_CATEGORY_COLOR_MAP[cat.code]) ||
+          DEFAULT_CATEGORY_COLOR_BY_NAME[normName] ||
+          PALETTE_COLORS[i % PALETTE_COLORS.length];
         updated = true;
       }
       if (updated) {
+        cat.sync_status = 'pending';
         await db.categories.put(cat);
       }
     }
@@ -2074,8 +2204,11 @@ export async function saveFixedExpense(
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
-      const { sync_status, default_quincena, ...payload } = record as any;
-      payload.default_fortnight = (record.default_fortnight as any) === 'q1' || (record.default_fortnight as any) === 15 ? 15 : (record.default_fortnight as any) === 'q2' || (record.default_fortnight as any) === 30 ? 30 : null;
+      const payload = toSupabaseFixedExpensePayload(record, userId);
+      if (!payload.category_id && record.category_id) {
+        const catUuid = await resolveCategoryCodeToUuid(record.category_id);
+        if (isValidUuid(catUuid)) payload.category_id = catUuid;
+      }
       const { error } = await supabase.from('fixed_expenses').upsert(payload);
       if (!error) {
         record.sync_status = 'synced';
@@ -2456,8 +2589,10 @@ export async function setFortnightExpensePaid(params: {
 }): Promise<void> {
   const userId = getActiveUserId();
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_expense_${params.expense.id}_${periodKey}`;
-  const txId = `tx_fe_${params.expense.id}_${periodKey}`;
+  const rawStateId = `fis_expense_${params.expense.id}_${periodKey}`;
+  const rawTxId = `tx_fe_${params.expense.id}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
+  const txId = ensureValidUuid(rawTxId);
 
   const txRecord: Transaction = {
     id: txId,
@@ -2466,7 +2601,7 @@ export async function setFortnightExpensePaid(params: {
     type: 'expense',
     description: `Pago Gasto Fijo: ${params.expense.name} (${params.fortnight === 'q1' ? 'Quincena 15' : 'Quincena 30'})`,
     category_id: params.expense.category_id || 'cat_services',
-    account_id: params.accountId || '',
+    account_id: params.accountId ? ensureValidUuid(params.accountId) : '',
     transaction_date: periodKey,
     sync_status: 'pending',
     created_at: new Date().toISOString(),
@@ -2475,7 +2610,7 @@ export async function setFortnightExpensePaid(params: {
   const stateRecord: FortnightItemState = {
     id: stateId,
     user_id: userId,
-    item_id: params.expense.id,
+    item_id: ensureValidUuid(params.expense.id),
     item_type: 'fixed_expense',
     period_key: periodKey,
     year: params.year,
@@ -2493,22 +2628,28 @@ export async function setFortnightExpensePaid(params: {
       const { sync_status: s1, ...txRaw } = txRecord;
       const txPayload = toSupabaseTransactionPayload(txRaw);
       const { sync_status: s2, ...stateRaw } = stateRecord;
-      const statePayload = toSupabaseFortnightStatePayload(stateRaw);
-      const [res1, res2] = await Promise.all([
-        supabase.from('transactions').upsert(txPayload),
-        supabase.from('fortnight_item_states').upsert(statePayload),
-      ]);
+      const statePayload = toSupabaseFortnightStatePayload(stateRaw, userId);
+
+      // Insertar transacción primero para satisfacer clave foránea en fortnight_item_states.transaction_id
+      const res1 = await supabase.from('transactions').upsert(txPayload);
+      const res2 = await supabase.from('fortnight_item_states').upsert(statePayload);
+
       if (!res1.error && !res2.error) {
         txRecord.sync_status = 'synced';
         stateRecord.sync_status = 'synced';
+        // Sincronizar automáticamente en segundo plano cualquier otro registro pendiente
+        pushPendingLocalRecords(userId).catch(() => {});
       } else {
-        logger.error('[Supabase Fortnight Paid Error]:', res1.error || res2.error);
+        logger.error('[Supabase Fortnight Paid Error]:', res1.error || res2.error, { txPayload, statePayload });
       }
     } catch (e) {
       logger.warn('Direct fortnight paid upsert notice:', e);
     }
   }
 
+  // Limpiar cualquier registro previo con ID legacy y guardar el nuevo UUID
+  await db.transactions.delete(rawTxId);
+  await db.fortnight_item_states.delete(rawStateId);
   await db.transactions.put(txRecord);
   await db.fortnight_item_states.put(stateRecord);
 }
@@ -2520,10 +2661,14 @@ export async function unmarkFortnightExpensePaid(params: {
   fortnight: FortnightType;
 }): Promise<void> {
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
-  const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+  const rawStateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const rawTxId = `tx_fe_${params.expenseId}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
+  const txId = ensureValidUuid(rawTxId);
 
+  await db.transactions.delete(rawTxId);
   await db.transactions.delete(txId);
+  await db.fortnight_item_states.delete(rawStateId);
   await db.fortnight_item_states.delete(stateId);
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -2546,15 +2691,18 @@ export async function setFortnightExpenseSkipped(params: {
 }): Promise<void> {
   const userId = getActiveUserId();
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
-  const txId = `tx_fe_${params.expenseId}_${periodKey}`;
+  const rawStateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const rawTxId = `tx_fe_${params.expenseId}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
+  const txId = ensureValidUuid(rawTxId);
 
+  await db.transactions.delete(rawTxId);
   await db.transactions.delete(txId);
 
   const stateRecord: FortnightItemState = {
     id: stateId,
     user_id: userId,
-    item_id: params.expenseId,
+    item_id: ensureValidUuid(params.expenseId),
     item_type: 'fixed_expense',
     period_key: periodKey,
     year: params.year,
@@ -2568,7 +2716,7 @@ export async function setFortnightExpenseSkipped(params: {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { sync_status, ...stateRaw } = stateRecord;
-      const statePayload = toSupabaseFortnightStatePayload(stateRaw);
+      const statePayload = toSupabaseFortnightStatePayload(stateRaw, userId);
       await Promise.all([
         supabase.from('transactions').delete().eq('id', txId),
         supabase.from('fortnight_item_states').upsert(statePayload),
@@ -2579,6 +2727,7 @@ export async function setFortnightExpenseSkipped(params: {
     }
   }
 
+  await db.fortnight_item_states.delete(rawStateId);
   await db.fortnight_item_states.put(stateRecord);
 }
 
@@ -2589,8 +2738,10 @@ export async function unmarkFortnightExpenseSkipped(params: {
   fortnight: FortnightType;
 }): Promise<void> {
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const rawStateId = `fis_expense_${params.expenseId}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
 
+  await db.fortnight_item_states.delete(rawStateId);
   await db.fortnight_item_states.delete(stateId);
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -2610,12 +2761,13 @@ export async function setFortnightDebtSkipped(params: {
 }): Promise<void> {
   const userId = getActiveUserId();
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+  const rawStateId = `fis_debt_${params.debtId}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
 
   const stateRecord: FortnightItemState = {
     id: stateId,
     user_id: userId,
-    item_id: params.debtId,
+    item_id: ensureValidUuid(params.debtId),
     item_type: 'debt',
     period_key: periodKey,
     year: params.year,
@@ -2629,7 +2781,7 @@ export async function setFortnightDebtSkipped(params: {
   if (navigator.onLine && isSupabaseConfigured() && supabase) {
     try {
       const { sync_status, ...rawPayload } = stateRecord;
-      const payload = toSupabaseFortnightStatePayload(rawPayload);
+      const payload = toSupabaseFortnightStatePayload(rawPayload, userId);
       const { error } = await supabase.from('fortnight_item_states').upsert(payload);
       if (!error) {
         stateRecord.sync_status = 'synced';
@@ -2641,6 +2793,7 @@ export async function setFortnightDebtSkipped(params: {
     }
   }
 
+  await db.fortnight_item_states.delete(rawStateId);
   await db.fortnight_item_states.put(stateRecord);
 }
 
@@ -2651,8 +2804,10 @@ export async function unmarkFortnightDebtSkipped(params: {
   fortnight: FortnightType;
 }): Promise<void> {
   const periodKey = getFortnightPeriodKey(params.year, params.month, params.fortnight);
-  const stateId = `fis_debt_${params.debtId}_${periodKey}`;
+  const rawStateId = `fis_debt_${params.debtId}_${periodKey}`;
+  const stateId = ensureValidUuid(rawStateId);
 
+  await db.fortnight_item_states.delete(rawStateId);
   await db.fortnight_item_states.delete(stateId);
 
   if (navigator.onLine && isSupabaseConfigured() && supabase) {

@@ -20,6 +20,8 @@ interface CurrencyConverterModalProps {
   onClose: () => void;
   rates: ExchangeRatesData;
   initialTab?: 'converter' | 'calculator';
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 type CurrencyType = 'USD_BCV' | 'USD_PAR' | 'EUR_BCV' | 'VES';
@@ -39,6 +41,8 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
   onClose,
   rates,
   initialTab = 'converter',
+  onRefresh,
+  isRefreshing = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'converter' | 'calculator'>(initialTab);
 
@@ -296,9 +300,9 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
               </div>
 
               {/* Card 1: From Currency */}
-              <div className="relative p-4 rounded-3xl bg-card border border-app space-y-2 overflow-hidden">
+              <div className="relative p-4 rounded-3xl bg-card border-2 border-emerald-500/50 hover:border-emerald-500/70 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20 space-y-2 overflow-hidden transition-all">
                 {/* Watermark symbol in background */}
-                <div className="absolute right-4 bottom-2 text-7xl font-black text-muted/10 pointer-events-none select-none">
+                <div className="absolute right-4 bottom-2 text-7xl font-black text-emerald-500/10 pointer-events-none select-none">
                   {CURRENCY_CONFIG[fromCurrency].watermark}
                 </div>
 
@@ -413,10 +417,23 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
                   <span>Compartir las tasas del día</span>
                 </button>
 
-                <div className="flex items-center gap-1 text-[11px] text-muted">
-                  <RefreshCw className="w-3.5 h-3.5 text-primary-custom" />
-                  <span>Actualizado: {rates.lastUpdated}</span>
-                </div>
+                {onRefresh ? (
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card hover:bg-surface border border-app text-[11px] font-medium text-muted hover:text-app transition-all cursor-pointer disabled:opacity-50"
+                    title="Clic para forzar actualización de tasas en tiempo real"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-primary-custom ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>Actualizado: <strong className="text-app">{rates.lastUpdated}</strong></span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 text-[11px] text-muted">
+                    <RefreshCw className="w-3.5 h-3.5 text-primary-custom" />
+                    <span>Actualizado: {rates.lastUpdated}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -467,11 +484,11 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
               </div>
 
               {/* Display 1: Math Expression & Input */}
-              <div className="relative p-3.5 rounded-2xl bg-card border border-app overflow-hidden">
-                <div className="absolute right-3 top-1 text-5xl font-black text-muted/10 pointer-events-none select-none">
+              <div className="relative p-3.5 rounded-2xl bg-card border-2 border-emerald-500/50 hover:border-emerald-500/70 overflow-hidden transition-all">
+                <div className="absolute right-3 top-1 text-5xl font-black text-emerald-500/10 pointer-events-none select-none">
                   {CURRENCY_CONFIG[calcFromCurrency].watermark}
                 </div>
-                <span className="text-[10px] uppercase font-bold text-muted block mb-1">
+                <span className="text-[10px] uppercase font-bold text-emerald-400 block mb-1">
                   Operación en {CURRENCY_CONFIG[calcFromCurrency].label}
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-app tracking-tight font-mono overflow-x-auto no-scrollbar">
@@ -495,6 +512,28 @@ export const CurrencyConverterModal: React.FC<CurrencyConverterModalProps> = ({
                 <div className="text-2xl sm:text-3xl font-black text-[#00C2C7] tracking-tight font-mono">
                   {formatCurrencyVE(calcConvertedResult)}
                 </div>
+              </div>
+
+              {/* Barra de Tasa Activa con Botón de Refresco Inmediato */}
+              <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-card border border-app text-xs text-muted">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-[10px] font-black text-[#00C2C7] uppercase">Tasa en uso:</span>
+                  <span className="font-semibold text-app truncate text-[11px]">
+                    1 {CURRENCY_CONFIG[calcFromCurrency].code} = {formatCurrencyVE(convertAmount(1, calcFromCurrency, calcToCurrency))} {CURRENCY_CONFIG[calcToCurrency].code}
+                  </span>
+                </div>
+                {onRefresh && (
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-1 text-[10px] font-bold text-primary-custom hover:underline ml-2 shrink-0 cursor-pointer disabled:opacity-50"
+                    title={`Última actualización: ${rates.lastUpdated}. Clic para refrescar`}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshing ? 'Actualizando...' : rates.lastUpdated}</span>
+                  </button>
+                )}
               </div>
 
               {/* Calculator Keypad */}

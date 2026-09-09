@@ -527,7 +527,104 @@ export function useAuth() {
   }, [initAuth]);
 
   /**
-   * Helper para buscar perfil por documento
+   * Obtiene de forma segura el correo electrónico asociado a una cédula
+   * utilizando la función RPC get_login_identifier (SECURITY DEFINER)
+   */
+  const getLoginIdentifier = async (fullCedula: string): Promise<{ exists: boolean; email?: string } | null> => {
+    const clean = fullCedula.trim();
+    if (!clean) return null;
+
+    // 1. Verificación local en Dexie (si existe sesión previa)
+    try {
+      const local = await db.user_profiles
+        .where('cedula')
+        .equalsIgnoreCase(clean)
+        .first();
+      if (local?.email) return { exists: true, email: local.email };
+    } catch {}
+
+    if (!supabase) return null;
+
+    // 2. RPC seguro en Supabase (SECURITY DEFINER)
+    try {
+      const { data, error } = await supabase.rpc('get_login_identifier', { p_cedula: clean });
+      if (!error && data && typeof data === 'object') {
+        return {
+          exists: Boolean((data as any).exists),
+          email: (data as any).email || undefined,
+        };
+      }
+    } catch (err) {
+      logger.warn('[Auth] Error consultando RPC get_login_identifier:', err);
+    }
+
+    return null;
+  };
+
+  /**
+   * Verifica de forma segura si una cédula ya está registrada (SECURITY DEFINER)
+   */
+  const checkCedulaExists = async (fullCedula: string): Promise<boolean> => {
+    const clean = fullCedula.trim();
+    if (!clean) return false;
+
+    // 1. Verificación local en Dexie
+    try {
+      const local = await db.user_profiles
+        .where('cedula')
+        .equalsIgnoreCase(clean)
+        .first();
+      if (local) return true;
+    } catch {}
+
+    if (!supabase) return false;
+
+    // 2. RPC seguro en Supabase
+    try {
+      const { data, error } = await supabase.rpc('check_cedula_exists', { p_cedula: clean });
+      if (!error && typeof data === 'boolean') {
+        return data;
+      }
+    } catch (err) {
+      logger.warn('[Auth] Error invocando check_cedula_exists RPC:', err);
+    }
+
+    return false;
+  };
+
+  /**
+   * Verifica de forma segura si un correo ya está registrado (SECURITY DEFINER)
+   */
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    const clean = email.trim().toLowerCase();
+    if (!clean) return false;
+
+    // 1. Verificación local en Dexie
+    try {
+      const local = await db.user_profiles
+        .where('email')
+        .equalsIgnoreCase(clean)
+        .first();
+      if (local) return true;
+    } catch {}
+
+    if (!supabase) return false;
+
+    // 2. RPC seguro en Supabase
+    try {
+      const { data, error } = await supabase.rpc('check_email_exists', { p_email: clean });
+      if (!error && typeof data === 'boolean') {
+        return data;
+      }
+    } catch (err) {
+      logger.warn('[Auth] Error invocando check_email_exists RPC:', err);
+    }
+
+    return false;
+  };
+
+  /**
+   * Helper para buscar perfil por documento (usa RPC seguro y Dexie)
    */
   const findProfileByDocument = async (fullCedula: string) => {
     const clean = fullCedula.trim();
@@ -542,33 +639,13 @@ export function useAuth() {
       if (local) return local;
     } catch {}
 
-    if (!supabase) return null;
-
-    // 2. ILIKE exact search on cedula (e.g. 'V-28322083')
-    try {
-      const { data: direct } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('cedula', clean)
-        .maybeSingle();
-      if (direct) return direct;
-
-      // 3. Secondary fallback with prefix variants
-      const rawNumber = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
-      if (rawNumber) {
-        const prefixes = ['V-', 'E-', 'J-', 'G-', ''];
-        for (const p of prefixes) {
-          const queryVal = `${p}${rawNumber}`;
-          const { data: variant } = await supabase
-            .from('profiles')
-            .select('*')
-            .ilike('cedula', queryVal)
-            .maybeSingle();
-          if (variant) return variant;
-        }
-      }
-    } catch (err) {
-      logger.warn('[Auth] Error consultando perfil por documento:', err);
+    // 2. RPC seguro
+    const idRes = await getLoginIdentifier(clean);
+    if (idRes?.exists && idRes.email) {
+      return {
+        cedula: clean,
+        email: idRes.email,
+      };
     }
 
     return null;
@@ -590,18 +667,9 @@ export function useAuth() {
       if (local) return local;
     } catch {}
 
-    if (!supabase) return null;
-
-    // 2. Búsqueda en Supabase profiles
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('email', clean)
-        .maybeSingle();
-      if (data) return data;
-    } catch (err) {
-      logger.warn('[Auth] Error consultando perfil por correo:', err);
+    const exists = await checkEmailExists(clean);
+    if (exists) {
+      return { email: clean };
     }
 
     return null;
@@ -635,11 +703,11 @@ export function useAuth() {
     }
 
     try {
-      // 1. Consultar profiles por cedula
-      const profile = await findProfileByDocument(cleanCedula);
+      // 1. Consultar identificador de acceso de forma segura vía RPC (evita select abierto a profiles)
+      const identifier = await getLoginIdentifier(cleanCedula);
 
-      // 2. Si no existe profile, mostrar mensaje exacto
-      if (!profile || !profile.email) {
+      // 2. Si no existe usuario con este documento
+      if (!identifier || !identifier.exists || !identifier.email) {
         setLoading(false);
         const notFoundMsg = `No existe ningún usuario registrado con el documento ${cleanCedula}`;
         setError(notFoundMsg);
@@ -648,7 +716,7 @@ export function useAuth() {
 
       // 3. Ejecutar signInWithPassword
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: profile.email,
+        email: identifier.email,
         password: password,
       });
 
@@ -665,23 +733,36 @@ export function useAuth() {
       }
 
       if (authData.user) {
-        const role: UserRole = profile.role === 'admin' ? 'admin' : 'user';
+        // 5. Usuario autenticado exitosamente: Ahora el token JWT permite consultar de forma segura su propio perfil
+        let profile: any = null;
+        try {
+          const { data: profData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          profile = profData;
+        } catch (err) {
+          logger.warn('[Auth] Error consultando perfil propio tras login:', err);
+        }
+
+        const role: UserRole = profile?.role === 'admin' ? 'admin' : 'user';
         const nowIso = new Date().toISOString();
-        const keepSessionVal = keepConnectedOption !== undefined ? keepConnectedOption : (profile.keep_session ?? false);
+        const keepSessionVal = keepConnectedOption !== undefined ? keepConnectedOption : (profile?.keep_session ?? false);
         const userProfile: UserProfile = {
           id: authData.user.id,
           email: authData.user.email,
-          cedula: profile.cedula || cleanCedula,
-          first_name: profile.first_name || authData.user.user_metadata?.first_name || '',
-          last_name: profile.last_name || authData.user.user_metadata?.last_name || '',
-          name: profile.name || (profile.first_name ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Usuario'),
-          avatar: profile.avatar || '👤',
+          cedula: profile?.cedula || cleanCedula,
+          first_name: profile?.first_name || authData.user.user_metadata?.first_name || '',
+          last_name: profile?.last_name || authData.user.user_metadata?.last_name || '',
+          name: profile?.name || (profile?.first_name ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Usuario'),
+          avatar: profile?.avatar || '👤',
           role,
           is_active: true,
-          currency: profile.currency || 'USD',
-          theme_mode: profile.theme_mode || 'navy',
-          accent_color: profile.accent_color || '#147DF0',
-          last_active_view: profile.last_active_view || 'dashboard',
+          currency: profile?.currency || 'USD',
+          theme_mode: profile?.theme_mode || 'navy',
+          accent_color: profile?.accent_color || '#147DF0',
+          last_active_view: profile?.last_active_view || 'dashboard',
           keep_session: keepSessionVal,
           last_sign_in_at: nowIso,
           last_login_at: nowIso,
@@ -1328,7 +1409,7 @@ export function useAuth() {
     signOut,
     updateProfile,
     refetchAuth: initAuth,
-    checkCedulaExists: async (cedula: string) => Boolean(await findProfileByDocument(cedula)),
-    checkEmailExists: async (email: string) => Boolean(await findProfileByEmail(email)),
+    checkCedulaExists,
+    checkEmailExists,
   };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { useFinanceStore, type RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
+import { pushPendingLocalRecords } from '../lib/db.ts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { logger } from '../utils/logger.ts';
 
@@ -43,6 +44,7 @@ export function useRealtimeSync(userId: string | null) {
   const syncNow = useCallback(async () => {
     if (!userId || !navigator.onLine) return;
     await fetchInitialData(userId);
+    await pushPendingLocalRecords(userId);
   }, [userId, fetchInitialData]);
 
   // Online / Offline Detection
@@ -51,7 +53,9 @@ export function useRealtimeSync(userId: string | null) {
       setIsOnline(true);
       if (userId) {
         setSyncStatus('syncing');
-        fetchInitialData(userId);
+        fetchInitialData(userId)
+          .then(() => pushPendingLocalRecords(userId))
+          .catch(() => {});
       }
     };
 
@@ -90,11 +94,17 @@ export function useRealtimeSync(userId: string | null) {
       return;
     }
 
-    // 2. Fetch inicial completo desde Supabase
-    fetchInitialData(userId).catch((err) => {
-      logger.warn('[RealtimeSync Initial Fetch Notice]:', err);
-      if (isMounted) setSyncStatus('error');
-    });
+    // 2. Fetch inicial completo desde Supabase y empuje automático de pendientes
+    fetchInitialData(userId)
+      .then(() => {
+        if (isMounted) {
+          pushPendingLocalRecords(userId).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        logger.warn('[RealtimeSync Initial Fetch Notice]:', err);
+        if (isMounted) setSyncStatus('error');
+      });
 
     // 3. Crear Canal Realtime Unificado para las 14 tablas oficiales
     const channelName = `realtime-sync-${userId}-${Math.random().toString(36).substring(2, 7)}`;
@@ -123,9 +133,17 @@ export function useRealtimeSync(userId: string | null) {
 
     channelRef.current = channel;
 
+    // 4. Sincronizador automático en segundo plano periódico (cada 45s)
+    const autoSyncInterval = setInterval(() => {
+      if (navigator.onLine && userId) {
+        pushPendingLocalRecords(userId).catch(() => {});
+      }
+    }, 45000);
+
     // Cleanup: Desuscribir canal al desmontar para evitar memory leaks
     return () => {
       isMounted = false;
+      clearInterval(autoSyncInterval);
       if (channelRef.current && supabase) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

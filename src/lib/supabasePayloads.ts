@@ -11,6 +11,8 @@ import type {
   SavingContribution,
   MonthlyFixedOverride,
   MonthlyFixedIncomeOverride,
+  FixedIncome,
+  FixedExpense,
   VariableIncome,
   Transaction,
   FortnightType,
@@ -21,59 +23,147 @@ import { isValidUuid, ensureValidUuid } from '../utils/uuid.ts';
 // Category ID Mapping: string IDs (Dexie) → UUID (Supabase)
 // ---------------------------------------------------------------
 
-/** Cache of Supabase category UUIDs keyed by local string IDs */
-let categoryMap: Map<string, string> = new Map();
+export const KNOWN_SUPABASE_CATEGORIES = Object.freeze({
+  cat_salary: '7b49253e-71c2-4964-913a-6251c13368f3',
+  cat_transport: '82d3d710-c994-49ed-946e-218f8843286f',
+  cat_services: 'ac794f8c-dafa-447b-9760-f51e59feaff1',
+  cat_health: 'c2da59c8-57f3-4df5-9db5-1d6cf0530d1c',
+  cat_extras: 'c62ff42c-437d-4589-bb39-1ec558197a7b',
+  cat_food: 'e512d7b8-f1b6-47d5-b5d3-a1eb6342bd94',
+});
 
-/** Populate category mapping from Supabase data */
-export function setCategoryMap(supabaseCategories: Array<{ id: string; name: string; type: string }>) {
+// Set inmutable con los únicos 6 UUIDs válidos existentes en PostgreSQL public.categories
+const STRICT_SUPABASE_CATEGORY_UUIDS = new Set<string>(Object.values(KNOWN_SUPABASE_CATEGORIES));
+
+export function isKnownSupabaseCategory(uuid?: string | null): boolean {
+  if (!uuid) return false;
+  return STRICT_SUPABASE_CATEGORY_UUIDS.has(uuid);
+}
+
+/** Cache of category mappings: local ID / code / name -> real Supabase UUID */
+const categoryMap: Map<string, string> = new Map();
+
+function initCategoryMap() {
   categoryMap.clear();
+  categoryMap.set('cat_salary', KNOWN_SUPABASE_CATEGORIES.cat_salary);
+  categoryMap.set('cat_bonus', KNOWN_SUPABASE_CATEGORIES.cat_salary);
+  categoryMap.set('cat_guard', KNOWN_SUPABASE_CATEGORIES.cat_salary);
+  categoryMap.set('cat_extras', KNOWN_SUPABASE_CATEGORIES.cat_extras);
+  categoryMap.set('cat_savings', KNOWN_SUPABASE_CATEGORIES.cat_extras);
+  categoryMap.set('cat_entertainment', KNOWN_SUPABASE_CATEGORIES.cat_extras);
+  categoryMap.set('cat_transport', KNOWN_SUPABASE_CATEGORIES.cat_transport);
+  categoryMap.set('cat_services', KNOWN_SUPABASE_CATEGORIES.cat_services);
+  categoryMap.set('cat_housing', KNOWN_SUPABASE_CATEGORIES.cat_services);
+  categoryMap.set('cat_debt', KNOWN_SUPABASE_CATEGORIES.cat_services);
+  categoryMap.set('cat_other_exp', KNOWN_SUPABASE_CATEGORIES.cat_services);
+  categoryMap.set('cat_health', KNOWN_SUPABASE_CATEGORIES.cat_health);
+  categoryMap.set('cat_food', KNOWN_SUPABASE_CATEGORIES.cat_food);
+  categoryMap.set('cat_tickets', KNOWN_SUPABASE_CATEGORIES.cat_food);
 
-  // Build a name-based lookup for approximate matching
-  const nameIndex = new Map<string, string>();
-  for (const cat of supabaseCategories) {
-    nameIndex.set(cat.name.toLowerCase(), cat.id);
+  for (const uuid of STRICT_SUPABASE_CATEGORY_UUIDS) {
+    categoryMap.set(uuid, uuid);
   }
+}
+initCategoryMap();
 
-  // Map each hardcoded local category ID to the best matching Supabase UUID
-  const localToName: Record<string, string[]> = {
-    cat_housing: ['vivienda', 'alquiler', 'servicios / hogar'],
-    cat_food: ['comida', 'supermercado', 'alimentación'],
-    cat_services: ['servicios', 'fibra', 'servicios / hogar'],
-    cat_transport: ['transporte', 'gasolina', 'combustible'],
-    cat_debt: ['deuda', 'cuotas', 'pago de deudas'],
-    cat_health: ['salud', 'farmacia', 'medicina'],
-    cat_entertainment: ['ocio', 'salidas', 'entretenimiento'],
-    cat_savings: ['ahorro', 'metas'],
-    cat_other_exp: ['otros', 'gastos'],
-    cat_salary: ['sueldo', 'salario', 'ingresos'],
-    cat_bonus: ['plus', 'bonos', 'bono'],
-    cat_guard: ['guardia', 'turnos'],
-    cat_tickets: ['tickets', 'alimentación', 'cesta ticket'],
-    cat_extras: ['extras', 'freelance', 'ingreso'],
-  };
+/**
+ * Deduce el UUID real de Supabase a partir de código, nombre o tipo
+ */
+export function matchToRealSupabaseUuid(code?: string, name?: string, type?: string): string {
+  if (code) {
+    const fromCode = categoryMap.get(code);
+    if (fromCode && STRICT_SUPABASE_CATEGORY_UUIDS.has(fromCode)) return fromCode;
+  }
+  const n = (name || '').toLowerCase();
+  if (n.includes('gasolin') || n.includes('trans') || n.includes('combust') || n.includes('moto') || n.includes('carro')) {
+    return KNOWN_SUPABASE_CATEGORIES.cat_transport;
+  }
+  if (n.includes('comid') || n.includes('mercado') || n.includes('alimen') || n.includes('super')) {
+    return KNOWN_SUPABASE_CATEGORIES.cat_food;
+  }
+  if (n.includes('salud') || n.includes('medic') || n.includes('farma') || n.includes('clinic')) {
+    return KNOWN_SUPABASE_CATEGORIES.cat_health;
+  }
+  if (n.includes('condominio') || n.includes('alquiler') || n.includes('servicio') || n.includes('vivienda') || n.includes('luz') || n.includes('agua') || n.includes('internet') || n.includes('fibra')) {
+    return KNOWN_SUPABASE_CATEGORIES.cat_services;
+  }
+  if (type === 'income' || n.includes('sueldo') || n.includes('salario') || n.includes('nomina')) {
+    if (type === 'income' || (!n.includes('gasto') && !n.includes('pago'))) {
+      return KNOWN_SUPABASE_CATEGORIES.cat_salary;
+    }
+  }
+  if (n.includes('extra') || n.includes('ahorro') || n.includes('freelance') || n.includes('ocio')) {
+    return KNOWN_SUPABASE_CATEGORIES.cat_extras;
+  }
+  return type === 'income' ? KNOWN_SUPABASE_CATEGORIES.cat_salary : KNOWN_SUPABASE_CATEGORIES.cat_services;
+}
 
-  for (const [localId, keywords] of Object.entries(localToName)) {
-    for (const kw of keywords) {
-      for (const [name, uuid] of nameIndex) {
-        if (name.includes(kw)) {
-          categoryMap.set(localId, uuid);
-          break;
-        }
-      }
-      if (categoryMap.has(localId)) break;
+/**
+ * Registra categorías en el mapa garantizando que SIEMPRE apunten a uno de los 6 UUIDs reales de Supabase.
+ * JAMÁS agrega UUIDs locales a la lista de UUIDs válidos de Supabase.
+ */
+export function setCategoryMap(categories: Array<{ id: string; name: string; type?: string; code?: string }>) {
+  for (const cat of categories) {
+    if (STRICT_SUPABASE_CATEGORY_UUIDS.has(cat.id)) {
+      categoryMap.set(cat.id, cat.id);
+      if (cat.code) categoryMap.set(cat.code, cat.id);
+      categoryMap.set(cat.name.toLowerCase(), cat.id);
+    } else {
+      // Categoría local de Dexie: mapear su ID al UUID real de Supabase
+      const realUuid = matchToRealSupabaseUuid(cat.code, cat.name, cat.type);
+      categoryMap.set(cat.id, realUuid);
+      if (cat.code) categoryMap.set(cat.code, realUuid);
+      categoryMap.set(cat.name.toLowerCase(), realUuid);
     }
   }
 }
 
-/** Resolve a category_id: if it's already a UUID, return as-is; if local string, map to UUID */
+/** Resolve a category_id: returns ONLY a known valid Supabase UUID or undefined */
 export function resolveCategoryId(localId?: string): string | undefined {
   if (!localId) return undefined;
-  // Already a valid UUID
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(localId)) {
+  if (STRICT_SUPABASE_CATEGORY_UUIDS.has(localId)) {
     return localId;
   }
-  // Try mapping
-  return categoryMap.get(localId) || undefined;
+  if (categoryMap.has(localId)) {
+    const res = categoryMap.get(localId);
+    if (res && STRICT_SUPABASE_CATEGORY_UUIDS.has(res)) return res;
+  }
+  const lower = localId.toLowerCase();
+  for (const [key, uuid] of categoryMap.entries()) {
+    if (key.toLowerCase() === lower && STRICT_SUPABASE_CATEGORY_UUIDS.has(uuid)) {
+      return uuid;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Garantiza un UUID de categoría 100% válido y existente en la tabla categories de Supabase.
+ * Previene el error PostgreSQL 23503 (violación de clave foránea transactions_category_id_fkey / 409 Conflict).
+ */
+export function getSafeSupabaseCategoryId(
+  categoryId?: string | null,
+  fallbackType: 'income' | 'expense' = 'expense',
+  description?: string
+): string {
+  if (categoryId) {
+    if (STRICT_SUPABASE_CATEGORY_UUIDS.has(categoryId)) {
+      return categoryId;
+    }
+    const resolved = resolveCategoryId(categoryId);
+    if (resolved && STRICT_SUPABASE_CATEGORY_UUIDS.has(resolved)) {
+      return resolved;
+    }
+  }
+  if (description) {
+    const fromDesc = matchToRealSupabaseUuid(undefined, description, fallbackType);
+    if (fromDesc && STRICT_SUPABASE_CATEGORY_UUIDS.has(fromDesc)) {
+      return fromDesc;
+    }
+  }
+  return fallbackType === 'income'
+    ? KNOWN_SUPABASE_CATEGORIES.cat_salary
+    : KNOWN_SUPABASE_CATEGORIES.cat_services;
 }
 
 /** Check if the category map has been populated */
@@ -131,20 +221,40 @@ export function toSupabaseDebtPaymentPayload(
 
 /**
  * Convert FortnightItemState to Supabase format.
- * - Removes `year`, `month`, `fortnight` (derived from period_key)
- * - Keeps `amount`, `transaction_id`, `notes` (added to DB via migration)
+ * - Ensures id, item_id, transaction_id are strictly valid deterministic UUIDs
+ * - Removes local-only columns: year, month, fortnight, sync_status (avoids PGRST204)
  */
 export function toSupabaseFortnightStatePayload(
-  record: Omit<FortnightItemState, 'sync_status'> & Record<string, any>
+  record: Omit<FortnightItemState, 'sync_status'> & Record<string, any>,
+  userId?: string
 ): Record<string, any> {
-  const {
-    year,
-    month,
-    fortnight,
-    ...rest
-  } = record;
+  const targetUserId = userId || record.user_id;
+  const cleanId = ensureValidUuid(record.id);
+  const cleanItemId = ensureValidUuid(record.item_id);
+  const cleanTxId = record.transaction_id ? ensureValidUuid(record.transaction_id) : null;
 
-  return rest;
+  const payload: Record<string, any> = {
+    id: cleanId,
+    item_id: cleanItemId,
+    item_type: record.item_type || 'fixed_expense',
+    period_key: String(record.period_key || ''),
+    status: record.status || 'paid',
+    notes: record.notes || '',
+    created_at: record.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (targetUserId) {
+    payload.user_id = targetUserId;
+  }
+  if (record.amount !== undefined && record.amount !== null) {
+    payload.amount = Number(record.amount);
+  }
+  if (cleanTxId) {
+    payload.transaction_id = cleanTxId;
+  }
+
+  return payload;
 }
 
 // ---------------------------------------------------------------
@@ -439,8 +549,11 @@ export function toSupabaseVariableIncomePayload(
 export function toSupabaseTransactionPayload(
   record: Omit<Transaction, 'sync_status'> & Record<string, any>
 ): Record<string, any> {
-  const resolved = resolveCategoryId(record.category_id);
-  const validCategory = resolved || (isValidUuid(record.category_id) ? record.category_id : null);
+  const safeCategory = getSafeSupabaseCategoryId(
+    record.category_id,
+    record.type === 'income' ? 'income' : 'expense',
+    record.description
+  );
   const validAccountId = record.account_id && isValidUuid(record.account_id) ? record.account_id : null;
   const cleanId = ensureValidUuid(record.id);
 
@@ -450,12 +563,123 @@ export function toSupabaseTransactionPayload(
     amount: Number(record.amount),
     type: record.type || 'expense',
     description: record.description || 'Transacción',
-    category_id: validCategory,
+    category_id: safeCategory,
     account_id: validAccountId,
     transaction_date: record.transaction_date || new Date().toISOString().split('T')[0],
     created_at: record.created_at || new Date().toISOString(),
     updated_at: record.updated_at || new Date().toISOString(),
   };
+}
+
+// ---------------------------------------------------------------
+// Fixed Incomes
+// ---------------------------------------------------------------
+
+/**
+ * Convert FixedIncome from frontend/Dexie format to Supabase format.
+ * - Resolves category_id to UUID (or null if not found)
+ * - Converts default_fortnight ('q1' -> 15, 'q2' -> 30, 'split' -> 50, 'both' -> null)
+ * - Removes local-only columns: due_day, due_day_2, sync_status (avoids PGRST204)
+ * - Retains strictly existing PostgreSQL columns: id, user_id, name, amount, currency,
+ *   default_fortnight, category_id, is_active, notes, payment_mode, original_amount, created_at, updated_at
+ */
+export function toSupabaseFixedIncomePayload(
+  record: Omit<FixedIncome, 'sync_status'> & Record<string, any>,
+  userId?: string
+): Record<string, any> {
+  const targetUserId = userId || record.user_id;
+  const cleanId = ensureValidUuid(record.id);
+
+  let defaultFortnight: number | null = null;
+  if (record.default_fortnight === 'q1' || (record.default_fortnight as any) === 15 || (record.default_fortnight as any) === '15') {
+    defaultFortnight = 15;
+  } else if (record.default_fortnight === 'q2' || (record.default_fortnight as any) === 30 || (record.default_fortnight as any) === '30') {
+    defaultFortnight = 30;
+  } else if (record.default_fortnight === 'split' || (record.default_fortnight as any) === 50 || (record.default_fortnight as any) === '50') {
+    defaultFortnight = 50;
+  }
+
+  const rawNotes = record.notes || '';
+  const cleanNotes = rawNotes.replace(/\s*\[split\]/g, '').trim();
+  const isSplit = record.default_fortnight === 'split' || defaultFortnight === 50;
+  const notesWithTag = isSplit ? (cleanNotes ? `${cleanNotes} [split]` : '[split]') : cleanNotes;
+
+  const safeCategory = getSafeSupabaseCategoryId(record.category_id, 'income');
+
+  const payload: Record<string, any> = {
+    id: cleanId,
+    name: (record.name || '').trim(),
+    amount: Number(record.amount) || 0,
+    currency: record.currency || 'USD',
+    default_fortnight: defaultFortnight,
+    category_id: safeCategory,
+    is_active: record.is_active !== undefined ? Boolean(record.is_active) : true,
+    notes: notesWithTag,
+    payment_mode: record.payment_mode || 'usd_cash',
+    original_amount: record.original_amount !== undefined ? Number(record.original_amount) : Number(record.amount) || 0,
+    created_at: record.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (targetUserId) {
+    payload.user_id = targetUserId;
+  }
+
+  return payload;
+}
+
+// ---------------------------------------------------------------
+// Fixed Expenses
+// ---------------------------------------------------------------
+
+/**
+ * Convert FixedExpense from frontend/Dexie format to Supabase format.
+ * - Resolves category_id to UUID (or null if not found)
+ * - Converts default_fortnight ('q1' -> 15, 'q2' -> 30, 'both' -> null)
+ * - Explicitly strips local-only columns: quincena, due_day, due_day_2, default_quincena, sync_status (avoids PGRST204)
+ * - Retains strictly existing PostgreSQL columns: id, user_id, name, amount, currency,
+ *   default_fortnight, category_id, is_active, notes, payment_mode, original_amount,
+ *   amount_usd, amount_in_ves, assumed_by_third_party, created_at, updated_at
+ */
+export function toSupabaseFixedExpensePayload(
+  record: Omit<FixedExpense, 'sync_status'> & Record<string, any>,
+  userId?: string
+): Record<string, any> {
+  const targetUserId = userId || record.user_id;
+  const cleanId = ensureValidUuid(record.id);
+
+  let defaultFortnight: number | null = null;
+  if (record.default_fortnight === 'q1' || (record.default_fortnight as any) === 15 || (record.default_fortnight as any) === '15') {
+    defaultFortnight = 15;
+  } else if (record.default_fortnight === 'q2' || (record.default_fortnight as any) === 30 || (record.default_fortnight as any) === '30') {
+    defaultFortnight = 30;
+  }
+
+  const safeCategory = getSafeSupabaseCategoryId(record.category_id, 'expense');
+
+  const payload: Record<string, any> = {
+    id: cleanId,
+    name: (record.name || '').trim(),
+    amount: Number(record.amount) || 0,
+    currency: record.currency || 'USD',
+    default_fortnight: defaultFortnight,
+    category_id: safeCategory,
+    is_active: record.is_active !== undefined ? Boolean(record.is_active) : true,
+    notes: record.notes || '',
+    payment_mode: record.payment_mode || 'ves_bcv',
+    original_amount: record.original_amount !== undefined ? Number(record.original_amount) : Number(record.amount) || 0,
+    amount_usd: record.amount_usd !== undefined ? Number(record.amount_usd) : Number(record.amount) || 0,
+    amount_in_ves: record.amount_in_ves !== undefined ? Number(record.amount_in_ves) : undefined,
+    assumed_by_third_party: Boolean(record.assumed_by_third_party),
+    created_at: record.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (targetUserId) {
+    payload.user_id = targetUserId;
+  }
+
+  return payload;
 }
 
 // ---------------------------------------------------------------
@@ -469,3 +693,4 @@ export function fortnightToInt(fortnight: FortnightType | string | number | null
   if (fortnight === 'split' || fortnight === 50 || fortnight === '50') return 50;
   return null;
 }
+

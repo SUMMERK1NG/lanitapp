@@ -4,10 +4,8 @@ import {
   TrendingUp,
   PiggyBank,
   CreditCard,
-  Calendar,
   Printer,
   Sliders,
-  ArrowRight,
   ArrowDownLeft,
   ArrowUpRight,
   ShieldCheck,
@@ -51,7 +49,12 @@ import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { Skeleton } from './ui/Skeleton.tsx';
 import { updatePreference, getUserPreferences } from '../lib/profilePreferences.ts';
-import { getActiveUserId } from '../lib/db.ts';
+import {
+  getActiveUserId,
+  DEFAULT_CATEGORY_COLOR_MAP,
+  DEFAULT_CATEGORY_COLOR_BY_NAME,
+  PALETTE_COLORS,
+} from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
 
 interface DashboardModuleProps {
@@ -134,6 +137,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState<boolean>(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
+  const [dashFortnight, setDashFortnight] = useState<'q1' | 'q2'>(() => (today.getDate() <= 15 ? 'q1' : 'q2'));
 
   // Load custom widget preferences from Supabase profiles (with fallback to DEFAULT_WIDGETS)
   const [widgets, setWidgets] = useState<DashboardWidgetConfig>(() => {
@@ -325,6 +329,54 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
     return fixedSum + varSum;
   }, [fixedExpenses, variableExpenses, selectedYear, selectedMonth, userCreatedAt]);
 
+  // Incomes breakdown for Q1 and Q2
+  const q1Income = useMemo(() => {
+    const fixed = fixedIncomes
+      .filter((fi) => fi.is_active !== false && (fi.default_fortnight === 'q1' || fi.default_fortnight === 'both' || fi.default_fortnight === 'split'))
+      .reduce((sum, fi) => sum + (fi.default_fortnight === 'split' ? fi.amount / 2 : fi.amount), 0);
+    const variable = variableIncomes
+      .filter((vi) => vi.year === selectedYear && vi.month === selectedMonth && vi.fortnight === 'q1')
+      .reduce((sum, vi) => sum + vi.amount, 0);
+    return fixed + variable;
+  }, [fixedIncomes, variableIncomes, selectedYear, selectedMonth]);
+
+  const q2Income = useMemo(() => {
+    const fixed = fixedIncomes
+      .filter((fi) => fi.is_active !== false && (fi.default_fortnight === 'q2' || fi.default_fortnight === 'both' || fi.default_fortnight === 'split'))
+      .reduce((sum, fi) => sum + (fi.default_fortnight === 'split' ? fi.amount / 2 : fi.amount), 0);
+    const variable = variableIncomes
+      .filter((vi) => vi.year === selectedYear && vi.month === selectedMonth && vi.fortnight === 'q2')
+      .reduce((sum, vi) => sum + vi.amount, 0);
+    return fixed + variable;
+  }, [fixedIncomes, variableIncomes, selectedYear, selectedMonth]);
+
+  // Debts breakdown for Q1 and Q2
+  const q1Debts = useMemo(() => {
+    return debts
+      .filter((d) => d.status === 'active' && d.current_balance > 0 && (d.fortnight_due === 'q1' || d.fortnight_due === 'both'))
+      .reduce((sum, d) => sum + (d.installment_amount || (d.current_balance > 0 ? d.current_balance : 0)), 0);
+  }, [debts]);
+
+  const q2Debts = useMemo(() => {
+    return debts
+      .filter((d) => d.status === 'active' && d.current_balance > 0 && (d.fortnight_due === 'q2' || d.fortnight_due === 'both'))
+      .reduce((sum, d) => sum + (d.installment_amount || (d.current_balance > 0 ? d.current_balance : 0)), 0);
+  }, [debts]);
+
+  // Planned Savings breakdown for Q1 and Q2
+  const q1Savings = useMemo(() => {
+    return savingsGoals
+      .filter((g) => g.status === 'active' && (g.frequency === 'fortnightly' || g.target_fortnight === 15 || (g.target_fortnight as any) === 'q1'))
+      .reduce((sum, g) => sum + g.amount_per_period, 0);
+  }, [savingsGoals]);
+
+  const q2Savings = useMemo(() => {
+    return savingsGoals
+      .filter((g) => g.status === 'active' && (g.frequency === 'fortnightly' || g.target_fortnight === 30 || (g.target_fortnight as any) === 'q2'))
+      .reduce((sum, g) => sum + g.amount_per_period, 0);
+  }, [savingsGoals]);
+
+
   // 7. Cashflow Chart Data (4 weeks / periods of the month)
   const cashflowData = useMemo(() => {
     const period1Income = totalIncome * 0.5;
@@ -384,19 +436,29 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 
     const totalCalculated = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
 
-    return Object.entries(categoryTotals)
-      .map(([catId, amount]) => {
-        const cat = categories.find((c) => c.id === catId);
-        return {
-          id: catId,
-          name: cat?.name || 'Otros Gastos',
-          amount: Number(amount.toFixed(2)),
-          color: cat?.color || '#00C2C7',
-          icon: cat?.icon || 'ShoppingCart',
-          percentage: totalCalculated > 0 ? Number(((amount / totalCalculated) * 100).toFixed(1)) : 0,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
+    const sortedEntries = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+
+    return sortedEntries.map(([catId, amount], index) => {
+      const cat = categories.find((c) => c.id === catId);
+      const normName = (cat?.name || '').toLowerCase().trim();
+      let color = cat?.color;
+      if (!color || color === '#FF914D') {
+        color =
+          (cat?.code && DEFAULT_CATEGORY_COLOR_MAP[cat.code]) ||
+          DEFAULT_CATEGORY_COLOR_MAP[catId] ||
+          DEFAULT_CATEGORY_COLOR_BY_NAME[normName] ||
+          PALETTE_COLORS[index % PALETTE_COLORS.length];
+      }
+
+      return {
+        id: catId,
+        name: cat?.name || (catId === 'cat_debt' ? 'Pago de Deudas y Cuotas' : 'Otros Gastos'),
+        amount: Number(amount.toFixed(2)),
+        color,
+        icon: cat?.icon || (catId === 'cat_debt' ? 'CreditCard' : 'ShoppingCart'),
+        percentage: totalCalculated > 0 ? Number(((amount / totalCalculated) * 100).toFixed(1)) : 0,
+      };
+    });
   }, [fixedExpenses, variableExpenses, monthTransactions, totalDebtPayments, categories, selectedYear, selectedMonth, userCreatedAt]);
 
   // 9. Savings and Debt Gauges
@@ -668,36 +730,59 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
         </div>
       )}
 
-      {/* 3. Quincena Glimpse Hero */}
+      {/* 3. Quincena Glimpse Hero & Termómetro de Liquidez */}
       {widgets.quincenas && (
-        <div className="p-5 rounded-3xl bg-surface border border-app shadow-md space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="space-y-3">
+          {/* Selector de Quincena y Acceso Rápido */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary-custom/20 text-primary-custom flex items-center justify-center font-bold">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-app">Distribución Plan Quincenal</h3>
-                <p className="text-xs text-muted">Compromisos programados para {MONTH_NAMES[selectedMonth]}</p>
+              <span className="text-xs font-bold text-muted">Vista Quincenal:</span>
+              <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-app">
+                <button
+                  type="button"
+                  onClick={() => setDashFortnight('q1')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    dashFortnight === 'q1'
+                      ? 'bg-primary-custom text-white shadow-sm'
+                      : 'text-muted hover:text-app'
+                  }`}
+                >
+                  Q1 (1-15)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDashFortnight('q2')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    dashFortnight === 'q2'
+                      ? 'bg-primary-custom text-white shadow-sm'
+                      : 'text-muted hover:text-app'
+                  }`}
+                >
+                  Q2 (16-30)
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => onNavigate('fortnight')}
-              className="text-xs font-bold text-primary-custom hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              Ver plan completo <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div className="p-3.5 rounded-2xl bg-card border border-app flex items-center justify-between">
+          {/* Comparativa Resumida Q1 vs Q2 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div
+              onClick={() => setDashFortnight('q1')}
+              className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                dashFortnight === 'q1'
+                  ? 'bg-primary-custom/10 border-primary-custom ring-1 ring-primary-custom shadow-sm'
+                  : 'bg-card border-app hover:bg-surface'
+              }`}
+            >
               <div>
                 <span className="text-[10px] text-muted font-bold block uppercase tracking-wider">
                   Quincena 15 de {MONTH_NAMES[selectedMonth]}
                 </span>
-                <span className="text-xs text-muted mt-0.5 block">Gastos asignados:</span>
-                <span className="text-lg font-black text-[#FF914D]">
-                  ${formatCurrencyVE(q1Expenses)}
+                <span className="text-xs text-muted mt-0.5 block">
+                  Ingreso: <strong className="text-app">${formatCurrencyVE(q1Income)}</strong> · Gastos: <strong className="text-[#FF914D]">${formatCurrencyVE(q1Expenses)}</strong>
+                </span>
+                <span className="text-sm font-black text-emerald-400 mt-1 block">
+                  Libre: ${formatCurrencyVE(Math.max(0, q1Income - (q1Expenses + q1Debts + q1Savings)))}
                 </span>
               </div>
               <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-primary-custom/10 text-primary-custom border border-primary-custom/25">
@@ -705,14 +790,23 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
               </span>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-card border border-app flex items-center justify-between">
+            <div
+              onClick={() => setDashFortnight('q2')}
+              className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                dashFortnight === 'q2'
+                  ? 'bg-primary-custom/10 border-primary-custom ring-1 ring-primary-custom shadow-sm'
+                  : 'bg-card border-app hover:bg-surface'
+              }`}
+            >
               <div>
                 <span className="text-[10px] text-muted font-bold block uppercase tracking-wider">
                   Quincena 30 de {MONTH_NAMES[selectedMonth]}
                 </span>
-                <span className="text-xs text-muted mt-0.5 block">Gastos asignados:</span>
-                <span className="text-lg font-black text-[#FF914D]">
-                  ${formatCurrencyVE(q2Expenses)}
+                <span className="text-xs text-muted mt-0.5 block">
+                  Ingreso: <strong className="text-app">${formatCurrencyVE(q2Income)}</strong> · Gastos: <strong className="text-[#FF914D]">${formatCurrencyVE(q2Expenses)}</strong>
+                </span>
+                <span className="text-sm font-black text-emerald-400 mt-1 block">
+                  Libre: ${formatCurrencyVE(Math.max(0, q2Income - (q2Expenses + q2Debts + q2Savings)))}
                 </span>
               </div>
               <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-primary-custom/10 text-primary-custom border border-primary-custom/25">
@@ -867,9 +961,12 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
                             return (
-                              <div className="p-2.5 rounded-xl bg-surface border border-app shadow-2xl text-xs space-y-0.5">
-                                <span className="font-bold text-app block">{data.name}</span>
-                                <span className="text-[#FF914D] font-black">${formatCurrencyVE(data.amount)}</span>
+                              <div className="p-2.5 rounded-xl bg-surface border border-app shadow-2xl text-xs space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: data.color }} />
+                                  <span className="font-bold text-app block">{data.name}</span>
+                                </div>
+                                <span className="font-black block" style={{ color: data.color }}>${formatCurrencyVE(data.amount)}</span>
                                 <span className="text-[10px] text-muted block">({data.percentage}%)</span>
                               </div>
                             );

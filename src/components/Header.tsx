@@ -13,6 +13,7 @@ import {
 import type { ExchangeRatesData, SyncResult, UserProfile, Debt, FixedExpense } from '../types/index.ts';
 import { computeSystemNotifications, getDismissedAlertIds } from './NotificationCenterModal.tsx';
 import type { RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
+import { SyncStatusBadge } from './SyncStatusBadge.tsx';
 
 interface HeaderProps {
   activeViewTitle?: string;
@@ -47,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshRates,
   isOnline,
   isSyncing,
-  syncStatus,
+  syncStatus: _syncStatus,
   lastSyncTime,
   activeProfile,
   debts = [],
@@ -288,46 +289,14 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Indicador de Estado de Sincronización Realtime (Amigable para el Usuario) */}
-          {(() => {
-            const effectiveStatus: RealtimeSyncStatus = syncStatus || (!isOnline ? 'offline' : isSyncing ? 'syncing' : 'connected');
-
-            let buttonClass = 'bg-card text-emerald-400 border-emerald-500/30 hover:border-emerald-500/50';
-            let dotElement = <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-xs shadow-emerald-400/50" />;
-            let labelText = 'Al día';
-            let tooltipText = `Todos tus datos están guardados y al día${lastSyncTime ? ` (${lastSyncTime})` : ''}`;
-
-            if (effectiveStatus === 'syncing') {
-              buttonClass = 'bg-card text-amber-400 border-amber-500/30';
-              dotElement = <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />;
-              labelText = 'Guardando...';
-              tooltipText = 'Guardando tus cambios de forma segura...';
-            } else if (effectiveStatus === 'offline') {
-              buttonClass = 'bg-card text-slate-400 border-slate-500/30';
-              dotElement = <span className="w-2 h-2 rounded-full bg-slate-400" />;
-              labelText = 'Sin conexión';
-              tooltipText = 'Sin conexión: tus datos están seguros en este dispositivo';
-            } else if (effectiveStatus === 'error') {
-              buttonClass = 'bg-card text-rose-400 border-rose-500/30';
-              dotElement = <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />;
-              labelText = 'Reintentando...';
-              tooltipText = 'Hubo un problema de red. Clic para reintentar.';
-            }
-
-            return (
-              <button
-                onClick={onSync}
-                disabled={effectiveStatus === 'syncing' || !isOnline}
-                className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer shrink-0 ${buttonClass}`}
-                title={tooltipText}
-              >
-                {dotElement}
-                <span className="hidden md:inline text-[11px] font-bold">
-                  {labelText}
-                </span>
-              </button>
-            );
-          })()}
+          {/* Indicador de Estado de Sincronización Realtime con Bandeja Offline */}
+          <SyncStatusBadge
+            userId={activeProfile?.id}
+            isOnline={isOnline}
+            isSyncing={isSyncing}
+            onSyncNow={onSync}
+            lastSyncTime={lastSyncTime}
+          />
 
           {/* Botón de Perfil / Avatar (Visible en móvil, en desktop ya está en la barra lateral) */}
           <button

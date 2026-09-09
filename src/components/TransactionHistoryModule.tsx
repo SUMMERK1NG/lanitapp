@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   X,
   FileSpreadsheet,
+  Share2,
 } from 'lucide-react';
 import type {
   Transaction,
@@ -493,6 +494,25 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
     window.print();
   };
 
+  // 5. WhatsApp Share Report
+  const handleShareWhatsApp = () => {
+    const periodLabel = `${MONTH_NAMES[selectedMonth]} ${selectedYear}`;
+    const net = totalFilteredIncome - totalFilteredExpense;
+    const msg = `📊 *Reporte de Movimientos - LANITAPP*\n` +
+      `🗓️ *Periodo:* ${periodLabel}\n` +
+      (fortnightFilter !== 'all' ? `✂️ *Corte:* ${fortnightFilter === 'q1' ? 'Quincena 15' : 'Quincena 30'}\n` : '') +
+      `\n` +
+      `💵 *Ingresos:* $${formatCurrencyVE(totalFilteredIncome)}\n` +
+      `🏷️ *Gastos / Egresos:* $${formatCurrencyVE(totalFilteredExpense)}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `✨ *Balance Neto:* ${net < 0 ? '-' : '+'}$${formatCurrencyVE(Math.abs(net))}` +
+      (bcvUsd > 1 ? ` (Bs. ${formatCurrencyVE(Math.abs(net) * bcvUsd)})\n` : '\n') +
+      `_Total movimientos: ${filteredMovements.length}_\n\n` +
+      `_Generado desde LANITAPP_`;
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* 1. Header Toolbar with Filters & Export Actions */}
@@ -535,6 +555,16 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Excel</span>
+          </button>
+
+          {/* Share to WhatsApp */}
+          <button
+            onClick={handleShareWhatsApp}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-black shadow-md transition-all cursor-pointer"
+            title="Compartir resumen por WhatsApp"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">WhatsApp</span>
           </button>
 
           {/* Export to PDF */}

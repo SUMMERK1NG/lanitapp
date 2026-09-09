@@ -49,8 +49,20 @@ const AVAILABLE_ICONS = [
   'Dumbbell',
 ];
 
-// Unified theme color for all categories
-const THEME_CATEGORY_COLOR = '#FF914D';
+const CATEGORY_PALETTE = [
+  { name: 'Azul', value: '#3B82F6' },
+  { name: 'Verde', value: '#10B981' },
+  { name: 'Cyan', value: '#06B6D4' },
+  { name: 'Turquesa', value: '#00C2C7' },
+  { name: 'Ámbar', value: '#F59E0B' },
+  { name: 'Naranja', value: '#FF914D' },
+  { name: 'Rojo', value: '#EF4444' },
+  { name: 'Rosa', value: '#EC4899' },
+  { name: 'Violeta', value: '#8B5CF6' },
+  { name: 'Índigo', value: '#6366F1' },
+  { name: 'Lima', value: '#84CC16' },
+  { name: 'Pizarra', value: '#64748B' },
+];
 
 export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }) => {
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
@@ -61,6 +73,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
   const [name, setName] = useState<string>('');
   const [type, setType] = useState<TransactionType>('expense');
   const [icon, setIcon] = useState<string>('Home');
+  const [color, setColor] = useState<string>('#3B82F6');
 
   const filteredCategories = categories.filter((c) => c.type === activeTab);
 
@@ -69,6 +82,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     setName('');
     setType(activeTab);
     setIcon(activeTab === 'expense' ? 'ShoppingCart' : 'Briefcase');
+    setColor(activeTab === 'expense' ? '#3B82F6' : '#10B981');
     setIsModalOpen(true);
   };
 
@@ -77,6 +91,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     setName(cat.name);
     setType(cat.type);
     setIcon(cat.icon);
+    setColor(cat.color || (cat.type === 'expense' ? '#3B82F6' : '#10B981'));
     setIsModalOpen(true);
   };
 
@@ -91,7 +106,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
       name: name.trim(),
       type,
       icon,
-      color: THEME_CATEGORY_COLOR,
+      color,
     });
 
     if (userId) {
@@ -212,13 +227,21 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
               key={cat.id}
               className="p-3.5 rounded-2xl bg-surface border border-app flex items-center justify-between shadow-sm hover:border-primary-custom transition-all"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-transform shadow-xs">
+              <div className="flex items-center gap-3 truncate">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-transform shadow-xs"
+                  style={{
+                    backgroundColor: `${cat.color || '#3B82F6'}20`,
+                    color: cat.color || '#3B82F6',
+                    borderColor: `${cat.color || '#3B82F6'}35`,
+                  }}
+                >
                   <CategoryIcon iconName={cat.icon} size={20} className="w-5 h-5" />
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-app">{cat.name}</h4>
-                  <span className="text-[10px] text-muted uppercase font-semibold">
+                <div className="truncate">
+                  <h4 className="text-xs font-bold text-app truncate">{cat.name}</h4>
+                  <span className="text-[10px] text-muted uppercase font-semibold flex items-center gap-1.5 mt-0.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cat.color || '#3B82F6' }} />
                     {cat.type === 'expense' ? 'Gasto' : 'Ingreso'}
                   </span>
                 </div>
@@ -336,14 +359,71 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
                 </div>
               </div>
 
+              {/* Color Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-muted">
+                    Color de la Categoría
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="text-[10px] font-mono text-muted uppercase">{color}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 p-2 bg-card rounded-2xl border border-app items-center">
+                  {CATEGORY_PALETTE.map((pal) => {
+                    const isSelected = color.toLowerCase() === pal.value.toLowerCase();
+                    return (
+                      <button
+                        key={pal.value}
+                        type="button"
+                        onClick={() => setColor(pal.value)}
+                        className={`w-7 h-7 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                          isSelected
+                            ? 'ring-2 ring-white scale-110 shadow-md'
+                            : 'hover:scale-105 opacity-80 hover:opacity-100'
+                        }`}
+                        style={{ backgroundColor: pal.value }}
+                        title={pal.name}
+                      >
+                        {isSelected && (
+                          <div className="w-2 h-2 rounded-full bg-white shadow-xs" />
+                        )}
+                      </button>
+                    );
+                  })}
+                  {/* Custom color input */}
+                  <label
+                    className="w-7 h-7 rounded-xl border border-dashed border-app flex items-center justify-center cursor-pointer hover:border-white/50 transition-all text-xs text-muted overflow-hidden relative shrink-0"
+                    title="Color personalizado"
+                  >
+                    🎨
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </label>
+                </div>
+              </div>
+
               {/* Live Preview */}
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-card border border-app">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 bg-primary-custom/15 text-primary-custom border border-primary-custom/25 transition-all shadow-xs">
+                <div
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition-all shadow-xs"
+                  style={{
+                    backgroundColor: `${color}20`,
+                    color: color,
+                    borderColor: `${color}40`,
+                  }}
+                >
                   <CategoryIcon iconName={icon} size={22} className="w-5.5 h-5.5" />
                 </div>
                 <div className="truncate">
                   <h5 className="text-xs font-bold text-app truncate">{name.trim() || 'Nombre de la Categoría'}</h5>
-                  <span className="text-[10px] text-muted uppercase font-semibold">
+                  <span className="text-[10px] text-muted uppercase font-semibold flex items-center gap-1.5 mt-0.5">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
                     {type === 'expense' ? 'Gasto' : 'Ingreso'} • Vista previa
                   </span>
                 </div>

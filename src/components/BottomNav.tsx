@@ -13,6 +13,9 @@ import {
   Settings,
   X,
   ChevronRight,
+  Bell,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react';
 import type { ActiveViewType } from './Sidebar.tsx';
 
@@ -25,6 +28,10 @@ interface BottomNavProps {
   onNavigateToSettings?: (tab?: 'themes' | 'categories' | 'users' | 'backup') => void;
   isAdmin?: boolean;
   pendingCount?: number;
+  onSync?: () => void;
+  isSyncing?: boolean;
+  unreadNotificationsCount?: number;
+  onOpenNotifications?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -36,6 +43,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onNavigateToSettings: _onNavigateToSettings,
   isAdmin = false,
   pendingCount = 0,
+  onSync: _onSync,
+  isSyncing = false,
+  unreadNotificationsCount = 0,
+  onOpenNotifications,
 }) => {
   const [isMoreOpen, setIsMoreOpen] = useState<boolean>(false);
 
@@ -64,6 +75,22 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   const moreMenuItems = [
+    {
+      id: 'notifications',
+      title: 'Centro de Notificaciones',
+      description: unreadNotificationsCount > 0
+        ? `${unreadNotificationsCount} aviso(s) de vencimiento o alerta(s)`
+        : 'Alertas de cuotas, deudas y avisos del sistema',
+      icon: Bell,
+      color: '#EF4444',
+      badge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
+      action: () => {
+        if (onOpenNotifications) {
+          onOpenNotifications();
+        }
+      },
+      active: false,
+    },
     {
       id: 'incomes',
       title: 'Gestión de Ingresos',
@@ -148,7 +175,29 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto no-scrollbar py-1">
+            {/* Estado de Sincronización Automática */}
+            <div className="px-3.5 py-2 rounded-2xl bg-surface border border-app flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-muted">
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 text-primary-custom animate-spin shrink-0" />
+                    <span className="text-[11px] text-app font-medium">Sincronizando automáticamente con la nube...</span>
+                  </>
+                ) : pendingCount > 0 ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-[11px] text-muted">Guardando {pendingCount} cambio(s) en segundo plano...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-[11px] text-muted">Sincronización en la nube al día</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 max-h-[55vh] overflow-y-auto no-scrollbar py-1">
               {/* Módulos estándar */}
               {moreMenuItems.map((item) => {
                 const Icon = item.icon;
@@ -162,19 +211,26 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                         : 'bg-card border-app text-muted hover:text-app hover:bg-surface-hover'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                         style={{ backgroundColor: `${item.color}20`, color: item.color }}
                       >
                         <Icon className="w-5 h-5" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-sm font-bold text-app block">{item.title}</span>
-                        <span className="text-[11px] text-muted block leading-tight">{item.description}</span>
+                        <span className="text-[11px] text-muted block leading-tight truncate">{item.description}</span>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-sm animate-pulse">
+                          {item.badge}
+                        </span>
+                      )}
+                      <ChevronRight className="w-4 h-4 text-muted" />
+                    </div>
                   </button>
                 );
               })}
@@ -248,8 +304,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <MoreHorizontal className="w-5 h-5" />
             <span className="text-[9px] mt-1 font-semibold">Más</span>
-            {pendingCount > 0 && (
-              <span className="absolute top-0.5 right-3 w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute top-0 right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-md animate-pulse">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
             )}
           </button>
         </div>

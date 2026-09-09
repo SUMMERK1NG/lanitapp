@@ -29,7 +29,8 @@ export const sendEmail = async (
   from?: string
 ): Promise<{ success: boolean; data?: any }> => {
   if (!isSupabaseConfigured() || !supabase) {
-    throw new Error('Supabase no está configurado para el envío de correos.');
+    logger.warn('Supabase no está configurado para el envío de correos.');
+    return { success: false };
   }
 
   try {
@@ -44,15 +45,15 @@ export const sendEmail = async (
     });
 
     if (error) {
-      logger.error('Error al invocar Edge Function send-email:', error);
-      throw new Error(error.message || 'Error al enviar el correo a través de Supabase.');
+      logger.warn('[Edge Function send-email aviso]:', error.message || 'Función no disponible');
+      return { success: false, data: null };
     }
 
     logger.dev('✅ Correo enviado exitosamente:', data);
     return { success: true, data };
   } catch (err: any) {
-    logger.error('❌ Error al enviar correo:', err);
-    throw err;
+    logger.warn('Aviso: No se pudo enviar el correo vía Edge Function:', err?.message || err);
+    return { success: false };
   }
 };
 

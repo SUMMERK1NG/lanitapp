@@ -41,6 +41,7 @@ import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx'
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
 import { CompleteCedulaModal } from './components/CompleteCedulaModal.tsx';
+import { GuidedOnboardingModal } from './components/GuidedOnboardingModal.tsx';
 import { SignOutConfirmModal } from './components/SignOutConfirmModal.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
@@ -48,7 +49,7 @@ import { AddVariableIncomeModal } from './components/AddVariableIncomeModal.tsx'
 import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
 import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
-import { NotificationCenterModal } from './components/NotificationCenterModal.tsx';
+import { NotificationCenterModal, computeSystemNotifications, getDismissedAlertIds } from './components/NotificationCenterModal.tsx';
 import { DashboardModule } from './components/DashboardModule.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { PullToRefresh } from './components/PullToRefresh.tsx';
@@ -310,6 +311,7 @@ export function App() {
   const [preselectedDebtForPayment, setPreselectedDebtForPayment] = useState<string | undefined>(undefined);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'themes' | 'categories' | 'users' | 'backup'>('themes');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
   // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keep_session)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
@@ -498,6 +500,28 @@ export function App() {
       return () => clearTimeout(timer);
     }
   }, [currentUser?.id, isStoreLoading]);
+
+  // Onboarding guiado para nuevos usuarios (cuando no tienen cuentas ni ingresos registrados)
+  useEffect(() => {
+    if (currentUser?.id && !isStoreLoading && !authLoading) {
+      const flagKey = `lanitapp_onboarding_completed_${currentUser.id}`;
+      const isCompleted = localStorage.getItem(flagKey);
+      if (!isCompleted && accounts.length === 0 && fixedIncomes.length === 0) {
+        setIsOnboardingOpen(true);
+      }
+    }
+  }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length]);
+
+  // Unread system notifications count for badge indicators
+  const unreadNotificationsCount = useMemo(() => {
+    try {
+      const all = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
+      const dismissed = getDismissedAlertIds();
+      return all.filter((n) => !dismissed.has(n.id)).length;
+    } catch {
+      return 0;
+    }
+  }, [debts, fixedExpenses, selectedYear, selectedMonth]);
 
   // Pending sync count
   const pendingCount = useMemo(() => {
@@ -836,7 +860,7 @@ export function App() {
                     </div>
                     <div>
                       <h2 className="text-base font-bold text-app">Cotizaciones y Tasas en Vivo</h2>
-                      <p className="text-xs text-muted">Fuente oficial DolarAPI Venezuela</p>
+                      <p className="text-xs text-muted">BCV Oficial y Paralelo P2P en tiempo real</p>
                     </div>
                   </div>
 
@@ -1024,6 +1048,8 @@ export function App() {
         isOpen={isConverterOpen}
         onClose={() => setIsConverterOpen(false)}
         rates={rates}
+        onRefresh={() => refreshRates(true)}
+        isRefreshing={ratesRefreshing}
       />
 
       {/* Notifications & System Alerts Modal (Centered Viewport Modal) */}
@@ -1075,6 +1101,17 @@ export function App() {
         onSignOut={signOut}
         checkCedulaExists={checkCedulaExists}
       />
+
+      {/* Modal de Onboarding Guiado para Nuevos Usuarios */}
+      {currentUser?.id && (
+        <GuidedOnboardingModal
+          isOpen={isOnboardingOpen}
+          onClose={() => setIsOnboardingOpen(false)}
+          userId={currentUser.id}
+          userName={currentUser.first_name || currentUser.name}
+          rates={rates}
+        />
+      )}
 
       {/* Modal de Advertencia de Timeout (5 min de inactividad, 2 min de advertencia) */}
       {showTimeoutWarning && currentUser && (
@@ -1146,6 +1183,10 @@ export function App() {
         onNavigateToSettings={handleNavigateToSettings}
         isAdmin={isAdmin}
         pendingCount={pendingCount}
+        onSync={syncNow}
+        isSyncing={isSyncing}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
       />
     </div>
   );

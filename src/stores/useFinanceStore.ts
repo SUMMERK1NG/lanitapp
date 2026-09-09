@@ -21,6 +21,9 @@ import type {
 import {
   db,
   DEFAULT_CATEGORIES,
+  DEFAULT_CATEGORY_COLOR_MAP,
+  DEFAULT_CATEGORY_COLOR_BY_NAME,
+  PALETTE_COLORS,
   seedUserDefaultCategories,
   toSupabaseAccountPayload,
   getFortnightPeriodKey,
@@ -29,7 +32,7 @@ import {
   setLastSyncTimestampInMemory,
 } from '../lib/db.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { ensureValidUuid, generateUuid } from '../utils/uuid.ts';
+import { ensureValidUuid, generateUuid, isValidUuid } from '../utils/uuid.ts';
 import { logger } from '../utils/logger.ts';
 import {
   sanitizeDebtPayload,
@@ -40,6 +43,11 @@ import {
 import {
   normalizeMonthlyFixedOverrideRow,
   normalizeMonthlyFixedIncomeOverrideRow,
+  toSupabaseFixedIncomePayload,
+  toSupabaseFixedExpensePayload,
+  toSupabaseTransactionPayload,
+  toSupabaseFortnightStatePayload,
+  setCategoryMap,
 } from '../lib/supabasePayloads.ts';
 
 export type RealtimeSyncStatus = 'connected' | 'syncing' | 'offline' | 'error';
@@ -350,11 +358,23 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           ? fallbackCategories
           : DEFAULT_CATEGORIES;
 
-      const sanitizedCategories = resolvedCategories.map((c) => ({
-        ...c,
-        name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
-        color: '#FF914D',
-      }));
+      const sanitizedCategories = resolvedCategories.map((c, index) => {
+        let targetColor = c.color;
+        if (!targetColor || targetColor === '#FF914D') {
+          const normName = (c.name || '').toLowerCase().trim();
+          targetColor =
+            (c.code && DEFAULT_CATEGORY_COLOR_MAP[c.code]) ||
+            DEFAULT_CATEGORY_COLOR_BY_NAME[normName] ||
+            PALETTE_COLORS[index % PALETTE_COLORS.length];
+        }
+        return {
+          ...c,
+          name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+          color: targetColor,
+        };
+      });
+
+      setCategoryMap(sanitizedCategories as any);
 
       set({
         accounts: filteredAccounts,
@@ -458,11 +478,21 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         categories = await seedUserDefaultCategories(userId);
       }
 
-      categories = categories.map((c) => ({
-        ...c,
-        name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
-        color: '#FF914D',
-      }));
+      categories = categories.map((c, index) => {
+        let targetColor = c.color;
+        if (!targetColor || targetColor === '#FF914D') {
+          const normName = (c.name || '').toLowerCase().trim();
+          targetColor =
+            (c.code && DEFAULT_CATEGORY_COLOR_MAP[c.code]) ||
+            DEFAULT_CATEGORY_COLOR_BY_NAME[normName] ||
+            PALETTE_COLORS[index % PALETTE_COLORS.length];
+        }
+        return {
+          ...c,
+          name: c.name ? c.name.replace(/\s*&\s*/g, ' y ') : c.name,
+          color: targetColor,
+        };
+      });
 
       const accounts: Account[] = rawAccounts.map((a: any) => ({
         id: ensureValidUuid(a.id),
@@ -546,6 +576,8 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       ]);
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      setCategoryMap(categories as any);
 
       set({
         profiles,
@@ -1078,6 +1110,24 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       }
     }
 
+    // Resolver UUID de categoría si es posible
+    const storeCategories = get().categories;
+    let resolvedCatId: string | undefined = undefined;
+    if (income.category_id) {
+      if (isValidUuid(income.category_id)) {
+        resolvedCatId = income.category_id;
+      } else {
+        const found = storeCategories.find((c) => c.code === income.category_id || c.id === income.category_id);
+        if (found && isValidUuid(found.id)) {
+          resolvedCatId = found.id;
+        }
+      }
+    }
+
+    const cleanNotes = (income.notes || '').replace(/\s*\[split\]/g, '').trim();
+    const isSplit = (income.default_fortnight as string) === 'split';
+    const notesWithTag = isSplit ? (cleanNotes ? `${cleanNotes} [split]` : '[split]') : cleanNotes;
+
     const record: FixedIncome = {
       id,
       user_id: supabaseUserId,
@@ -1087,10 +1137,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       currency: income.currency || 'USD',
       payment_mode: income.payment_mode || 'usd_cash',
       default_fortnight: income.default_fortnight,
-      category_id: income.category_id || 'cat_salary',
+      category_id: resolvedCatId || income.category_id || 'cat_salary',
       due_day: income.due_day,
       is_active: income.is_active !== undefined ? income.is_active : true,
-      notes: income.notes || '',
+      notes: notesWithTag,
       sync_status: 'pending',
       created_at: income.created_at || new Date().toISOString(),
     };
@@ -1102,28 +1152,30 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_incomes.put(record);
 
-    const cleanNotes = (income.notes || '').replace(/\s*\[split\]/g, '').trim();
-    const isSplit = record.default_fortnight === 'split';
-    const notesWithTag = isSplit ? (cleanNotes ? `${cleanNotes} [split]` : '[split]') : cleanNotes;
-    record.notes = notesWithTag;
-
-    const { sync_status, category_id, is_active, payment_mode, original_amount, ...payload } = record as any;
-    payload.default_fortnight = fortnightToQuincena(income.default_fortnight);
-    payload.notes = notesWithTag;
+    const payload = toSupabaseFixedIncomePayload(record, supabaseUserId);
+    if (resolvedCatId) payload.category_id = resolvedCatId;
     logger.dev('[Supabase Fixed Incomes Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('fixed_incomes').upsert(payload);
         if (!error) {
+          record.sync_status = 'synced';
           await db.fixed_incomes.update(id, { sync_status: 'synced' });
+          set((s) => ({
+            fixedIncomes: s.fixedIncomes.map((i) => (i.id === id ? { ...i, sync_status: 'synced' } : i)),
+          }));
         } else {
           // If check constraint fails on default_fortnight=50, fallback to null with notes tag
           if (isSplit && payload.default_fortnight === 50) {
             payload.default_fortnight = null;
             const { error: errRetry } = await supabase.from('fixed_incomes').upsert(payload);
             if (!errRetry) {
+              record.sync_status = 'synced';
               await db.fixed_incomes.update(id, { sync_status: 'synced' });
+              set((s) => ({
+                fixedIncomes: s.fixedIncomes.map((i) => (i.id === id ? { ...i, sync_status: 'synced' } : i)),
+              }));
               return record;
             }
           }
@@ -1226,7 +1278,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       }));
       if (navigator.onLine && isSupabaseConfigured() && supabase) {
         try {
-          const { sync_status, ...txPayload } = tx;
+          const txPayload = toSupabaseTransactionPayload(tx);
           await supabase.from('transactions').upsert(txPayload);
         } catch (e) {
           logger.warn('Sync var income tx store err:', e);
@@ -1317,6 +1369,20 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     const id = ensureValidUuid(expense.id);
     const quincenaValue = expense.default_fortnight === 'q1' || (expense.default_fortnight as any) === 15 ? 15 : expense.default_fortnight === 'q2' || (expense.default_fortnight as any) === 30 ? 30 : null;
 
+    // Resolver UUID de categoría si es posible
+    const storeCategories = get().categories;
+    let resolvedCatId: string | undefined = undefined;
+    if (expense.category_id) {
+      if (isValidUuid(expense.category_id)) {
+        resolvedCatId = expense.category_id;
+      } else {
+        const found = storeCategories.find((c) => c.code === expense.category_id || c.id === expense.category_id);
+        if (found && isValidUuid(found.id)) {
+          resolvedCatId = found.id;
+        }
+      }
+    }
+
     const record: FixedExpense = {
       id,
       user_id: userId,
@@ -1329,7 +1395,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       payment_mode: expense.payment_mode || 'ves_bcv',
       default_fortnight: expense.default_fortnight,
       quincena: quincenaValue,
-      category_id: expense.category_id || 'cat_services',
+      category_id: resolvedCatId || expense.category_id || 'cat_services',
       is_active: expense.is_active !== undefined ? expense.is_active : true,
       assumed_by_third_party: expense.assumed_by_third_party || false,
       notes: expense.notes || '',
@@ -1344,16 +1410,19 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     }));
     await db.fixed_expenses.put(record);
 
-    const { sync_status, default_quincena, ...payload } = record as any;
-    payload.default_fortnight = quincenaValue;
-    payload.quincena = quincenaValue;
+    const payload = toSupabaseFixedExpensePayload(record, userId);
+    if (resolvedCatId) payload.category_id = resolvedCatId;
     logger.dev('[Supabase Fixed Expenses Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('fixed_expenses').upsert(payload);
         if (!error) {
+          record.sync_status = 'synced';
           await db.fixed_expenses.update(id, { sync_status: 'synced' });
+          set((s) => ({
+            fixedExpenses: s.fixedExpenses.map((e) => (e.id === id ? { ...e, sync_status: 'synced' } : e)),
+          }));
         } else {
           logger.error('[Supabase Fixed Expenses Error]:', error.message, error.details);
           set((state) => ({
@@ -1441,7 +1510,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       }));
       if (navigator.onLine && isSupabaseConfigured() && supabase) {
         try {
-          const { sync_status, ...txPayload } = tx;
+          const txPayload = toSupabaseTransactionPayload(tx);
           await supabase.from('transactions').upsert(txPayload);
         } catch (e) {
           logger.warn('Sync var expense tx store err:', e);
@@ -1846,18 +1915,16 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     await db.transactions.put(txRecord);
     await db.fortnight_item_states.put(stateRecord);
 
-    const { sync_status: s1, ...txPayload } = txRecord;
-    const { sync_status: s2, ...statePayload } = stateRecord;
+    const txPayload = toSupabaseTransactionPayload(txRecord);
+    const statePayload = toSupabaseFortnightStatePayload(stateRecord, userId);
 
     logger.dev('[Supabase Transactions Paid Payload]:', txPayload);
     logger.dev('[Supabase Fortnight Item States Paid Payload]:', statePayload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
       try {
-        await Promise.all([
-          supabase.from('transactions').upsert(txPayload),
-          supabase.from('fortnight_item_states').upsert(statePayload),
-        ]);
+        await supabase.from('transactions').upsert(txPayload);
+        await supabase.from('fortnight_item_states').upsert(statePayload);
       } catch {
         set((state) => ({
           syncQueue: [
@@ -1933,7 +2000,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     await db.fortnight_item_states.put(stateRecord);
 
-    const { sync_status, ...payload } = stateRecord;
+    const payload = toSupabaseFortnightStatePayload(stateRecord, userId);
     logger.dev('[Supabase Fortnight Expense Skipped Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -2000,7 +2067,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
 
     await db.fortnight_item_states.put(stateRecord);
 
-    const { sync_status, ...payload } = stateRecord;
+    const payload = toSupabaseFortnightStatePayload(stateRecord, userId);
     logger.dev('[Supabase Fortnight Debt Skipped Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {
@@ -2056,7 +2123,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
     set((s) => ({ transactions: [record, ...s.transactions] }));
     await db.transactions.put(record);
 
-    const { sync_status, ...payload } = record;
+    const payload = toSupabaseTransactionPayload(record);
     logger.dev('[Supabase Transactions Payload]:', payload);
 
     if (navigator.onLine && isSupabaseConfigured() && supabase) {

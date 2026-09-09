@@ -24,6 +24,10 @@ import {
   PartyPopper,
   Trophy,
   Flame,
+  FileSpreadsheet,
+  Share2,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import type {
   FortnightType,
@@ -62,6 +66,7 @@ import { AddPaymentModal } from './AddPaymentModal.tsx';
 import { AddDebtModal } from './AddDebtModal.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
+import { ensureValidUuid } from '../utils/uuid.ts';
 
 interface FortnightPlannerProps {
   selectedYear: number;
@@ -171,6 +176,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     expense?: FixedExpense;
     amount: number;
   }>({ isOpen: false, amount: 0 });
+
+  // Share & Export Modals State
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [copiedShareToast, setCopiedShareToast] = useState<boolean>(false);
 
   // Reactive DB queries for Fortnight Item States
   const allFortnightStates = useLiveQuery(() => db.fortnight_item_states.toArray(), []) || [];
@@ -366,7 +375,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const override = overrideMap.get(fe.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fe.amount;
         const state = allFortnightStates.find(
-          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === activePeriodKey
+          (s) =>
+            (s.item_id === fe.id || s.item_id === ensureValidUuid(fe.id)) &&
+            (s.item_type === 'fixed_expense' || s.item_type === 'expense') &&
+            s.period_key === activePeriodKey
         );
 
         return {
@@ -470,7 +482,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
             dp.fortnight === selectedFortnight
         );
         const state = allFortnightStates.find(
-          (s) => s.item_id === d.id && s.item_type === 'debt' && s.period_key === activePeriodKey
+          (s) =>
+            (s.item_id === d.id || s.item_id === ensureValidUuid(d.id)) &&
+            s.item_type === 'debt' &&
+            s.period_key === activePeriodKey
         );
         const isSkipped = state?.status === 'skipped';
         const isPaid = hasPayment || state?.status === 'paid';
@@ -988,6 +1003,91 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
     }
   };
 
+  // Generar resumen para WhatsApp
+  const generateFortnightSummaryText = () => {
+    const bcv = rates?.bcvDollar || 0;
+    const freeBs = bcv > 0 ? Math.abs(netRemaining) * bcv : 0;
+    const healthLabel = netRemaining < 0 ? '🔴 Déficit' : (netRemaining / (totalAvailable || 1) < 0.25 ? '🟡 Margen Ajustado' : '🟢 Solvente');
+
+    return `📊 *Resumen Quincenal - LANITAPP*\n` +
+      `🗓️ *Periodo:* ${fortnightLabel}\n\n` +
+      `💵 *Ingresos:* $${totalAvailable.toFixed(2)}` + (bcv > 0 ? ` (Bs. ${(totalAvailable * bcv).toLocaleString('es-VE', { maximumFractionDigits: 2 })})\n` : '\n') +
+      `🏷️ *Gastos Fijos:* $${totalFixedCost.toFixed(2)}\n` +
+      `💳 *Deudas / Cuotas:* $${effectiveDebtCost.toFixed(2)}\n` +
+      (plannedSavingsTotal > 0 ? `🎯 *Ahorro Programado:* $${plannedSavingsTotal.toFixed(2)}\n` : '') +
+      (totalVarExpensesCost > 0 ? `🛒 *Gastos Variables:* $${totalVarExpensesCost.toFixed(2)}\n` : '') +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `✨ *Dinero Libre Real:* ${netRemaining < 0 ? '-' : ''}$${Math.abs(netRemaining).toFixed(2)}` +
+      (bcv > 0 ? ` (Bs. ${freeBs.toLocaleString('es-VE', { maximumFractionDigits: 2 })})\n` : '\n') +
+      `Estado: ${healthLabel}\n\n` +
+      `_Generado desde LANITAPP_`;
+  };
+
+  const handleOpenWhatsAppShare = () => {
+    const text = generateFortnightSummaryText();
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleCopyWhatsAppText = () => {
+    const text = generateFortnightSummaryText();
+    navigator.clipboard.writeText(text);
+    setCopiedShareToast(true);
+    setTimeout(() => setCopiedShareToast(false), 2500);
+  };
+
+  // Exportar detalle quincenal a CSV con UTF-8 BOM
+  const handleExportFortnightCSV = () => {
+    const bcv = rates?.bcvDollar || 0;
+    const lines: string[] = [];
+
+    lines.push(`"PLAN QUINCENAL - LANITAPP"`);
+    lines.push(`"Periodo","${fortnightLabel}"`);
+    lines.push(`"Fecha de Exportación","${new Date().toLocaleDateString('es-VE')}"`);
+    lines.push(`"Tasa BCV Aplicada","${bcv.toFixed(2)} Bs/$"`);
+    lines.push('');
+
+    lines.push(`"RESUMEN GENERAL"`);
+    lines.push(`"Concepto","Monto USD","Monto Bs (Aprox)"`);
+    lines.push(`"Total Ingresos",${totalAvailable.toFixed(2)},${(totalAvailable * bcv).toFixed(2)}`);
+    lines.push(`"Total Gastos Fijos",${totalFixedCost.toFixed(2)},${(totalFixedCost * bcv).toFixed(2)}`);
+    lines.push(`"Total Deudas",${effectiveDebtCost.toFixed(2)},${(effectiveDebtCost * bcv).toFixed(2)}`);
+    lines.push(`"Ahorros Planificados",${plannedSavingsTotal.toFixed(2)},${(plannedSavingsTotal * bcv).toFixed(2)}`);
+    lines.push(`"Dinero Libre Real",${netRemaining.toFixed(2)},${(netRemaining * bcv).toFixed(2)}`);
+    lines.push('');
+
+    lines.push(`"DETALLE DE INGRESOS"`);
+    lines.push(`"Nombre","Tipo","Monto USD","Monto Bs"`);
+    allFortnightIncomes.forEach((inc) => {
+      lines.push(`"${inc.name.replace(/"/g, '""')}","${inc.isFixed ? 'Fijo' : 'Variable'}",${inc.finalAmount.toFixed(2)},${(inc.finalAmount * bcv).toFixed(2)}`);
+    });
+    lines.push('');
+
+    lines.push(`"DETALLE DE GASTOS FIJOS"`);
+    lines.push(`"Nombre","Monto USD","Monto Bs","Estado","Asumido Tercero"`);
+    activeFortnightFixedExpenses.forEach((fe) => {
+      const status = fe.isPaid ? 'Pagado' : fe.isSkipped ? 'Omitido' : 'Pendiente';
+      lines.push(`"${fe.name.replace(/"/g, '""')}",${fe.finalAmount.toFixed(2)},${(fe.finalAmount * bcv).toFixed(2)},"${status}","${fe.isAssumed ? 'Sí' : 'No'}"`);
+    });
+    lines.push('');
+
+    lines.push(`"DETALLE DE DEUDAS Y CUOTAS"`);
+    lines.push(`"Acreedor / Deuda","Cuota Quincenal USD","Cuota Bs","Saldo Pendiente USD","Estado"`);
+    debtsDueThisFortnight.forEach((d) => {
+      const status = d.isPaid ? 'Pagado' : d.isSkipped ? 'Omitido' : 'Pendiente';
+      lines.push(`"${d.creditor.replace(/"/g, '""')}",${d.calculatedCuota.toFixed(2)},${(d.calculatedCuota * bcv).toFixed(2)},${d.current_balance.toFixed(2)},"${status}"`);
+    });
+
+    const csvContent = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Plan_Quincenal_${selectedFortnight.toUpperCase()}_${MONTH_NAMES[selectedMonth]}_${selectedYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-4">
       {/* Month & Period Selector Bar */}
@@ -999,7 +1099,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           className="w-full sm:w-auto justify-between sm:justify-start"
         />
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Quincena 15 vs 30 Selector */}
           <div className="w-full sm:w-auto grid grid-cols-2 gap-1 p-1 bg-card rounded-2xl border border-app">
             <button
@@ -1021,6 +1121,29 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
               }`}
             >
               Quincena 30
+            </button>
+          </div>
+
+          {/* Botones de Exportar y Compartir */}
+          <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              title="Compartir resumen por WhatsApp"
+              className="px-3 py-2 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportFortnightCSV}
+              title="Exportar plan quincenal a Excel / CSV"
+              className="px-3 py-2 rounded-2xl bg-card hover:bg-surface-hover border border-app text-xs font-bold text-muted hover:text-app flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-primary-custom" />
+              <span className="hidden sm:inline">Exportar CSV</span>
             </button>
           </div>
         </div>
@@ -2400,6 +2523,64 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
           initialMonth={selectedMonth}
           initialFortnight={selectedFortnight}
         />
+      )}
+      {/* Modal 9: Compartir Resumen Quincenal por WhatsApp */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-surface border border-app rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-app">Compartir Resumen Quincenal</h3>
+                  <p className="text-xs text-muted">Listo para enviar a tu pareja o familia</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-surface-hover text-muted hover:text-app transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Vista Previa Estilo Chat */}
+            <div className="p-4 rounded-2xl bg-card border border-app text-xs font-mono whitespace-pre-line text-app leading-relaxed shadow-inner max-h-60 overflow-y-auto">
+              {generateFortnightSummaryText()}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCopyWhatsAppText}
+                className="py-2.5 px-4 rounded-2xl bg-card hover:bg-surface-hover border border-app text-xs font-bold text-app flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {copiedShareToast ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400">¡Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar Texto</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenWhatsAppShare}
+                className="py-2.5 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Abrir WhatsApp</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
