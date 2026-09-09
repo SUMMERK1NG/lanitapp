@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sparkles,
   Wallet,
@@ -32,6 +33,7 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
 }) => {
   const [step, setStep] = useState<number>(1);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false);
 
   // Paso 1: Ingreso Principal
   const [incomeName, setIncomeName] = useState<string>('Sueldo Principal');
@@ -62,83 +64,122 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
   const [accountName, setAccountName] = useState<string>('Efectivo USD');
   const [accountBalance, setAccountBalance] = useState<number>(50);
 
-  const { saveFixedIncome, saveFixedExpense, saveDebt, saveAccount, loadFromLocalCache } = useFinanceStore();
+  const {
+    accounts,
+    fixedIncomes,
+    fixedExpenses,
+    debts,
+    saveFixedIncome,
+    saveFixedExpense,
+    saveDebt,
+    saveAccount,
+    loadFromLocalCache,
+  } = useFinanceStore();
 
   if (!isOpen) return null;
 
   const handleFinish = async () => {
+    if (isSubmittingRef.current || isSaving) return;
+    isSubmittingRef.current = true;
     setIsSaving(true);
     try {
-      // 1. Guardar Cuenta Inicial
+      // 1. Guardar o actualizar Cuenta Inicial
       if (accountName.trim()) {
-        await saveAccount({
-          name: accountName.trim(),
-          type: 'cash',
-          currency: 'USD',
-          initial_balance: Number(accountBalance) || 0,
-        }, userId);
+        const cleanAcc = accountName.trim();
+        const existingAcc = accounts.find((a) => a.name.trim().toLowerCase() === cleanAcc.toLowerCase());
+        if (existingAcc) {
+          await saveAccount({
+            ...existingAcc,
+            initial_balance: Number(accountBalance) || 0,
+          }, userId);
+        } else {
+          await saveAccount({
+            name: cleanAcc,
+            type: 'cash',
+            currency: 'USD',
+            initial_balance: Number(accountBalance) || 0,
+          }, userId);
+        }
       }
 
-      // 2. Guardar Ingreso Principal
+      // 2. Guardar o actualizar Ingreso Principal
       if (incomeAmount > 0) {
-        await saveFixedIncome({
-          name: incomeName.trim() || 'Sueldo Principal',
-          amount: Number(incomeAmount),
-          currency: 'USD',
-          default_fortnight: incomeFortnight as any,
-          category_id: '',
-          is_active: true,
-        }, userId);
+        const cleanInc = incomeName.trim() || 'Sueldo Principal';
+        const existingInc = fixedIncomes.find((i) => i.name.trim().toLowerCase() === cleanInc.toLowerCase());
+        if (existingInc) {
+          await saveFixedIncome({
+            ...existingInc,
+            amount: Number(incomeAmount),
+            default_fortnight: incomeFortnight as any,
+            is_active: true,
+          }, userId);
+        } else {
+          await saveFixedIncome({
+            name: cleanInc,
+            amount: Number(incomeAmount),
+            currency: 'USD',
+            default_fortnight: incomeFortnight as any,
+            category_id: '',
+            is_active: true,
+          }, userId);
+        }
       }
 
-      // 3. Guardar Gastos Fijos
-      if (expense1Amount > 0 && expense1Name.trim()) {
-        await saveFixedExpense({
-          name: expense1Name.trim(),
-          amount: Number(expense1Amount),
-          default_fortnight: expense1Fortnight,
-          currency: 'USD',
-          category_id: '',
-          is_active: true,
-        }, userId);
-      }
+      // 3. Guardar o actualizar Gastos Fijos (evita duplicados si se corre de nuevo)
+      const saveOrUpdateFixedExpense = async (name: string, amount: number, fortnight: 'q1' | 'q2' | 'both') => {
+        const cleanExp = name.trim();
+        if (!cleanExp || amount <= 0) return;
+        const existingExp = fixedExpenses.find((e) => e.name.trim().toLowerCase() === cleanExp.toLowerCase());
+        if (existingExp) {
+          await saveFixedExpense({
+            ...existingExp,
+            amount: Number(amount),
+            default_fortnight: fortnight,
+            is_active: true,
+          }, userId);
+        } else {
+          await saveFixedExpense({
+            name: cleanExp,
+            amount: Number(amount),
+            default_fortnight: fortnight,
+            currency: 'USD',
+            category_id: '',
+            is_active: true,
+          }, userId);
+        }
+      };
 
-      if (expense2Amount > 0 && expense2Name.trim()) {
-        await saveFixedExpense({
-          name: expense2Name.trim(),
-          amount: Number(expense2Amount),
-          default_fortnight: expense2Fortnight,
-          currency: 'USD',
-          category_id: '',
-          is_active: true,
-        }, userId);
-      }
+      await saveOrUpdateFixedExpense(expense1Name, expense1Amount, expense1Fortnight);
+      await saveOrUpdateFixedExpense(expense2Name, expense2Amount, expense2Fortnight);
+      await saveOrUpdateFixedExpense(expense3Name, expense3Amount, expense3Fortnight);
 
-      if (expense3Amount > 0 && expense3Name.trim()) {
-        await saveFixedExpense({
-          name: expense3Name.trim(),
-          amount: Number(expense3Amount),
-          default_fortnight: expense3Fortnight,
-          currency: 'USD',
-          category_id: '',
-          is_active: true,
-        }, userId);
-      }
-
-      // 4. Guardar Deuda si aplica
+      // 4. Guardar o actualizar Deuda si aplica
       if (hasDebt && debtInstallment > 0) {
-        await saveDebt({
-          creditor: debtCreditor.trim() || 'Deuda Inicial',
-          total_amount: Number(debtTotal) || Number(debtInstallment),
-          installment_amount: Number(debtInstallment),
-          current_balance: Number(debtTotal) || Number(debtInstallment),
-          debt_mode: 'installments',
-          payment_type: 'cash',
-          platform: 'cashea',
-          currency: 'USD',
-          fortnight_due: debtFortnight,
-          status: 'active',
-        }, userId);
+        const cleanCreditor = debtCreditor.trim() || 'Cashea';
+        const existingDebt = debts.find((d) => (d.creditor || '').trim().toLowerCase() === cleanCreditor.toLowerCase());
+        if (existingDebt) {
+          await saveDebt({
+            ...existingDebt,
+            total_amount: Number(debtTotal) || Number(debtInstallment),
+            installment_amount: Number(debtInstallment),
+            current_balance: Number(debtTotal) || Number(debtInstallment),
+            fortnight_due: debtFortnight,
+            status: 'active',
+          }, userId);
+        } else {
+          await saveDebt({
+            creditor: cleanCreditor,
+            total_amount: Number(debtTotal) || Number(debtInstallment),
+            installment_amount: Number(debtInstallment),
+            current_balance: Number(debtTotal) || Number(debtInstallment),
+            debt_mode: 'installments',
+            payment_type: 'cash',
+            platform: 'cashea',
+            currency: 'USD',
+            fortnight_due: debtFortnight,
+            status: 'active',
+          }, userId);
+        }
       }
 
       // Marcar onboarding como completado
@@ -153,6 +194,7 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
       onClose();
     } finally {
       setIsSaving(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -163,8 +205,10 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
       <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 sm:space-y-6 relative my-auto max-h-[92vh] flex flex-col justify-between overflow-y-auto">
         {/* Cabecera del Wizard */}
         <div className="flex items-center justify-between">
@@ -662,6 +706,7 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -237,6 +237,30 @@ async function safeQuery<T = any>(
   }
 }
 
+/**
+ * Deduplica elementos idénticos creados por error (ej. doble clic en móvil o concurrencia)
+ */
+function deduplicateRecords<T extends { id: string }>(
+  items: T[],
+  keyFn: (item: T) => string
+): { unique: T[]; duplicates: T[] } {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  const duplicates: T[] = [];
+
+  for (const item of items) {
+    const key = keyFn(item);
+    if (seen.has(key)) {
+      duplicates.push(item);
+    } else {
+      seen.add(key);
+      unique.push(item);
+    }
+  }
+
+  return { unique, duplicates };
+}
+
 export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   profiles: [],
   categories: DEFAULT_CATEGORIES,
@@ -346,6 +370,46 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredStates = fortnightItemStates.filter(matchesUser);
       const filteredTxs = transactions.filter(matchesUser);
 
+      // Purgar duplicados idénticos en la base local (causados por doble clic o sincronización concurrente)
+      const { unique: cleanExpenses, duplicates: dupExpenses } = deduplicateRecords(
+        filteredExpenses,
+        (e) => `${(e.name || '').trim().toLowerCase()}_${Number(e.amount)}_${e.default_fortnight}`
+      );
+      if (dupExpenses.length > 0) {
+        logger.info(`[FinanceStore] Purgando ${dupExpenses.length} gastos fijos duplicados de Dexie...`);
+        const dupIds = dupExpenses.map((d) => d.id);
+        db.fixed_expenses.bulkDelete(dupIds).catch(() => {});
+        if (navigator.onLine && isSupabaseConfigured() && supabase) {
+          supabase.from('fixed_expenses').delete().in('id', dupIds).then(() => {});
+        }
+      }
+
+      const { unique: cleanFixedIncomes, duplicates: dupIncomes } = deduplicateRecords(
+        filteredFixedIncomes,
+        (i) => `${(i.name || '').trim().toLowerCase()}_${Number(i.amount)}_${i.default_fortnight}`
+      );
+      if (dupIncomes.length > 0) {
+        logger.info(`[FinanceStore] Purgando ${dupIncomes.length} ingresos fijos duplicados de Dexie...`);
+        const dupIds = dupIncomes.map((d) => d.id);
+        db.fixed_incomes.bulkDelete(dupIds).catch(() => {});
+        if (navigator.onLine && isSupabaseConfigured() && supabase) {
+          supabase.from('fixed_incomes').delete().in('id', dupIds).then(() => {});
+        }
+      }
+
+      const { unique: cleanAccounts, duplicates: dupAccounts } = deduplicateRecords(
+        filteredAccounts,
+        (a) => `${(a.name || '').trim().toLowerCase()}_${a.type || 'cash'}`
+      );
+      if (dupAccounts.length > 0) {
+        logger.info(`[FinanceStore] Purgando ${dupAccounts.length} cuentas duplicadas de Dexie...`);
+        const dupIds = dupAccounts.map((d) => d.id);
+        db.accounts.bulkDelete(dupIds).catch(() => {});
+        if (navigator.onLine && isSupabaseConfigured() && supabase) {
+          supabase.from('accounts').delete().in('id', dupIds).then(() => {});
+        }
+      }
+
       const userCategories = categories.filter((c) => c.user_id === userId);
       const isSeeded = typeof localStorage !== 'undefined' && userId && localStorage.getItem('lanitapp_cat_seeded_' + userId);
       const fallbackCategories = categories.filter((c) => !c.user_id);
@@ -377,12 +441,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       setCategoryMap(sanitizedCategories as any);
 
       set({
-        accounts: filteredAccounts,
+        accounts: cleanAccounts,
         categories: sanitizedCategories,
-        fixedIncomes: filteredFixedIncomes,
+        fixedIncomes: cleanFixedIncomes,
         monthlyIncomeOverrides,
         variableIncomes: filteredVarIncomes,
-        fixedExpenses: filteredExpenses,
+        fixedExpenses: cleanExpenses,
         monthlyFixedOverrides,
         variableExpenses: filteredVarExpenses,
         debts: filteredDebts,
@@ -494,7 +558,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         };
       });
 
-      const accounts: Account[] = rawAccounts.map((a: any) => ({
+      const rawAccountsMapped: Account[] = rawAccounts.map((a: any) => ({
         id: ensureValidUuid(a.id),
         user_id: a.user_id || userId,
         name: a.name,
@@ -507,13 +571,34 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         updated_at: a.updated_at,
         sync_status: 'synced' as SyncStatus,
       }));
+      const { unique: accounts, duplicates: dupAccounts } = deduplicateRecords(
+        rawAccountsMapped,
+        (a) => `${(a.name || '').trim().toLowerCase()}_${a.type || 'cash'}`
+      );
+      if (dupAccounts.length > 0) {
+        logger.info(`[Supabase Fetch] Limpiando ${dupAccounts.length} cuentas duplicadas...`);
+        const dupIds = dupAccounts.map((d) => d.id);
+        db.accounts.bulkDelete(dupIds).catch(() => {});
+        supabase.from('accounts').delete().in('id', dupIds).then(() => {});
+      }
 
-      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
+      const rawFixedIncomesMapped: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
         ...i,
         id: ensureValidUuid(i.id),
         default_fortnight: quincenaToFortnight(i.default_fortnight, i.notes),
         sync_status: 'synced',
       }));
+      const { unique: fixedIncomes, duplicates: dupIncomes } = deduplicateRecords(
+        rawFixedIncomesMapped,
+        (i) => `${(i.name || '').trim().toLowerCase()}_${Number(i.amount)}_${i.default_fortnight}`
+      );
+      if (dupIncomes.length > 0) {
+        logger.info(`[Supabase Fetch] Limpiando ${dupIncomes.length} ingresos fijos duplicados...`);
+        const dupIds = dupIncomes.map((d) => d.id);
+        db.fixed_incomes.bulkDelete(dupIds).catch(() => {});
+        supabase.from('fixed_incomes').delete().in('id', dupIds).then(() => {});
+      }
+
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => normalizeMonthlyFixedIncomeOverrideRow(o));
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => {
         const [yr, mo] = (v.month_year || '').split('-').map(Number);
@@ -539,12 +624,24 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           updated_at: v.updated_at || new Date().toISOString(),
         };
       });
-      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
+
+      const rawFixedExpensesMapped: FixedExpense[] = rawExpenses.map((e: any) => ({
         ...e,
         id: ensureValidUuid(e.id),
         default_fortnight: quincenaToFortnight(e.default_fortnight || e.default_quincena),
         sync_status: 'synced',
       }));
+      const { unique: fixedExpenses, duplicates: dupExpenses } = deduplicateRecords(
+        rawFixedExpensesMapped,
+        (e) => `${(e.name || '').trim().toLowerCase()}_${Number(e.amount)}_${e.default_fortnight}`
+      );
+      if (dupExpenses.length > 0) {
+        logger.info(`[Supabase Fetch] Limpiando ${dupExpenses.length} gastos fijos duplicados...`);
+        const dupIds = dupExpenses.map((d) => d.id);
+        db.fixed_expenses.bulkDelete(dupIds).catch(() => {});
+        supabase.from('fixed_expenses').delete().in('id', dupIds).then(() => {});
+      }
+
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => normalizeMonthlyFixedOverrideRow(o));
       const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
       const debtPayments: DebtPayment[] = rawDebtPayments.map((p: any) => ({

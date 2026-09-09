@@ -39,6 +39,7 @@ interface HeaderProps {
   onOpenProfile: () => void;
   onOpenNotifications?: () => void;
   onOpenAudit?: () => void;
+  unreadNotificationsCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -62,31 +63,30 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenNotifications,
   onOpenAudit,
+  unreadNotificationsCount,
 }) => {
   // Sincronizar dinámicamente alertas descartadas para el contador de la campana
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => getDismissedAlertIds());
 
   useEffect(() => {
-    const handleUpdate = () => setDismissedIds(getDismissedAlertIds());
-    window.addEventListener('lanitapp_alerts_dismissed', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    return () => {
-      window.removeEventListener('lanitapp_alerts_dismissed', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
+    const handleDismissedChange = () => {
+      setDismissedIds(getDismissedAlertIds());
     };
+    window.addEventListener('lanitapp_alerts_dismissed', handleDismissedChange);
+    return () => window.removeEventListener('lanitapp_alerts_dismissed', handleDismissedChange);
   }, []);
 
   // Rotación automática de tasas en la versión móvil (Dólar, Euro y Promedio)
   const mobileRateItems = useMemo(() => [
     {
-      key: 'usd',
+      key: 'dollar',
       label: 'Dólar BCV',
       shortLabel: '$',
-      color: 'text-orange-400',
+      color: 'text-[#147DF0]',
       value: rates.bcvDollar,
     },
     {
-      key: 'eur',
+      key: 'euro',
       label: 'Euro BCV',
       shortLabel: '€',
       color: 'text-[#00C2C7]',
@@ -115,7 +115,9 @@ export const Header: React.FC<HeaderProps> = ({
     return all.filter((n) => !dismissedIds.has(n.id));
   }, [debts, fixedExpenses, selectedYear, selectedMonth, dismissedIds]);
 
-  const unreadCount = notifications.length;
+  const unreadCount = unreadNotificationsCount !== undefined
+    ? unreadNotificationsCount
+    : notifications.filter((n) => n.priority === 'high').length;
 
   // Resolve user avatar exclusivamente desde el perfil de Supabase
   const userAvatar = activeProfile?.avatar_url || activeProfile?.avatar || '👑';

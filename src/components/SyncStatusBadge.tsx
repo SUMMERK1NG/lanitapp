@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Cloud,
@@ -97,10 +98,11 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({
         )}
       </button>
 
-      {/* Modal / Bandeja de Transparencia Offline-First */}
-      {isTrayOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+      {/* Modal / Bandeja de Transparencia Offline-First (Renderizado vía Portal en document.body para evitar clipping en mobile) */}
+      {isTrayOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="fixed inset-0 cursor-pointer" onClick={() => setIsTrayOpen(false)} />
+          <div className="relative z-10 w-full max-w-sm bg-surface border border-app rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[88vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
@@ -213,7 +215,8 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

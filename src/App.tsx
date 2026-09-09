@@ -514,8 +514,12 @@ export function App() {
         return;
       }
 
-      // 2. Si el usuario aún no tiene cuentas ni ingresos registrados en su perfil (cuenta en blanco)
-      const hasFinancialData = accounts.length > 0 || fixedIncomes.length > 0;
+      // 2. Si el usuario ya completó el asistente de bienvenida, no volver a abrirlo automáticamente
+      const hasCompleted = localStorage.getItem(`lanitapp_onboarding_completed_${currentUser.id}`) === 'true';
+      if (hasCompleted) return;
+
+      // 3. Si el usuario aún no tiene cuentas ni ingresos ni gastos registrados en su perfil (cuenta en blanco)
+      const hasFinancialData = accounts.length > 0 || fixedIncomes.length > 0 || fixedExpenses.length > 0;
       if (!hasFinancialData) {
         // Verificar si solo se omitió temporalmente en esta sesión activa específica
         const isSkippedInThisSession = sessionStorage.getItem(`lanitapp_onboarding_skipped_${currentUser.id}`) === 'true';
@@ -524,18 +528,18 @@ export function App() {
         }
       }
     }
-  }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length]);
+  }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length, fixedExpenses.length]);
 
-  // Unread system notifications count for badge indicators
+  // Unread system notifications count for badge indicators (prioriza alertas urgentes de alta prioridad)
   const unreadNotificationsCount = useMemo(() => {
     try {
-      const all = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth);
+      const all = computeSystemNotifications(debts, fixedExpenses, selectedYear, selectedMonth, fixedIncomes, variableIncomes, variableExpenses);
       const dismissed = getDismissedAlertIds();
-      return all.filter((n) => !dismissed.has(n.id)).length;
+      return all.filter((n) => !dismissed.has(n.id) && n.priority === 'high').length;
     } catch {
       return 0;
     }
-  }, [debts, fixedExpenses, selectedYear, selectedMonth]);
+  }, [debts, fixedExpenses, selectedYear, selectedMonth, fixedIncomes, variableIncomes, variableExpenses]);
 
   // Pending sync count
   const pendingCount = useMemo(() => {
@@ -680,6 +684,7 @@ export function App() {
           onOpenProfile={() => setIsProfileModalOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           onOpenAudit={() => setIsAuditModalOpen(true)}
+          unreadNotificationsCount={unreadNotificationsCount}
         />
 
         {/* Offline Mode Banner */}

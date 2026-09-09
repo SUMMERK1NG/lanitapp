@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   X,
@@ -90,8 +91,25 @@ export function computeSystemNotifications(
   const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const currentFortnight = currentDay <= 15 ? 'q1' : 'q2';
 
+  // Deduplicar fixedExpenses para evitar alertas repetidas en pantalla
+  const seenExpenseKeys = new Set<string>();
+  const cleanFixedExpenses = fixedExpenses.filter((e) => {
+    const key = `${(e.name || '').trim().toLowerCase()}_${Number(e.amount)}_${e.default_fortnight}`;
+    if (seenExpenseKeys.has(key)) return false;
+    seenExpenseKeys.add(key);
+    return true;
+  });
+
+  const seenDebtKeys = new Set<string>();
+  const cleanDebts = debts.filter((d) => {
+    const key = `${(d.creditor || '').trim().toLowerCase()}_${Number(d.installment_amount || d.total_amount)}`;
+    if (seenDebtKeys.has(key)) return false;
+    seenDebtKeys.add(key);
+    return true;
+  });
+
   // 1. Alerta Inteligente de Déficit Quincenal
-  if (fixedIncomes.length > 0 || fixedExpenses.length > 0) {
+  if (fixedIncomes.length > 0 || cleanFixedExpenses.length > 0) {
     const fnIncomes =
       fixedIncomes
         .filter((f) => f.is_active !== false && (f.default_fortnight === 'both' || f.default_fortnight === currentFortnight))
@@ -101,13 +119,13 @@ export function computeSystemNotifications(
         .reduce((sum, v) => sum + v.amount, 0);
 
     const fnExpenses =
-      fixedExpenses
+      cleanFixedExpenses
         .filter((e) => e.is_active !== false && (e.default_fortnight === 'both' || e.default_fortnight === currentFortnight))
         .reduce((sum, e) => sum + e.amount, 0) +
       variableExpenses
         .filter((v) => v.year === currentYear && v.month === currentMonth && (v.fortnight === currentFortnight || (v as any).quincena === (currentFortnight === 'q1' ? 15 : 30)))
         .reduce((sum, v) => sum + v.amount, 0) +
-      debts
+      cleanDebts
         .filter((d) => d.status !== 'paid' && (d.fortnight_due === currentFortnight || d.fortnight_due === 'both' || !d.fortnight_due))
         .reduce((sum, d) => {
           const rem = d.current_balance !== undefined ? d.current_balance : d.total_amount || 0;
@@ -170,7 +188,7 @@ export function computeSystemNotifications(
   }
 
   // 3. Alertas de Cuotas de Deudas Reales
-  debts.forEach((debt) => {
+  cleanDebts.forEach((debt) => {
     if (debt.status === 'paid') return;
     const remaining = debt.current_balance !== undefined ? debt.current_balance : debt.total_amount || 0;
     if (remaining <= 0) return;
@@ -193,7 +211,7 @@ export function computeSystemNotifications(
   });
 
   // 4. Alertas de Gastos Fijos Activos de la Quincena
-  fixedExpenses.forEach((exp) => {
+  cleanFixedExpenses.forEach((exp) => {
     if (exp.is_active === false) return;
     const fn = exp.default_fortnight;
     const matchesFortnight = fn === 'both' || fn === currentFortnight;
@@ -283,9 +301,9 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     saveDismissedAlertIds(next);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Backdrop click to close */}
       <div className="fixed inset-0 cursor-pointer" onClick={onClose} />
@@ -466,6 +484,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
