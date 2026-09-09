@@ -527,54 +527,115 @@ export function useAuth() {
   }, [initAuth]);
 
   /**
-   * Obtiene de forma segura el correo electrónico asociado a una cédula
-   * utilizando la función RPC get_login_identifier (SECURITY DEFINER)
+   * Obtiene de forma segura el correo electrónico asociado a una cédula.
+   * Cuenta con triple capa de resiliencia:
+   * 1. Caché local Dexie (inmediato si existe sesión en este dispositivo).
+   * 2. Función RPC 'get_login_identifier' en Supabase (si está instalada).
+   * 3. Fallback directo sobre la tabla profiles en Supabase (compatible con cualquier entorno sin RPCs).
    */
   const getLoginIdentifier = async (fullCedula: string): Promise<{ exists: boolean; email?: string } | null> => {
     const clean = fullCedula.trim();
     if (!clean) return null;
 
-    // 1. Verificación local en Dexie (si existe sesión previa)
+    const rawNum = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
+    const candidateVariants = Array.from(
+      new Set([
+        clean,
+        clean.toUpperCase(),
+        clean.toLowerCase(),
+        rawNum,
+        `V-${rawNum}`,
+        `E-${rawNum}`,
+        `J-${rawNum}`,
+        `G-${rawNum}`,
+        `V${rawNum}`,
+        `E${rawNum}`,
+      ].filter(Boolean))
+    );
+
+    // 1. Verificación local en Dexie (inmediata si existe sesión previa en este dispositivo)
     try {
-      const local = await db.user_profiles
-        .where('cedula')
-        .equalsIgnoreCase(clean)
-        .first();
-      if (local?.email) return { exists: true, email: local.email };
-    } catch {}
+      for (const variant of candidateVariants) {
+        const local = await db.user_profiles
+          .where('cedula')
+          .equalsIgnoreCase(variant)
+          .first();
+        if (local?.email) {
+          return { exists: true, email: local.email };
+        }
+      }
+    } catch (err) {
+      logger.warn('[Auth] Error buscando cédula en Dexie local:', err);
+    }
 
     if (!supabase) return null;
 
-    // 2. RPC seguro en Supabase (SECURITY DEFINER)
+    // 2. Intentar primero RPC seguro en Supabase si está disponible (SECURITY DEFINER)
     try {
       const { data, error } = await supabase.rpc('get_login_identifier', { p_cedula: clean });
-      if (!error && data && typeof data === 'object') {
+      if (!error && data && typeof data === 'object' && (data as any).exists && (data as any).email) {
         return {
-          exists: Boolean((data as any).exists),
-          email: (data as any).email || undefined,
+          exists: true,
+          email: (data as any).email,
         };
       }
     } catch (err) {
-      logger.warn('[Auth] Error consultando RPC get_login_identifier:', err);
+      logger.warn('[Auth] RPC get_login_identifier no disponible o falló:', err);
+    }
+
+    // 3. Fallback directo sobre la tabla profiles en Supabase (compatible con cualquier entorno)
+    try {
+      for (const variant of candidateVariants) {
+        const { data: profile, error: pErr } = await supabase
+          .from('profiles')
+          .select('email, cedula')
+          .ilike('cedula', variant)
+          .maybeSingle();
+
+        if (!pErr && profile?.email) {
+          return {
+            exists: true,
+            email: profile.email,
+          };
+        }
+      }
+    } catch (directErr) {
+      logger.warn('[Auth] Error en fallback de consulta directa en profiles:', directErr);
     }
 
     return null;
   };
 
   /**
-   * Verifica de forma segura si una cédula ya está registrada (SECURITY DEFINER)
+   * Verifica de forma segura si una cédula ya está registrada (con fallback directo)
    */
   const checkCedulaExists = async (fullCedula: string): Promise<boolean> => {
     const clean = fullCedula.trim();
     if (!clean) return false;
 
+    const rawNum = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
+    const candidateVariants = Array.from(
+      new Set([
+        clean,
+        clean.toUpperCase(),
+        clean.toLowerCase(),
+        rawNum,
+        `V-${rawNum}`,
+        `E-${rawNum}`,
+        `J-${rawNum}`,
+        `G-${rawNum}`,
+      ].filter(Boolean))
+    );
+
     // 1. Verificación local en Dexie
     try {
-      const local = await db.user_profiles
-        .where('cedula')
-        .equalsIgnoreCase(clean)
-        .first();
-      if (local) return true;
+      for (const variant of candidateVariants) {
+        const local = await db.user_profiles
+          .where('cedula')
+          .equalsIgnoreCase(variant)
+          .first();
+        if (local) return true;
+      }
     } catch {}
 
     if (!supabase) return false;
@@ -585,15 +646,25 @@ export function useAuth() {
       if (!error && typeof data === 'boolean') {
         return data;
       }
-    } catch (err) {
-      logger.warn('[Auth] Error invocando check_cedula_exists RPC:', err);
-    }
+    } catch {}
+
+    // 3. Fallback directo a profiles
+    try {
+      for (const variant of candidateVariants) {
+        const { data: direct, error: dErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('cedula', variant)
+          .maybeSingle();
+        if (!dErr && direct) return true;
+      }
+    } catch {}
 
     return false;
   };
 
   /**
-   * Verifica de forma segura si un correo ya está registrado (SECURITY DEFINER)
+   * Verifica de forma segura si un correo ya está registrado (con fallback directo)
    */
   const checkEmailExists = async (email: string): Promise<boolean> => {
     const clean = email.trim().toLowerCase();
@@ -616,15 +687,23 @@ export function useAuth() {
       if (!error && typeof data === 'boolean') {
         return data;
       }
-    } catch (err) {
-      logger.warn('[Auth] Error invocando check_email_exists RPC:', err);
-    }
+    } catch {}
+
+    // 3. Fallback directo a profiles
+    try {
+      const { data: direct, error: dErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', clean)
+        .maybeSingle();
+      if (!dErr && direct) return true;
+    } catch {}
 
     return false;
   };
 
   /**
-   * Helper para buscar perfil por documento (usa RPC seguro y Dexie)
+   * Helper para buscar perfil por documento (usa getLoginIdentifier y Dexie)
    */
   const findProfileByDocument = async (fullCedula: string) => {
     const clean = fullCedula.trim();
@@ -639,7 +718,7 @@ export function useAuth() {
       if (local) return local;
     } catch {}
 
-    // 2. RPC seguro
+    // 2. Usar getLoginIdentifier que incluye RPC y Fallback directo
     const idRes = await getLoginIdentifier(clean);
     if (idRes?.exists && idRes.email) {
       return {
