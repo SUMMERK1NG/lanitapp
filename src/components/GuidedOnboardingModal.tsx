@@ -147,8 +147,9 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
       onClose();
     } catch (err) {
       logger.error('Error completando onboarding guiado:', err);
-      // Cerrar de todas formas para no bloquear al usuario
-      localStorage.setItem(`lanitapp_onboarding_completed_${userId}`, 'true');
+      try {
+        sessionStorage.setItem(`lanitapp_onboarding_skipped_${userId}`, 'true');
+      } catch {}
       onClose();
     } finally {
       setIsSaving(false);
@@ -156,13 +157,15 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
   };
 
   const handleSkip = () => {
-    localStorage.setItem(`lanitapp_onboarding_completed_${userId}`, 'true');
+    try {
+      sessionStorage.setItem(`lanitapp_onboarding_skipped_${userId}`, 'true');
+    } catch {}
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+      <div className="w-full max-w-lg bg-surface border border-app rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 sm:space-y-6 relative my-auto max-h-[92vh] flex flex-col justify-between overflow-y-auto">
         {/* Cabecera del Wizard */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">

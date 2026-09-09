@@ -15,6 +15,7 @@ import {
   Check,
   X,
   History,
+  Sparkles,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -75,6 +76,7 @@ interface DashboardModuleProps {
   currentUserId?: string;
   initialWidgets?: DashboardWidgetConfig | null;
   isLoading?: boolean;
+  onOpenOnboarding?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -130,6 +132,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   currentUserId,
   initialWidgets,
   isLoading,
+  onOpenOnboarding,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -138,6 +141,17 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
   const [dashFortnight, setDashFortnight] = useState<'q1' | 'q2'>(() => (today.getDate() <= 15 ? 'q1' : 'q2'));
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState<boolean>(() => {
+    try {
+      if (!currentUserId) return false;
+      return (
+        localStorage.getItem(`lanitapp_onboarding_completed_${currentUserId}`) === 'true' ||
+        localStorage.getItem(`lanitapp_onboarding_banner_dismissed_${currentUserId}`) === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
 
   // Load custom widget preferences from Supabase profiles (with fallback to DEFAULT_WIDGETS)
   const [widgets, setWidgets] = useState<DashboardWidgetConfig>(() => {
@@ -628,6 +642,44 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner de Bienvenida / Onboarding Guiado si no está descartado */}
+      {onOpenOnboarding && !isOnboardingDismissed && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-primary-custom/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-app flex items-center gap-1.5">
+                ¡Bienvenido a LANITAPP!
+              </h3>
+              <p className="text-xs text-muted">
+                Configura tu ingreso base, 3 compromisos fijos y deudas en 2 minutos.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOnboardingDismissed(true);
+                if (currentUserId) localStorage.setItem(`lanitapp_onboarding_banner_dismissed_${currentUserId}`, 'true');
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-muted hover:text-app cursor-pointer transition-colors"
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              onClick={onOpenOnboarding}
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Comenzar Asistente</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Executive Financial KPI Cards */}
       {widgets.kpis && (

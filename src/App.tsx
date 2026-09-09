@@ -501,13 +501,27 @@ export function App() {
     }
   }, [currentUser?.id, isStoreLoading]);
 
-  // Onboarding guiado para nuevos usuarios (cuando no tienen cuentas ni ingresos registrados)
+  // Onboarding guiado para nuevos usuarios (reaparece si cerró sesión sin registrar nada)
   useEffect(() => {
     if (currentUser?.id && !isStoreLoading && !authLoading) {
-      const flagKey = `lanitapp_onboarding_completed_${currentUser.id}`;
-      const isCompleted = localStorage.getItem(flagKey);
-      if (!isCompleted && accounts.length === 0 && fixedIncomes.length === 0) {
+      // 1. Si se solicita explícitamente vía hash (#onboarding) o parámetro (?onboarding=true)
+      const isUrlRequested = window.location.hash.includes('onboarding') || window.location.search.includes('onboarding');
+      if (isUrlRequested) {
         setIsOnboardingOpen(true);
+        try {
+          window.history.replaceState(null, '', window.location.pathname);
+        } catch {}
+        return;
+      }
+
+      // 2. Si el usuario aún no tiene cuentas ni ingresos registrados en su perfil (cuenta en blanco)
+      const hasFinancialData = accounts.length > 0 || fixedIncomes.length > 0;
+      if (!hasFinancialData) {
+        // Verificar si solo se omitió temporalmente en esta sesión activa específica
+        const isSkippedInThisSession = sessionStorage.getItem(`lanitapp_onboarding_skipped_${currentUser.id}`) === 'true';
+        if (!isSkippedInThisSession) {
+          setIsOnboardingOpen(true);
+        }
       }
     }
   }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length]);
@@ -708,6 +722,7 @@ export function App() {
                 currentUserId={currentUser?.id}
                 initialWidgets={currentUser?.dashboard_widgets}
                 isLoading={authLoading || isStoreLoading}
+                onOpenOnboarding={() => setIsOnboardingOpen(true)}
               />
             )}
 
@@ -959,6 +974,7 @@ export function App() {
         onShowToast={showToast}
         onNavigateToSettings={handleNavigateToSettings}
         onSignOut={signOut}
+        onOpenOnboarding={() => setIsOnboardingOpen(true)}
       />
 
       {/* Reset Password Modal */}
@@ -1187,6 +1203,7 @@ export function App() {
         isSyncing={isSyncing}
         unreadNotificationsCount={unreadNotificationsCount}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenOnboarding={() => setIsOnboardingOpen(true)}
       />
     </div>
   );

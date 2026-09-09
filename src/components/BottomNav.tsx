@@ -16,6 +16,7 @@ import {
   Bell,
   RefreshCw,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import type { ActiveViewType } from './Sidebar.tsx';
 
@@ -32,6 +33,7 @@ interface BottomNavProps {
   isSyncing?: boolean;
   unreadNotificationsCount?: number;
   onOpenNotifications?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -47,6 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   isSyncing = false,
   unreadNotificationsCount = 0,
   onOpenNotifications,
+  onOpenOnboarding,
 }) => {
   const [isMoreOpen, setIsMoreOpen] = useState<boolean>(false);
 
@@ -75,6 +78,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   const moreMenuItems = [
+    {
+      id: 'onboarding',
+      title: 'Asistente de Bienvenida',
+      description: 'Configuración guiada de ingresos, compromisos y deudas',
+      icon: Sparkles,
+      color: '#10B981',
+      action: () => {
+        if (onOpenOnboarding) {
+          onOpenOnboarding();
+        }
+      },
+      active: false,
+    },
     {
       id: 'notifications',
       title: 'Centro de Notificaciones',

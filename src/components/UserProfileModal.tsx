@@ -39,6 +39,7 @@ interface UserProfileModalProps {
   onNavigateToSettings?: (tab?: 'themes' | 'categories' | 'users' | 'backup') => void;
   isAdmin?: boolean;
   onSignOut?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
 const AVATAR_PRESETS = [
@@ -81,6 +82,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onNavigateToSettings: _onNavigateToSettings,
   isAdmin: _propIsAdmin,
   onSignOut,
+  onOpenOnboarding,
 }) => {
   const [name, setName] = useState<string>(profile?.name || 'Usuario');
   const [avatar, setAvatar] = useState<string>(() => {
@@ -763,6 +765,31 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             )}
           </div>
 
+
+          {/* ASISTENTE DE BIENVENIDA / ONBOARDING */}
+          {onOpenOnboarding && (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-app">Asistente de Bienvenida</h4>
+                  <p className="text-[10px] text-muted">Configura tus ingresos, gastos fijos y cuentas paso a paso</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenOnboarding();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0"
+              >
+                Abrir
+              </button>
+            </div>
+          )}
 
           {/* Actions: Guardar Cambios & Cerrar Sesión */}
           <div className="space-y-2 pt-3 border-t border-app">
