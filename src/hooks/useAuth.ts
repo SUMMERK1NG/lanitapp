@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db, saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
@@ -99,9 +99,131 @@ export const normalizeCedula = (val?: string | null): string => {
   return clean;
 };
 
+// ==============================================================================
+// TRIPLE BLINDAJE CONTRA RACE CONDITIONS EN ENVÍO DE CORREO DE BIENVENIDA
+// ==============================================================================
+
+// Blindaje 1 (Memoria de sesión): Compartido entre todas las instancias y renders del hook
+const welcomeEmailSentInSession = new Set<string>();
+const welcomeEmailInProgress = new Set<string>();
+
+/**
+ * Función unificada con Triple Blindaje para enviar correo de bienvenida:
+ * 1. Verificación en memoria de sesión (evita re-ejecuciones por renders / StrictMode)
+ * 2. Verificación en perfil / base de datos y localStorage persistente
+ * 3. Bloqueo sincrónico inmediato ANTES de iniciar el dispatch para evitar race conditions
+ */
+export const sendWelcomeEmailIfPending = async (
+  profile?: Partial<UserProfile> | null
+): Promise<boolean> => {
+  if (!profile || !profile.id) return false;
+  const userId = profile.id;
+  const email = profile.email?.trim();
+  if (!email || !email.includes('@')) return false;
+
+  const localFlagKey = `lanitapp_welcome_email_sent_${userId}`;
+
+  // ✅ Blindaje 1: Verificar si ya se envió o está en proceso en esta sesión
+  if (welcomeEmailSentInSession.has(userId) || welcomeEmailInProgress.has(userId)) {
+    logger.dev('[WELCOME EMAIL] Omitido: Ya enviado o en proceso en esta sesión para:', userId);
+    return false;
+  }
+
+  // ✅ Blindaje 1.5: Respaldo en localStorage (evita duplicados entre recargas o si la columna DB aún no se crea)
+  if (typeof window !== 'undefined' && localStorage.getItem(localFlagKey) === 'true') {
+    logger.dev('[WELCOME EMAIL] Omitido: Ya registrado previamente en localStorage para:', userId);
+    welcomeEmailSentInSession.add(userId);
+    return false;
+  }
+
+  // ✅ Blindaje 2: Verificar en la base de datos / objeto de perfil
+  if (profile.welcome_email_sent === true) {
+    logger.dev('[WELCOME EMAIL] Omitido: Ya enviado previamente según perfil DB para:', userId);
+    welcomeEmailSentInSession.add(userId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(localFlagKey, 'true');
+      } catch {}
+    }
+    return false;
+  }
+
+  // ✅ Blindaje 3: Marcar inmediatamente en memoria ANTES de la llamada asíncrona (anti-race condition)
+  welcomeEmailInProgress.add(userId);
+  welcomeEmailSentInSession.add(userId);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(localFlagKey, 'true');
+    } catch {}
+  }
+
+  try {
+    const firstName = profile.first_name || 'Usuario';
+    const sent = await sendWelcomeEmail(email, firstName);
+
+    if (sent) {
+      // Actualizar en Supabase y verificar el UPDATE
+      if (supabase && isSupabaseConfigured()) {
+        const { data: updatedProfile, error: updateError } = await supabase
+          .from('profiles')
+          .update({ welcome_email_sent: true })
+          .eq('id', userId)
+          .select('welcome_email_sent')
+          .maybeSingle();
+
+        if (updateError) {
+          logger.error('[WELCOME EMAIL UPDATE ERROR]:', updateError);
+        } else {
+          logger.dev('[WELCOME EMAIL] Perfil actualizado en Supabase:', updatedProfile);
+        }
+      }
+
+      // Actualizar en Dexie local
+      try {
+        await db.user_profiles.update(userId, { welcome_email_sent: true });
+      } catch {}
+
+      logger.dev('[WELCOME EMAIL] Enviado exitosamente a:', email);
+      return true;
+    } else {
+      // Si el envío retornó false (ej. sin conexión), desmarcamos para permitir reintento
+      welcomeEmailSentInSession.delete(userId);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(localFlagKey);
+        } catch {}
+      }
+      return false;
+    }
+  } catch (error) {
+    // Si falla, remover del Set para permitir reintento
+    welcomeEmailSentInSession.delete(userId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(localFlagKey);
+      } catch {}
+    }
+    logger.error('[WELCOME EMAIL ERROR]:', error);
+    return false;
+  } finally {
+    welcomeEmailInProgress.delete(userId);
+  }
+};
+
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const welcomeEmailAttempted = useRef<Record<string, boolean>>({});
+
+  // Efecto dedicado para disparo garantizado y deduplicado del correo de bienvenida
+  useEffect(() => {
+    if (currentUser?.id && !welcomeEmailAttempted.current[currentUser.id]) {
+      welcomeEmailAttempted.current[currentUser.id] = true;
+      sendWelcomeEmailIfPending(currentUser).catch((err) => {
+        logger.warn('[WELCOME EMAIL EFFECT NOTICE]:', err);
+      });
+    }
+  }, [currentUser]);
   const [error, setError] = useState<string | null>(() => {
     try {
       const flash = sessionStorage.getItem('lanitapp_auth_flash_error');
@@ -320,20 +442,8 @@ export function useAuth() {
             setCurrentUser(userProfile);
             setLoading(false);
 
-            // Enviar bienvenida retroactiva a usuarios existentes si aún no se les ha enviado
-            if (!profileData.welcome_email_sent && (profileData.email || authUser.email)) {
-              const targetEmail = profileData.email || authUser.email;
-              const targetFirstName = profileData.first_name || resolvedFirstName || 'Usuario';
-              sendWelcomeEmail(targetEmail, targetFirstName)
-                .then(async (sent) => {
-                  if (sent && supabase) {
-                    await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userProfile.id);
-                    userProfile.welcome_email_sent = true;
-                    await saveUserProfile(userProfile);
-                  }
-                })
-                .catch((err) => logger.warn('[RETROACTIVE WELCOME EMAIL WARNING]:', err));
-            }
+            // Enviar bienvenida retroactiva a usuarios existentes si aún no se les ha enviado (Triple Blindaje)
+            sendWelcomeEmailIfPending(userProfile).catch(() => {});
 
             // Registrar acceso e IP del usuario en segundo plano al restaurar sesión
             recordUserAccess(userProfile.id).catch(() => {});
@@ -402,18 +512,8 @@ export function useAuth() {
             setCurrentUser(newProfile);
             setLoading(false);
 
-            // Enviar correo de bienvenida al registrarse vía Google/OAuth
-            if (authUser.email) {
-              sendWelcomeEmail(authUser.email, resolvedFirstName || 'Usuario')
-                .then(async (sent) => {
-                  if (sent && supabase) {
-                    await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', newProfile.id);
-                    newProfile.welcome_email_sent = true;
-                    await saveUserProfile(newProfile);
-                  }
-                })
-                .catch((err) => logger.warn('[GOOGLE WELCOME EMAIL WARNING]:', err));
-            }
+            // Enviar correo de bienvenida al registrarse vía Google/OAuth (Triple Blindaje)
+            sendWelcomeEmailIfPending(newProfile).catch(() => {});
 
             // Limpiar hash residual de tokens OAuth de la URL
             if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
@@ -927,18 +1027,8 @@ export function useAuth() {
         setCurrentUser(userProfile);
         setLoading(false);
 
-        // Enviar bienvenida retroactiva al iniciar sesión con cédula si aún no se envió
-        if (!userProfile.welcome_email_sent && userProfile.email) {
-          sendWelcomeEmail(userProfile.email, userProfile.first_name || 'Usuario')
-            .then(async (sent) => {
-              if (sent && supabase) {
-                await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userProfile.id);
-                userProfile.welcome_email_sent = true;
-                await saveUserProfile(userProfile);
-              }
-            })
-            .catch((err) => logger.warn('[RETROACTIVE WELCOME EMAIL WARNING]:', err));
-        }
+        // Enviar bienvenida retroactiva al iniciar sesión con cédula si aún no se envió (Triple Blindaje)
+        sendWelcomeEmailIfPending(userProfile).catch(() => {});
 
         return { success: true };
       }
@@ -1162,16 +1252,8 @@ export function useAuth() {
           logger.error('[Supabase Profiles SignUp Error]:', profErr.message);
         }
 
-        // Envío de correo de bienvenida al nuevo usuario (en segundo plano y sin bloquear el registro)
-        sendWelcomeEmail(cleanEmail, cleanFirstName || 'Usuario')
-          .then(async (sent) => {
-            if (sent && supabase) {
-              await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userId);
-              userProfile.welcome_email_sent = true;
-              await saveUserProfile(userProfile);
-            }
-          })
-          .catch((err) => logger.warn('[WELCOME EMAIL SIGNUP WARNING]:', err));
+        // Envío de correo de bienvenida al nuevo usuario (en segundo plano con Triple Blindaje)
+        sendWelcomeEmailIfPending(userProfile).catch(() => {});
 
         await saveUserProfile(userProfile);
         setActiveUserId(userProfile.id);
@@ -1340,6 +1422,11 @@ export function useAuth() {
   const signOut = async () => {
     setLoading(true);
     try {
+      // Limpiar flags de bienvenida en memoria de la sesión
+      welcomeEmailSentInSession.clear();
+      welcomeEmailInProgress.clear();
+      welcomeEmailAttempted.current = {};
+
       if (isSupabaseConfigured() && supabase) {
         await supabase.auth.signOut().catch((e) => logger.warn('Supabase signout notice:', e));
       }
