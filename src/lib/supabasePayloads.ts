@@ -330,7 +330,7 @@ export function toSupabaseMonthlyOverridePayload(
 
   const payload: Record<string, any> = {
     id: validId,
-    expense_id: targetExpenseId,
+    expense_id: targetExpenseId, // ✅ Nombre canónico en Supabase: expense_id
     month_year: finalMonthYear || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
     is_active: is_active !== undefined ? Boolean(is_active) : true,
   };
@@ -343,11 +343,12 @@ export function toSupabaseMonthlyOverridePayload(
     ? Number(custom_amount)
     : amount !== undefined && amount !== null
     ? Number(amount)
-    : undefined;
+    : 0;
 
-  if (numAmount !== undefined && !isNaN(numAmount)) {
-    payload.custom_amount = numAmount;
-    payload.amount = numAmount;
+  // Supabase schema: amount numeric NOT NULL DEFAULT 0
+  payload.amount = !isNaN(numAmount) ? numAmount : 0;
+  if (custom_amount !== undefined && custom_amount !== null && !isNaN(Number(custom_amount))) {
+    payload.custom_amount = Number(custom_amount);
   }
 
   if (assumed_by_third_party !== undefined) {
@@ -383,16 +384,19 @@ export function normalizeMonthlyFixedOverrideRow(row: any): MonthlyFixedOverride
     ? Number(row.custom_amount)
     : row.amount !== undefined && row.amount !== null
     ? Number(row.amount)
-    : undefined;
+    : 0;
 
   return {
     id: ensureValidUuid(row.id),
     user_id: row.user_id,
     fixed_expense_id: fixedExpenseId,
+    expense_id: fixedExpenseId, // compatibilidad dual
     year: finalYear,
     month: finalMonth,
+    month_year: row.month_year || `${finalYear}-${String(finalMonth + 1).padStart(2, '0')}`,
+    amount: !isNaN(numAmount) ? numAmount : 0,
     is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
-    custom_amount: numAmount !== undefined && !isNaN(numAmount) ? numAmount : undefined,
+    custom_amount: row.custom_amount !== undefined && row.custom_amount !== null && !isNaN(Number(row.custom_amount)) ? Number(row.custom_amount) : undefined,
     assumed_by_third_party: Boolean(row.assumed_by_third_party),
     notes: row.notes || '',
     sync_status: (row.sync_status as any) || 'synced',
@@ -442,7 +446,7 @@ export function toSupabaseMonthlyIncomeOverridePayload(
 
   const payload: Record<string, any> = {
     id: validId,
-    income_id: targetIncomeId,
+    income_id: targetIncomeId, // ✅ Nombre canónico en Supabase: income_id
     month_year: finalMonthYear || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
     is_active: is_active !== undefined ? Boolean(is_active) : true,
   };
@@ -455,11 +459,11 @@ export function toSupabaseMonthlyIncomeOverridePayload(
     ? Number(custom_amount)
     : amount !== undefined && amount !== null
     ? Number(amount)
-    : undefined;
+    : 0;
 
-  if (numAmount !== undefined && !isNaN(numAmount)) {
-    payload.custom_amount = numAmount;
-    payload.amount = numAmount;
+  payload.amount = !isNaN(numAmount) ? numAmount : 0;
+  if (custom_amount !== undefined && custom_amount !== null && !isNaN(Number(custom_amount))) {
+    payload.custom_amount = Number(custom_amount);
   }
 
   if (notes !== undefined && notes !== null) {
@@ -491,20 +495,24 @@ export function normalizeMonthlyFixedIncomeOverrideRow(row: any): MonthlyFixedIn
     ? Number(row.custom_amount)
     : row.amount !== undefined && row.amount !== null
     ? Number(row.amount)
-    : undefined;
+    : 0;
 
   return {
     id: ensureValidUuid(row.id),
     user_id: row.user_id,
     fixed_income_id: fixedIncomeId,
+    income_id: fixedIncomeId, // compatibilidad dual
     year: finalYear,
     month: finalMonth,
+    month_year: row.month_year || `${finalYear}-${String(finalMonth + 1).padStart(2, '0')}`,
+    amount: !isNaN(numAmount) ? numAmount : 0,
     is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
-    custom_amount: numAmount !== undefined && !isNaN(numAmount) ? numAmount : undefined,
+    custom_amount: row.custom_amount !== undefined && row.custom_amount !== null && !isNaN(Number(row.custom_amount)) ? Number(row.custom_amount) : undefined,
     notes: row.notes || '',
     sync_status: (row.sync_status as any) || 'synced',
   };
 }
+
 
 // ---------------------------------------------------------------
 // Variable Income

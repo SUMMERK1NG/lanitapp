@@ -138,8 +138,11 @@ export interface MonthlyFixedIncomeOverride {
   id: string; // `${fixed_income_id}_${year}_${month}`
   user_id?: string;
   fixed_income_id: string;
+  income_id?: string; // alias canónico según esquema Supabase
   year: number;
   month: number;
+  month_year?: string;
+  amount?: number;
   is_active: boolean;
   custom_amount?: number;
   notes?: string;
@@ -164,6 +167,14 @@ export interface VariableIncome {
   sync_status: SyncStatus;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface FixedIncomePaymentSplit {
+  fortnight: FortnightType;
+  amount: number;
+  due_date: string;
+  month: number;
+  year: number;
 }
 
 export type FixedExpensePaymentMode = 'usd_cash' | 'eur_cash' | 'ves_bcv' | 'ves_euro' | 'ves_parallel' | 'ves_fixed' | 'other' | 'cash' | 'bcv_usd' | 'fixed_ves' | 'bcv_eur' | 'parallel_ves';
@@ -195,8 +206,11 @@ export interface MonthlyFixedOverride {
   id: string; // `${fixed_expense_id}_${year}_${month}`
   user_id?: string;
   fixed_expense_id: string;
+  expense_id?: string; // alias canónico según esquema Supabase
   year: number;
   month: number;
+  month_year?: string;
+  amount?: number;
   is_active: boolean;
   custom_amount?: number;
   assumed_by_third_party?: boolean;

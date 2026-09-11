@@ -1056,6 +1056,10 @@ export function subscribeToRealtimeChanges(userId: string, onUpdate?: () => void
                 await db.fixed_incomes.put(normIncome);
               } else if (tableName === 'variable_incomes') {
                 await db.variable_incomes.put(normalizeVariableIncomeRow(newRow));
+              } else if (tableName === 'monthly_fixed_overrides') {
+                await db.monthly_fixed_overrides.put(normalizeMonthlyFixedOverrideRow(newRow));
+              } else if (tableName === 'monthly_fixed_income_overrides') {
+                await db.monthly_fixed_income_overrides.put(normalizeMonthlyFixedIncomeOverrideRow(newRow));
               } else if (targetTable) {
                 await targetTable.put({ ...newRow, sync_status: 'synced' as SyncStatus });
               }
@@ -1548,19 +1552,17 @@ export async function toggleMonthlyFixedIncomeOverride(
       const currentUid = user?.id || userId;
       record.user_id = currentUid;
 
-      // Si no teníamos un ID previo válido, consultar si existe remotamente
-      if (!existing || !isValidUuid(existing.id)) {
-        const { data: remoteExisting } = await supabase
-          .from('monthly_fixed_income_overrides')
-          .select('id')
-          .eq('income_id', cleanIncomeId)
-          .eq('month_year', monthYear)
-          .maybeSingle();
+      // Consultar siempre por (income_id, month_year) para resolver el ID canónico de Supabase si existe
+      const { data: remoteExisting } = await supabase
+        .from('monthly_fixed_income_overrides')
+        .select('id')
+        .eq('income_id', cleanIncomeId)
+        .eq('month_year', monthYear)
+        .maybeSingle();
 
-        if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
-          finalId = remoteExisting.id;
-          record.id = finalId;
-        }
+      if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
+        finalId = remoteExisting.id;
+        record.id = finalId;
       }
 
       const { sync_status, ...rawPayload } = record;
@@ -1568,7 +1570,7 @@ export async function toggleMonthlyFixedIncomeOverride(
 
       const { data, error } = await supabase
         .from('monthly_fixed_income_overrides')
-        .upsert(payload, { onConflict: 'id' })
+        .upsert(payload, { onConflict: 'income_id,month_year' })
         .select();
 
       if (error) {
@@ -2131,19 +2133,17 @@ export async function toggleMonthlyFixedOverride(
       const currentUid = user?.id || userId;
       record.user_id = currentUid;
 
-      // Si no teníamos un ID previo válido, consultar si existe remotamente
-      if (!existing || !isValidUuid(existing.id)) {
-        const { data: remoteExisting } = await supabase
-          .from('monthly_fixed_overrides')
-          .select('id')
-          .eq('expense_id', cleanExpenseId)
-          .eq('month_year', monthYear)
-          .maybeSingle();
+      // Consultar siempre por (expense_id, month_year) para resolver el ID canónico de Supabase si existe
+      const { data: remoteExisting } = await supabase
+        .from('monthly_fixed_overrides')
+        .select('id')
+        .eq('expense_id', cleanExpenseId)
+        .eq('month_year', monthYear)
+        .maybeSingle();
 
-        if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
-          finalId = remoteExisting.id;
-          record.id = finalId;
-        }
+      if (remoteExisting?.id && isValidUuid(remoteExisting.id)) {
+        finalId = remoteExisting.id;
+        record.id = finalId;
       }
 
       const { sync_status, ...rawPayload } = record;
@@ -2151,7 +2151,7 @@ export async function toggleMonthlyFixedOverride(
 
       const { data, error } = await supabase
         .from('monthly_fixed_overrides')
-        .upsert(payload, { onConflict: 'id' })
+        .upsert(payload, { onConflict: 'expense_id,month_year' })
         .select();
 
       if (error) {
