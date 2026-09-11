@@ -268,3 +268,367 @@ WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "fortnight_item_states_delete_policy" ON public.fortnight_item_states
 FOR DELETE TO authenticated
 USING (auth.uid() = user_id);
+
+-- ==============================================================================
+-- 8. TABLA CATEGORIES: BLINDAJE RLS (SISTEMA + PERSONALIZADAS POR USUARIO)
+-- ==============================================================================
+
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "categories_select_policy" ON public.categories;
+DROP POLICY IF EXISTS "categories_insert_policy" ON public.categories;
+DROP POLICY IF EXISTS "categories_update_policy" ON public.categories;
+DROP POLICY IF EXISTS "categories_delete_policy" ON public.categories;
+
+CREATE POLICY "categories_select_policy" ON public.categories
+FOR SELECT TO authenticated
+USING (user_id IS NULL OR auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "categories_insert_policy" ON public.categories
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "categories_update_policy" ON public.categories
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "categories_delete_policy" ON public.categories
+FOR DELETE TO authenticated
+USING ((auth.uid() = user_id AND user_id IS NOT NULL) OR public.is_admin());
+
+-- ==============================================================================
+-- 9. TABLA TRANSACTIONS: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "transactions_select_policy" ON public.transactions;
+DROP POLICY IF EXISTS "transactions_insert_policy" ON public.transactions;
+DROP POLICY IF EXISTS "transactions_update_policy" ON public.transactions;
+DROP POLICY IF EXISTS "transactions_delete_policy" ON public.transactions;
+
+CREATE POLICY "transactions_select_policy" ON public.transactions
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "transactions_insert_policy" ON public.transactions
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "transactions_update_policy" ON public.transactions
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "transactions_delete_policy" ON public.transactions
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 10. TABLA FIXED_INCOMES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.fixed_incomes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "fixed_incomes_select_policy" ON public.fixed_incomes;
+DROP POLICY IF EXISTS "fixed_incomes_insert_policy" ON public.fixed_incomes;
+DROP POLICY IF EXISTS "fixed_incomes_update_policy" ON public.fixed_incomes;
+DROP POLICY IF EXISTS "fixed_incomes_delete_policy" ON public.fixed_incomes;
+
+CREATE POLICY "fixed_incomes_select_policy" ON public.fixed_incomes
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "fixed_incomes_insert_policy" ON public.fixed_incomes
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "fixed_incomes_update_policy" ON public.fixed_incomes
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "fixed_incomes_delete_policy" ON public.fixed_incomes
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 11. TABLA MONTHLY_FIXED_INCOME_OVERRIDES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.monthly_fixed_income_overrides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "monthly_fixed_income_overrides_select_policy" ON public.monthly_fixed_income_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_income_overrides_insert_policy" ON public.monthly_fixed_income_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_income_overrides_update_policy" ON public.monthly_fixed_income_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_income_overrides_delete_policy" ON public.monthly_fixed_income_overrides;
+
+CREATE POLICY "monthly_fixed_income_overrides_select_policy" ON public.monthly_fixed_income_overrides
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "monthly_fixed_income_overrides_insert_policy" ON public.monthly_fixed_income_overrides
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "monthly_fixed_income_overrides_update_policy" ON public.monthly_fixed_income_overrides
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "monthly_fixed_income_overrides_delete_policy" ON public.monthly_fixed_income_overrides
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 12. TABLA VARIABLE_INCOMES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.variable_incomes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "variable_incomes_select_policy" ON public.variable_incomes;
+DROP POLICY IF EXISTS "variable_incomes_insert_policy" ON public.variable_incomes;
+DROP POLICY IF EXISTS "variable_incomes_update_policy" ON public.variable_incomes;
+DROP POLICY IF EXISTS "variable_incomes_delete_policy" ON public.variable_incomes;
+
+CREATE POLICY "variable_incomes_select_policy" ON public.variable_incomes
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "variable_incomes_insert_policy" ON public.variable_incomes
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "variable_incomes_update_policy" ON public.variable_incomes
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "variable_incomes_delete_policy" ON public.variable_incomes
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 13. TABLA FIXED_EXPENSES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.fixed_expenses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "fixed_expenses_select_policy" ON public.fixed_expenses;
+DROP POLICY IF EXISTS "fixed_expenses_insert_policy" ON public.fixed_expenses;
+DROP POLICY IF EXISTS "fixed_expenses_update_policy" ON public.fixed_expenses;
+DROP POLICY IF EXISTS "fixed_expenses_delete_policy" ON public.fixed_expenses;
+
+CREATE POLICY "fixed_expenses_select_policy" ON public.fixed_expenses
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "fixed_expenses_insert_policy" ON public.fixed_expenses
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "fixed_expenses_update_policy" ON public.fixed_expenses
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "fixed_expenses_delete_policy" ON public.fixed_expenses
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 14. TABLA MONTHLY_FIXED_OVERRIDES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.monthly_fixed_overrides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "monthly_fixed_overrides_select_policy" ON public.monthly_fixed_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_overrides_insert_policy" ON public.monthly_fixed_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_overrides_update_policy" ON public.monthly_fixed_overrides;
+DROP POLICY IF EXISTS "monthly_fixed_overrides_delete_policy" ON public.monthly_fixed_overrides;
+
+CREATE POLICY "monthly_fixed_overrides_select_policy" ON public.monthly_fixed_overrides
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "monthly_fixed_overrides_insert_policy" ON public.monthly_fixed_overrides
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "monthly_fixed_overrides_update_policy" ON public.monthly_fixed_overrides
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "monthly_fixed_overrides_delete_policy" ON public.monthly_fixed_overrides
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 15. TABLA VARIABLE_EXPENSES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.variable_expenses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "variable_expenses_select_policy" ON public.variable_expenses;
+DROP POLICY IF EXISTS "variable_expenses_insert_policy" ON public.variable_expenses;
+DROP POLICY IF EXISTS "variable_expenses_update_policy" ON public.variable_expenses;
+DROP POLICY IF EXISTS "variable_expenses_delete_policy" ON public.variable_expenses;
+
+CREATE POLICY "variable_expenses_select_policy" ON public.variable_expenses
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "variable_expenses_insert_policy" ON public.variable_expenses
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "variable_expenses_update_policy" ON public.variable_expenses
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "variable_expenses_delete_policy" ON public.variable_expenses
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 16. TABLA DEBTS: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.debts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "debts_select_policy" ON public.debts;
+DROP POLICY IF EXISTS "debts_insert_policy" ON public.debts;
+DROP POLICY IF EXISTS "debts_update_policy" ON public.debts;
+DROP POLICY IF EXISTS "debts_delete_policy" ON public.debts;
+
+CREATE POLICY "debts_select_policy" ON public.debts
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "debts_insert_policy" ON public.debts
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "debts_update_policy" ON public.debts
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "debts_delete_policy" ON public.debts
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 17. TABLA DEBT_PAYMENTS: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.debt_payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "debt_payments_select_policy" ON public.debt_payments;
+DROP POLICY IF EXISTS "debt_payments_insert_policy" ON public.debt_payments;
+DROP POLICY IF EXISTS "debt_payments_update_policy" ON public.debt_payments;
+DROP POLICY IF EXISTS "debt_payments_delete_policy" ON public.debt_payments;
+
+CREATE POLICY "debt_payments_select_policy" ON public.debt_payments
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "debt_payments_insert_policy" ON public.debt_payments
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "debt_payments_update_policy" ON public.debt_payments
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "debt_payments_delete_policy" ON public.debt_payments
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 18. TABLA SAVINGS_GOALS: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.savings_goals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "savings_goals_select_policy" ON public.savings_goals;
+DROP POLICY IF EXISTS "savings_goals_insert_policy" ON public.savings_goals;
+DROP POLICY IF EXISTS "savings_goals_update_policy" ON public.savings_goals;
+DROP POLICY IF EXISTS "savings_goals_delete_policy" ON public.savings_goals;
+
+CREATE POLICY "savings_goals_select_policy" ON public.savings_goals
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "savings_goals_insert_policy" ON public.savings_goals
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "savings_goals_update_policy" ON public.savings_goals
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "savings_goals_delete_policy" ON public.savings_goals
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 19. TABLA SAVING_CONTRIBUTIONS: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.saving_contributions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "saving_contributions_select_policy" ON public.saving_contributions;
+DROP POLICY IF EXISTS "saving_contributions_insert_policy" ON public.saving_contributions;
+DROP POLICY IF EXISTS "saving_contributions_update_policy" ON public.saving_contributions;
+DROP POLICY IF EXISTS "saving_contributions_delete_policy" ON public.saving_contributions;
+
+CREATE POLICY "saving_contributions_select_policy" ON public.saving_contributions
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "saving_contributions_insert_policy" ON public.saving_contributions
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "saving_contributions_update_policy" ON public.saving_contributions
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "saving_contributions_delete_policy" ON public.saving_contributions
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+-- ==============================================================================
+-- 20. TABLA PLANNING_NOTES: BLINDAJE RLS POR USUARIO
+-- ==============================================================================
+
+ALTER TABLE public.planning_notes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "planning_notes_select_policy" ON public.planning_notes;
+DROP POLICY IF EXISTS "planning_notes_insert_policy" ON public.planning_notes;
+DROP POLICY IF EXISTS "planning_notes_update_policy" ON public.planning_notes;
+DROP POLICY IF EXISTS "planning_notes_delete_policy" ON public.planning_notes;
+
+CREATE POLICY "planning_notes_select_policy" ON public.planning_notes
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "planning_notes_insert_policy" ON public.planning_notes
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "planning_notes_update_policy" ON public.planning_notes
+FOR UPDATE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin())
+WITH CHECK (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "planning_notes_delete_policy" ON public.planning_notes
+FOR DELETE TO authenticated
+USING (auth.uid() = user_id OR public.is_admin());

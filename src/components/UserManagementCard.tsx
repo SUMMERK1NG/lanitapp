@@ -75,6 +75,11 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
   // Delete state
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setActionMessage({ type, text });
+    setTimeout(() => setActionMessage(null), 4500);
+  };
+
   /**
    * Carga directa desde la tabla profiles de Supabase
    */
@@ -109,11 +114,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
   useEffect(() => {
     fetchUsers();
   }, []);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setActionMessage({ type, text });
-    setTimeout(() => setActionMessage(null), 4500);
-  };
 
   // Open Edit User Modal
   const handleOpenEdit = (user: UserProfile) => {

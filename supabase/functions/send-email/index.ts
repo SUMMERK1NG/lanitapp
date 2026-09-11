@@ -51,8 +51,28 @@ serve(async (req) => {
       });
     }
 
-    // Remitente dinámico enviado desde el frontend o tomado del entorno
-    const sender = from || RESEND_FROM;
+    // Validación y sanitización estricta de remitente: No permitir spoofing de dominios arbitrarios
+    let sender = RESEND_FROM;
+    if (from && typeof from === "string") {
+      const normalizedFrom = from.toLowerCase().trim();
+      if (normalizedFrom.includes("@lanitapp.xyz") || normalizedFrom.includes("@resend.dev")) {
+        sender = from.trim();
+      }
+    }
+
+    // Validación básica de formato de correo destino
+    const recipientList = (Array.isArray(to) ? to : [to]).map((t: string) => String(t).trim());
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const allValid = recipientList.every((email: string) => emailRegex.test(email));
+    if (!allValid || recipientList.length === 0) {
+      return new Response(JSON.stringify({ error: "Dirección de correo destino inválida" }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        }
+      });
+    }
 
     // 3. Enviar el correo a través de Resend desde el servidor Deno
     const resendResponse = await fetch("https://api.resend.com/emails", {
@@ -63,8 +83,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: sender,
-        to: Array.isArray(to) ? to : [to],
-        subject: subject,
+        to: recipientList,
+        subject: String(subject).trim(),
         html: html,
         text: text,
       }),

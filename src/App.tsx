@@ -50,21 +50,42 @@ import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
 import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
 import { NotificationCenterModal, computeSystemNotifications, getDismissedAlertIds } from './components/NotificationCenterModal.tsx';
-import { DashboardModule } from './components/DashboardModule.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { PullToRefresh } from './components/PullToRefresh.tsx';
 import { Skeleton } from './components/ui/Skeleton.tsx';
 import { TrendingUp, AlertTriangle, Clock, LogOut, CheckCircle2, WifiOff } from 'lucide-react';
 
-import { PlanningModule } from './components/planning/PlanningModule.tsx';
-import { IncomesManagementModule } from './components/IncomesManagementModule.tsx';
-import { FixedExpensesModule } from './components/FixedExpensesModule.tsx';
-import { DebtManagementModule } from './components/DebtManagementModule.tsx';
-import { SavingsModule } from './components/SavingsModule.tsx';
-import { AccountsManagementModule } from './components/AccountsManagementModule.tsx';
-import { TransactionHistoryModule } from './components/TransactionHistoryModule.tsx';
-import { RatesHistoryModule } from './components/RatesHistoryModule.tsx';
-import { SettingsView } from './components/SettingsView.tsx';
+// Lazy-loaded Views for Bundle Optimization & Performance (Code-Splitting)
+const DashboardModule = lazy(() =>
+  import('./components/DashboardModule.tsx').then((m) => ({ default: m.DashboardModule }))
+);
+const PlanningModule = lazy(() =>
+  import('./components/planning/PlanningModule.tsx').then((m) => ({ default: m.PlanningModule }))
+);
+const IncomesManagementModule = lazy(() =>
+  import('./components/IncomesManagementModule.tsx').then((m) => ({ default: m.IncomesManagementModule }))
+);
+const FixedExpensesModule = lazy(() =>
+  import('./components/FixedExpensesModule.tsx').then((m) => ({ default: m.FixedExpensesModule }))
+);
+const DebtManagementModule = lazy(() =>
+  import('./components/DebtManagementModule.tsx').then((m) => ({ default: m.DebtManagementModule }))
+);
+const SavingsModule = lazy(() =>
+  import('./components/SavingsModule.tsx').then((m) => ({ default: m.SavingsModule }))
+);
+const AccountsManagementModule = lazy(() =>
+  import('./components/AccountsManagementModule.tsx').then((m) => ({ default: m.AccountsManagementModule }))
+);
+const TransactionHistoryModule = lazy(() =>
+  import('./components/TransactionHistoryModule.tsx').then((m) => ({ default: m.TransactionHistoryModule }))
+);
+const RatesHistoryModule = lazy(() =>
+  import('./components/RatesHistoryModule.tsx').then((m) => ({ default: m.RatesHistoryModule }))
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView.tsx').then((m) => ({ default: m.SettingsView }))
+);
 const AuditPanel = lazy(() =>
   import('./components/AuditPanel.tsx').then((m) => ({ default: m.AuditPanel }))
 );
@@ -207,6 +228,15 @@ export function App() {
     }
   }, [currentUser?.theme_mode, currentUser?.accent_color]);
 
+  // Sesión persistente / Inactividad (declarado antes de efectos para evitar TDZ)
+  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('lanitapp_keep_connected') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // Synchronize all user preferences from Supabase profiles on login or session restore
   useEffect(() => {
     if (currentUser?.id) {
@@ -316,20 +346,6 @@ export function App() {
   // Inactivity session timeout management (5 minutes inactivity -> auto logout unless keep_session)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState<boolean>(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
-  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('lanitapp_keep_connected') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  // Sincronizar estado local cuando cargue el perfil de Supabase
-  useEffect(() => {
-    if (currentUser?.keep_session !== undefined) {
-      setKeepConnected(currentUser.keep_session);
-    }
-  }, [currentUser?.keep_session]);
 
   // Fuente de verdad: profiles.keep_session (fallback a keepConnected / false)
   const isSessionKept = currentUser?.keep_session ?? keepConnected;
@@ -465,31 +481,36 @@ export function App() {
   const liveSavingContributions = useLiveQuery(() => db.saving_contributions.toArray(), []) || [];
 
   // Categorías individuales por usuario
-  const userCategories = liveCategories.filter((c) => c.user_id === activeUserId);
-  const fallbackCategories = liveCategories.filter((c) => !c.user_id);
-  const hasUserCustom = activeUserId ? Boolean(localStorage.getItem('lanitapp_cat_seeded_' + activeUserId)) : false;
-  const categories: Category[] =
-    userCategories.length > 0 || hasUserCustom
+  const categories: Category[] = useMemo(() => {
+    const userCategories = liveCategories.filter((c) => c.user_id === activeUserId);
+    const fallbackCategories = liveCategories.filter((c) => !c.user_id);
+    const hasUserCustom = activeUserId ? Boolean(localStorage.getItem('lanitapp_cat_seeded_' + activeUserId)) : false;
+    return userCategories.length > 0 || hasUserCustom
       ? userCategories
       : fallbackCategories.length > 0
       ? fallbackCategories
       : DEFAULT_CATEGORIES;
-  // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
-  const isUserMatch = (item: { user_id?: string | null }) =>
-    Boolean(activeUserId && item.user_id && item.user_id === activeUserId);
+  }, [liveCategories, activeUserId]);
 
-  const accounts: Account[] = liveAccounts.filter(isUserMatch);
-  const transactions: Transaction[] = liveTransactions.filter(isUserMatch);
-  const fixedIncomes: FixedIncome[] = liveFixedIncomes.filter(isUserMatch);
-  const variableIncomes: VariableIncome[] = liveVariableIncomes.filter(isUserMatch);
+  // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
+  const isUserMatch = useCallback(
+    (item: { user_id?: string | null }) =>
+      Boolean(activeUserId && item.user_id && item.user_id === activeUserId),
+    [activeUserId]
+  );
+
+  const accounts: Account[] = useMemo(() => liveAccounts.filter(isUserMatch), [liveAccounts, isUserMatch]);
+  const transactions: Transaction[] = useMemo(() => liveTransactions.filter(isUserMatch), [liveTransactions, isUserMatch]);
+  const fixedIncomes: FixedIncome[] = useMemo(() => liveFixedIncomes.filter(isUserMatch), [liveFixedIncomes, isUserMatch]);
+  const variableIncomes: VariableIncome[] = useMemo(() => liveVariableIncomes.filter(isUserMatch), [liveVariableIncomes, isUserMatch]);
   const monthlyIncomeOverrides = liveMonthlyIncomeOverrides;
-  const fixedExpenses: FixedExpense[] = liveFixedExpenses.filter(isUserMatch);
-  const variableExpenses: VariableExpense[] = liveVariableExpenses.filter(isUserMatch);
-  const debts: Debt[] = liveDebts.filter(isUserMatch);
+  const fixedExpenses: FixedExpense[] = useMemo(() => liveFixedExpenses.filter(isUserMatch), [liveFixedExpenses, isUserMatch]);
+  const variableExpenses: VariableExpense[] = useMemo(() => liveVariableExpenses.filter(isUserMatch), [liveVariableExpenses, isUserMatch]);
+  const debts: Debt[] = useMemo(() => liveDebts.filter(isUserMatch), [liveDebts, isUserMatch]);
   const monthlyOverrides = liveMonthlyOverrides;
-  const debtPayments: DebtPayment[] = liveDebtPayments.filter(isUserMatch);
-  const savingsGoals: SavingsGoal[] = liveSavingsGoals.filter(isUserMatch);
-  const savingContributions: SavingContribution[] = liveSavingContributions.filter(isUserMatch);
+  const debtPayments: DebtPayment[] = useMemo(() => liveDebtPayments.filter(isUserMatch), [liveDebtPayments, isUserMatch]);
+  const savingsGoals: SavingsGoal[] = useMemo(() => liveSavingsGoals.filter(isUserMatch), [liveSavingsGoals, isUserMatch]);
+  const savingContributions: SavingContribution[] = useMemo(() => liveSavingContributions.filter(isUserMatch), [liveSavingContributions, isUserMatch]);
 
   // Verificación proactiva de déficit quincenal y notificación por email
   useEffect(() => {

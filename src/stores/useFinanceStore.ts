@@ -237,30 +237,6 @@ async function safeQuery<T = any>(
   }
 }
 
-/**
- * Deduplica elementos idénticos creados por error (ej. doble clic en móvil o concurrencia)
- */
-function deduplicateRecords<T extends { id: string }>(
-  items: T[],
-  keyFn: (item: T) => string
-): { unique: T[]; duplicates: T[] } {
-  const seen = new Set<string>();
-  const unique: T[] = [];
-  const duplicates: T[] = [];
-
-  for (const item of items) {
-    const key = keyFn(item);
-    if (seen.has(key)) {
-      duplicates.push(item);
-    } else {
-      seen.add(key);
-      unique.push(item);
-    }
-  }
-
-  return { unique, duplicates };
-}
-
 export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
   profiles: [],
   categories: DEFAULT_CATEGORIES,
@@ -370,45 +346,10 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
       const filteredStates = fortnightItemStates.filter(matchesUser);
       const filteredTxs = transactions.filter(matchesUser);
 
-      // Purgar duplicados idénticos en la base local (causados por doble clic o sincronización concurrente)
-      const { unique: cleanExpenses, duplicates: dupExpenses } = deduplicateRecords(
-        filteredExpenses,
-        (e) => `${(e.name || '').trim().toLowerCase()}_${Number(e.amount)}_${e.default_fortnight}`
-      );
-      if (dupExpenses.length > 0) {
-        logger.info(`[FinanceStore] Purgando ${dupExpenses.length} gastos fijos duplicados de Dexie...`);
-        const dupIds = dupExpenses.map((d) => d.id);
-        db.fixed_expenses.bulkDelete(dupIds).catch(() => {});
-        if (navigator.onLine && isSupabaseConfigured() && supabase) {
-          supabase.from('fixed_expenses').delete().in('id', dupIds).then(() => {});
-        }
-      }
-
-      const { unique: cleanFixedIncomes, duplicates: dupIncomes } = deduplicateRecords(
-        filteredFixedIncomes,
-        (i) => `${(i.name || '').trim().toLowerCase()}_${Number(i.amount)}_${i.default_fortnight}`
-      );
-      if (dupIncomes.length > 0) {
-        logger.info(`[FinanceStore] Purgando ${dupIncomes.length} ingresos fijos duplicados de Dexie...`);
-        const dupIds = dupIncomes.map((d) => d.id);
-        db.fixed_incomes.bulkDelete(dupIds).catch(() => {});
-        if (navigator.onLine && isSupabaseConfigured() && supabase) {
-          supabase.from('fixed_incomes').delete().in('id', dupIds).then(() => {});
-        }
-      }
-
-      const { unique: cleanAccounts, duplicates: dupAccounts } = deduplicateRecords(
-        filteredAccounts,
-        (a) => `${(a.name || '').trim().toLowerCase()}_${a.type || 'cash'}`
-      );
-      if (dupAccounts.length > 0) {
-        logger.info(`[FinanceStore] Purgando ${dupAccounts.length} cuentas duplicadas de Dexie...`);
-        const dupIds = dupAccounts.map((d) => d.id);
-        db.accounts.bulkDelete(dupIds).catch(() => {});
-        if (navigator.onLine && isSupabaseConfigured() && supabase) {
-          supabase.from('accounts').delete().in('id', dupIds).then(() => {});
-        }
-      }
+      // Preservar todos los registros filtrados del usuario (la prevención de duplicados se maneja en UI al crear)
+      const cleanExpenses = filteredExpenses;
+      const cleanFixedIncomes = filteredFixedIncomes;
+      const cleanAccounts = filteredAccounts;
 
       const userCategories = categories.filter((c) => c.user_id === userId);
       const isSeeded = typeof localStorage !== 'undefined' && userId && localStorage.getItem('lanitapp_cat_seeded_' + userId);
@@ -571,33 +512,14 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         updated_at: a.updated_at,
         sync_status: 'synced' as SyncStatus,
       }));
-      const { unique: accounts, duplicates: dupAccounts } = deduplicateRecords(
-        rawAccountsMapped,
-        (a) => `${(a.name || '').trim().toLowerCase()}_${a.type || 'cash'}`
-      );
-      if (dupAccounts.length > 0) {
-        logger.info(`[Supabase Fetch] Limpiando ${dupAccounts.length} cuentas duplicadas...`);
-        const dupIds = dupAccounts.map((d) => d.id);
-        db.accounts.bulkDelete(dupIds).catch(() => {});
-        supabase.from('accounts').delete().in('id', dupIds).then(() => {});
-      }
+      const accounts: Account[] = rawAccountsMapped;
 
-      const rawFixedIncomesMapped: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
+      const fixedIncomes: FixedIncome[] = rawFixedIncomes.map((i: any) => ({
         ...i,
         id: ensureValidUuid(i.id),
         default_fortnight: quincenaToFortnight(i.default_fortnight, i.notes),
         sync_status: 'synced',
       }));
-      const { unique: fixedIncomes, duplicates: dupIncomes } = deduplicateRecords(
-        rawFixedIncomesMapped,
-        (i) => `${(i.name || '').trim().toLowerCase()}_${Number(i.amount)}_${i.default_fortnight}`
-      );
-      if (dupIncomes.length > 0) {
-        logger.info(`[Supabase Fetch] Limpiando ${dupIncomes.length} ingresos fijos duplicados...`);
-        const dupIds = dupIncomes.map((d) => d.id);
-        db.fixed_incomes.bulkDelete(dupIds).catch(() => {});
-        supabase.from('fixed_incomes').delete().in('id', dupIds).then(() => {});
-      }
 
       const monthlyIncomeOverrides: MonthlyFixedIncomeOverride[] = rawIncomeOverrides.map((o: any) => normalizeMonthlyFixedIncomeOverrideRow(o));
       const variableIncomes: VariableIncome[] = rawVariableIncomes.map((v: any) => {
@@ -625,22 +547,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         };
       });
 
-      const rawFixedExpensesMapped: FixedExpense[] = rawExpenses.map((e: any) => ({
+      const fixedExpenses: FixedExpense[] = rawExpenses.map((e: any) => ({
         ...e,
         id: ensureValidUuid(e.id),
         default_fortnight: quincenaToFortnight(e.default_fortnight || e.default_quincena),
         sync_status: 'synced',
       }));
-      const { unique: fixedExpenses, duplicates: dupExpenses } = deduplicateRecords(
-        rawFixedExpensesMapped,
-        (e) => `${(e.name || '').trim().toLowerCase()}_${Number(e.amount)}_${e.default_fortnight}`
-      );
-      if (dupExpenses.length > 0) {
-        logger.info(`[Supabase Fetch] Limpiando ${dupExpenses.length} gastos fijos duplicados...`);
-        const dupIds = dupExpenses.map((d) => d.id);
-        db.fixed_expenses.bulkDelete(dupIds).catch(() => {});
-        supabase.from('fixed_expenses').delete().in('id', dupIds).then(() => {});
-      }
 
       const monthlyFixedOverrides: MonthlyFixedOverride[] = rawExpenseOverrides.map((o: any) => normalizeMonthlyFixedOverrideRow(o));
       const debts: Debt[] = rawDebts.map((d: any) => normalizeDebtRow(d));
@@ -754,6 +666,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ accounts: s.accounts.filter((a) => a.id !== oldRow.id) }));
           await db.accounts.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const accItem = normalizeAcc(newRow);
           set((s) => {
             const exists = s.accounts.some((a) => a.id === accItem.id);
@@ -822,7 +735,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ monthlyIncomeOverrides: s.monthlyIncomeOverrides.filter((o) => o.id !== oldRow.id) }));
           await db.monthly_fixed_income_overrides.delete(oldRow.id);
         } else if (newRow?.id) {
-          const item: MonthlyFixedIncomeOverride = { ...newRow, sync_status: 'synced' };
+          const item: MonthlyFixedIncomeOverride = normalizeMonthlyFixedIncomeOverrideRow(newRow);
           set((s) => ({
             monthlyIncomeOverrides: s.monthlyIncomeOverrides.some((o) => o.id === item.id)
               ? s.monthlyIncomeOverrides.map((o) => (o.id === item.id ? item : o))
@@ -837,6 +750,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ variableIncomes: s.variableIncomes.filter((v) => v.id !== oldRow.id) }));
           await db.variable_incomes.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const [yr, mo] = (newRow.month_year || '').split('-').map(Number);
           const now = new Date();
           const year = !isNaN(yr) && yr > 2000 ? yr : (newRow.year || now.getFullYear());
@@ -873,6 +787,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fixedExpenses: s.fixedExpenses.filter((e) => e.id !== oldRow.id) }));
           await db.fixed_expenses.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: FixedExpense = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
@@ -903,26 +818,12 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
         }
         break;
       }
-      case 'monthly_fixed_income_overrides': {
-        if (eventType === 'DELETE' && oldRow?.id) {
-          set((s) => ({ monthlyIncomeOverrides: s.monthlyIncomeOverrides.filter((o) => o.id !== oldRow.id) }));
-          await db.monthly_fixed_income_overrides.delete(oldRow.id);
-        } else if (newRow?.id) {
-          const item: MonthlyFixedIncomeOverride = normalizeMonthlyFixedIncomeOverrideRow(newRow);
-          set((s) => ({
-            monthlyIncomeOverrides: s.monthlyIncomeOverrides.some((o) => o.id === item.id)
-              ? s.monthlyIncomeOverrides.map((o) => (o.id === item.id ? item : o))
-              : [...s.monthlyIncomeOverrides, item],
-          }));
-          await db.monthly_fixed_income_overrides.put(item);
-        }
-        break;
-      }
       case 'debts': {
         if (eventType === 'DELETE' && oldRow?.id) {
           set((s) => ({ debts: s.debts.filter((d) => d.id !== oldRow.id) }));
           await db.debts.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: Debt = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
@@ -944,6 +845,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ debtPayments: s.debtPayments.filter((p) => p.id !== oldRow.id) }));
           await db.debt_payments.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: DebtPayment = {
             ...newRow,
             id: ensureValidUuid(newRow.id),
@@ -964,6 +866,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingsGoals: s.savingsGoals.filter((g) => g.id !== oldRow.id) }));
           await db.savings_goals.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           let normalizedFortnight: 15 | 30 | null = null;
           if (newRow.target_fortnight === 15 || newRow.target_fortnight === '15' || newRow.target_fortnight === 'q1') {
             normalizedFortnight = 15;
@@ -990,6 +893,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ savingContributions: s.savingContributions.filter((c) => c.id !== oldRow.id) }));
           await db.saving_contributions.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: SavingContribution = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             savingContributions: s.savingContributions.some((c) => c.id === item.id)
@@ -1005,6 +909,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ fortnightItemStates: s.fortnightItemStates.filter((st) => st.id !== oldRow.id) }));
           await db.fortnight_item_states.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: FortnightItemState = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             fortnightItemStates: s.fortnightItemStates.some((st) => st.id === item.id)
@@ -1020,6 +925,7 @@ export const useFinanceStore = create<FinanceStoreState>((set, get) => ({
           set((s) => ({ transactions: s.transactions.filter((t) => t.id !== oldRow.id) }));
           await db.transactions.delete(oldRow.id);
         } else if (newRow?.id) {
+          if (newRow.user_id && userId && newRow.user_id !== userId) break;
           const item: Transaction = { ...newRow, id: ensureValidUuid(newRow.id), sync_status: 'synced' };
           set((s) => ({
             transactions: s.transactions.some((t) => t.id === item.id)
