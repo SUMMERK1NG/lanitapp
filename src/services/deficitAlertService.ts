@@ -153,7 +153,14 @@ export const sendDeficitAlertEmail = async (email: string, alert: DeficitAlert):
     </html>
   `;
 
-  await sendEmail(email, subject, html);
+  try {
+    const res = await sendEmail(email, subject, html);
+    if (res.success) {
+      logger.dev('[DEFICIT ALERT EMAIL SENT] to:', email);
+    }
+  } catch (err) {
+    logger.warn('[DEFICIT ALERT EMAIL ERROR]:', err);
+  }
 };
 
 /**

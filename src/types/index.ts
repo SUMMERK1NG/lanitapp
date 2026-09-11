@@ -65,6 +65,7 @@ export interface UserProfile {
   accent_color: AccentColor;
   last_active_view?: string;
   keep_session?: boolean;
+  welcome_email_sent?: boolean;
   dashboard_widgets?: any;
   created_at?: string;
   last_sign_in_at?: string;

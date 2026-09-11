@@ -15,7 +15,8 @@ export interface BiweeklyEmailPayload {
 }
 
 // Remitente configurado con fallback al dominio personalizado oficial
-const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <notificaciones@lanitapp.xyz>';
+export const DEFAULT_EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'LANITAPP <notificaciones@lanitapp.xyz>';
+export const EMAIL_FROM = DEFAULT_EMAIL_FROM;
 
 /**
  * Envío seguro de correos electrónicos a través de Supabase Edge Function 'send-email'.

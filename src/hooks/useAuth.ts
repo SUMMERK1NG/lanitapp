@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { db, saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
 import { sendPasswordResetEmail } from '../lib/emailConfig.ts';
+import { sendWelcomeEmail } from '../services/welcomeEmailService.ts';
 
 /**
  * Obtiene la IP pública del cliente con rotación de múltiples servicios y timeout seguro
@@ -299,6 +300,7 @@ export function useAuth() {
               accent_color: profileData.accent_color || '#147DF0',
               last_active_view: profileData.last_active_view || 'dashboard',
               keep_session: profileData.keep_session ?? false,
+              welcome_email_sent: profileData.welcome_email_sent ?? false,
               sync_status: 'synced',
               created_at: profileData.created_at,
               last_sign_in_at: profileData.last_sign_in_at || profileData.last_login_at || authUser.last_sign_in_at || new Date().toISOString(),
@@ -317,6 +319,21 @@ export function useAuth() {
             }
             setCurrentUser(userProfile);
             setLoading(false);
+
+            // Enviar bienvenida retroactiva a usuarios existentes si aún no se les ha enviado
+            if (!profileData.welcome_email_sent && (profileData.email || authUser.email)) {
+              const targetEmail = profileData.email || authUser.email;
+              const targetFirstName = profileData.first_name || resolvedFirstName || 'Usuario';
+              sendWelcomeEmail(targetEmail, targetFirstName)
+                .then(async (sent) => {
+                  if (sent && supabase) {
+                    await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userProfile.id);
+                    userProfile.welcome_email_sent = true;
+                    await saveUserProfile(userProfile);
+                  }
+                })
+                .catch((err) => logger.warn('[RETROACTIVE WELCOME EMAIL WARNING]:', err));
+            }
 
             // Registrar acceso e IP del usuario en segundo plano al restaurar sesión
             recordUserAccess(userProfile.id).catch(() => {});
@@ -384,6 +401,19 @@ export function useAuth() {
             setActiveUserId(newProfile.id);
             setCurrentUser(newProfile);
             setLoading(false);
+
+            // Enviar correo de bienvenida al registrarse vía Google/OAuth
+            if (authUser.email) {
+              sendWelcomeEmail(authUser.email, resolvedFirstName || 'Usuario')
+                .then(async (sent) => {
+                  if (sent && supabase) {
+                    await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', newProfile.id);
+                    newProfile.welcome_email_sent = true;
+                    await saveUserProfile(newProfile);
+                  }
+                })
+                .catch((err) => logger.warn('[GOOGLE WELCOME EMAIL WARNING]:', err));
+            }
 
             // Limpiar hash residual de tokens OAuth de la URL
             if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
@@ -843,6 +873,7 @@ export function useAuth() {
           accent_color: profile?.accent_color || '#147DF0',
           last_active_view: profile?.last_active_view || 'dashboard',
           keep_session: keepSessionVal,
+          welcome_email_sent: profile?.welcome_email_sent ?? false,
           last_sign_in_at: nowIso,
           last_login_at: nowIso,
           sync_status: 'synced',
@@ -895,6 +926,20 @@ export function useAuth() {
         setActiveUserId(userProfile.id);
         setCurrentUser(userProfile);
         setLoading(false);
+
+        // Enviar bienvenida retroactiva al iniciar sesión con cédula si aún no se envió
+        if (!userProfile.welcome_email_sent && userProfile.email) {
+          sendWelcomeEmail(userProfile.email, userProfile.first_name || 'Usuario')
+            .then(async (sent) => {
+              if (sent && supabase) {
+                await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userProfile.id);
+                userProfile.welcome_email_sent = true;
+                await saveUserProfile(userProfile);
+              }
+            })
+            .catch((err) => logger.warn('[RETROACTIVE WELCOME EMAIL WARNING]:', err));
+        }
+
         return { success: true };
       }
 
@@ -1116,6 +1161,17 @@ export function useAuth() {
         if (profErr) {
           logger.error('[Supabase Profiles SignUp Error]:', profErr.message);
         }
+
+        // Envío de correo de bienvenida al nuevo usuario (en segundo plano y sin bloquear el registro)
+        sendWelcomeEmail(cleanEmail, cleanFirstName || 'Usuario')
+          .then(async (sent) => {
+            if (sent && supabase) {
+              await supabase.from('profiles').update({ welcome_email_sent: true }).eq('id', userId);
+              userProfile.welcome_email_sent = true;
+              await saveUserProfile(userProfile);
+            }
+          })
+          .catch((err) => logger.warn('[WELCOME EMAIL SIGNUP WARNING]:', err));
 
         await saveUserProfile(userProfile);
         setActiveUserId(userProfile.id);
