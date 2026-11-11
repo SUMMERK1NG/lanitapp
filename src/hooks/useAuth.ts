@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { saveUserProfile } from '../lib/profilePreferences.ts';
@@ -109,15 +109,42 @@ export const normalizeCedula = (val?: string | null): string => {
 const welcomeEmailSentInSession = new Set<string>();
 const welcomeEmailInProgress = new Set<string>();
 
+const WELCOME_NEW_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
+
+/** Determina si la cuenta en Supabase Auth fue creada recientemente (primer ingreso / registro) */
+const isRecentlyCreatedAuthUser = (createdAt?: string | null): boolean => {
+  if (!createdAt) return false;
+  const createdMs = Date.parse(createdAt);
+  if (Number.isNaN(createdMs)) return false;
+  const ageMs = Date.now() - createdMs;
+  return ageMs >= 0 && ageMs <= WELCOME_NEW_ACCOUNT_WINDOW_MS;
+};
+
+/** Normaliza silenciosamente en BD usuarios existentes sin enviar correo retroactivo */
+const ensureExistingUserWelcomeFlag = async (userId?: string, currentFlag?: boolean | null): Promise<void> => {
+  if (!userId || currentFlag === true || !isSupabaseConfigured() || !supabase) return;
+  try {
+    await supabase
+      .from('profiles')
+      .update({ welcome_email_sent: true })
+      .eq('id', userId)
+      .or('welcome_email_sent.is.null,welcome_email_sent.eq.false');
+  } catch {
+    // No bloquear sesión si falla la normalización silenciosa
+  }
+};
+
 /**
- * Función unificada con Triple Blindaje para enviar correo de bienvenida:
- * 1. Verificación en memoria de sesión (evita re-ejecuciones por renders / StrictMode)
- * 2. Verificación en perfil / base de datos y localStorage persistente
- * 3. Bloqueo sincrónico inmediato ANTES de iniciar el dispatch para evitar race conditions
+ * Envío único de correo de bienvenida exclusivo para registros nuevos reales:
+ * 1. Requiere `options.isNewRegistration === true` (nunca se envía retroactivamente a usuarios existentes)
+ * 2. Deduplicación en memoria de sesión (evita re-ejecuciones por renders / onAuthStateChange)
+ * 3. Reclamo atómico en PostgreSQL (`welcome_email_sent = true`) antes de despachar el correo
  */
 export const sendWelcomeEmailIfPending = async (
-  profile?: Partial<UserProfile> | null
+  profile?: Partial<UserProfile> | null,
+  options?: { isNewRegistration?: boolean }
 ): Promise<boolean> => {
+  if (!options?.isNewRegistration) return false;
   if (!profile || !profile.id) return false;
   const userId = profile.id;
   const email = profile.email?.trim();
@@ -129,47 +156,61 @@ export const sendWelcomeEmailIfPending = async (
     return false;
   }
 
-  // ✅ Blindaje 2: Verificar en la base de datos / objeto de perfil
+  // ✅ Blindaje 2: Verificar en el perfil recibido
   if (profile.welcome_email_sent === true) {
     logger.dev('[WELCOME EMAIL] Omitido: Ya enviado previamente según perfil DB para:', userId);
     welcomeEmailSentInSession.add(userId);
     return false;
   }
 
-  // ✅ Blindaje 3: Marcar inmediatamente en memoria ANTES de la llamada asíncrona (anti-race condition)
+  // ✅ Blindaje 3: Marcar inmediatamente en memoria ANTES de llamadas asíncronas
   welcomeEmailInProgress.add(userId);
   welcomeEmailSentInSession.add(userId);
 
+  let claimedInDb = false;
   try {
+    if (supabase && isSupabaseConfigured()) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id === userId) {
+        const { data: claimed, error: claimErr } = await supabase
+          .from('profiles')
+          .update({ welcome_email_sent: true })
+          .eq('id', userId)
+          .or('welcome_email_sent.is.null,welcome_email_sent.eq.false')
+          .select('id')
+          .maybeSingle();
+
+        if (claimErr) {
+          logger.error('[WELCOME EMAIL CLAIM ERROR]:', claimErr);
+          welcomeEmailSentInSession.delete(userId);
+          return false;
+        }
+        if (!claimed) {
+          logger.dev('[WELCOME EMAIL] Omitido: Ya reclamado previamente en Supabase para:', userId);
+          return false;
+        }
+        claimedInDb = true;
+      }
+    }
+
     const firstName = profile.first_name || 'Usuario';
     const sent = await sendWelcomeEmail(email, firstName);
 
     if (sent) {
-      // Actualizar en Supabase y verificar el UPDATE
-      if (supabase && isSupabaseConfigured()) {
-        const { data: updatedProfile, error: updateError } = await supabase
-          .from('profiles')
-          .update({ welcome_email_sent: true })
-          .eq('id', userId)
-          .select('welcome_email_sent')
-          .maybeSingle();
-
-        if (updateError) {
-          logger.error('[WELCOME EMAIL UPDATE ERROR]:', updateError);
-        } else {
-          logger.dev('[WELCOME EMAIL] Perfil actualizado en Supabase:', updatedProfile);
-        }
-      }
-
-      logger.dev('[WELCOME EMAIL] Enviado exitosamente a:', email);
+      logger.dev('[WELCOME EMAIL] Enviado exitosamente a cuenta nueva:', email);
       return true;
-    } else {
-      // Si el envío retornó false (ej. sin conexión), desmarcamos para permitir reintento
-      welcomeEmailSentInSession.delete(userId);
-      return false;
     }
+
+    // Si el envío falló y ya habíamos reclamado en BD, revertir para permitir reintento
+    if (claimedInDb && supabase && isSupabaseConfigured()) {
+      await supabase.from('profiles').update({ welcome_email_sent: false }).eq('id', userId);
+    }
+    welcomeEmailSentInSession.delete(userId);
+    return false;
   } catch (error) {
-    // Si falla, remover del Set para permitir reintento
+    if (claimedInDb && supabase && isSupabaseConfigured()) {
+      await supabase.from('profiles').update({ welcome_email_sent: false }).eq('id', userId);
+    }
     welcomeEmailSentInSession.delete(userId);
     logger.error('[WELCOME EMAIL ERROR]:', error);
     return false;
@@ -178,20 +219,25 @@ export const sendWelcomeEmailIfPending = async (
   }
 };
 
+/**
+ * Envía bienvenida únicamente si `auth.users.created_at` es reciente;
+ * de lo contrario normaliza el flag en BD sin enviar correo retroactivo.
+ */
+const syncAuthWelcomeState = async (
+  profile: UserProfile,
+  authCreatedAt?: string | null,
+  existingWelcomeFlag?: boolean | null
+): Promise<void> => {
+  if (isRecentlyCreatedAuthUser(authCreatedAt)) {
+    await sendWelcomeEmailIfPending(profile, { isNewRegistration: true });
+  } else {
+    await ensureExistingUserWelcomeFlag(profile.id, existingWelcomeFlag);
+  }
+};
+
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const welcomeEmailAttempted = useRef<Record<string, boolean>>({});
-
-  // Efecto dedicado para disparo garantizado y deduplicado del correo de bienvenida
-  useEffect(() => {
-    if (currentUser?.id && !welcomeEmailAttempted.current[currentUser.id]) {
-      welcomeEmailAttempted.current[currentUser.id] = true;
-      sendWelcomeEmailIfPending(currentUser).catch((err) => {
-        logger.warn('[WELCOME EMAIL EFFECT NOTICE]:', err);
-      });
-    }
-  }, [currentUser]);
   const [error, setError] = useState<string | null>(() => getAuthFlashError());
 
   // Initialize auth session on load (F5 / start)
@@ -398,8 +444,8 @@ export function useAuth() {
             setCurrentUser(userProfile);
             setLoading(false);
 
-            // Enviar bienvenida retroactiva a usuarios existentes si aún no se les ha enviado (Triple Blindaje)
-            sendWelcomeEmailIfPending(userProfile).catch(() => {});
+            // Enviar bienvenida únicamente si es una cuenta creada recientemente (ej. primer ingreso con Google)
+            syncAuthWelcomeState(userProfile, authUser.created_at, profileData.welcome_email_sent).catch(() => {});
 
             // Registrar acceso e IP del usuario en segundo plano al restaurar sesión
             recordUserAccess(userProfile.id).catch(() => {});
@@ -468,8 +514,8 @@ export function useAuth() {
             setCurrentUser(newProfile);
             setLoading(false);
 
-            // Enviar correo de bienvenida al registrarse vía Google/OAuth (Triple Blindaje)
-            sendWelcomeEmailIfPending(newProfile).catch(() => {});
+            // Enviar correo de bienvenida al registrarse vía Google/OAuth (solo cuenta recién creada)
+            syncAuthWelcomeState(newProfile, authUser.created_at, false).catch(() => {});
 
             // Limpiar hash residual de tokens OAuth de la URL
             if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
@@ -544,6 +590,9 @@ export function useAuth() {
               currency: profileData.currency || 'USD',
               theme_mode: profileData.theme_mode || 'navy',
               accent_color: profileData.accent_color || '#147DF0',
+              last_active_view: profileData.last_active_view || 'dashboard',
+              keep_session: profileData.keep_session ?? false,
+              welcome_email_sent: profileData.welcome_email_sent ?? false,
               sync_status: 'synced',
               created_at: profileData.created_at,
               last_sign_in_at: profileData.last_sign_in_at || authUser.last_sign_in_at,
@@ -552,6 +601,8 @@ export function useAuth() {
             await saveUserProfile(userProfile);
             setActiveUserId(userProfile.id);
             setCurrentUser(userProfile);
+
+            syncAuthWelcomeState(userProfile, authUser.created_at, profileData.welcome_email_sent).catch(() => {});
           } else if (!profileErr) {
             // Usuario nuevo proveniente de Google OAuth
             const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'user';
@@ -593,6 +644,7 @@ export function useAuth() {
             await saveUserProfile(newProfile);
             setActiveUserId(newProfile.id);
             setCurrentUser(newProfile);
+            syncAuthWelcomeState(newProfile, authUser.created_at, false).catch(() => {});
           }
         } else if (event === 'SIGNED_OUT') {
           setActiveUserId('');
@@ -890,6 +942,9 @@ export function useAuth() {
               updated_at: nowIso,
               last_sign_in_at: nowIso,
             };
+            if (!profile?.welcome_email_sent) {
+              loginUpdatePayload.welcome_email_sent = true;
+            }
             if (clientIp) {
               loginUpdatePayload.last_sign_in_ip = clientIp;
             }
@@ -914,9 +969,6 @@ export function useAuth() {
         setActiveUserId(userProfile.id);
         setCurrentUser(userProfile);
         setLoading(false);
-
-        // Enviar bienvenida retroactiva al iniciar sesión con cédula si aún no se envió (Triple Blindaje)
-        sendWelcomeEmailIfPending(userProfile).catch(() => {});
 
         return { success: true };
       }
@@ -1140,8 +1192,8 @@ export function useAuth() {
           logger.error('[Supabase Profiles SignUp Error]:', profErr.message);
         }
 
-        // Envío de correo de bienvenida al nuevo usuario (en segundo plano con Triple Blindaje)
-        sendWelcomeEmailIfPending(userProfile).catch(() => {});
+        // Envío de correo de bienvenida al nuevo usuario (solo registro nuevo con Triple Blindaje)
+        sendWelcomeEmailIfPending(userProfile, { isNewRegistration: true }).catch(() => {});
 
         await saveUserProfile(userProfile);
         setActiveUserId(userProfile.id);
@@ -1313,7 +1365,6 @@ export function useAuth() {
       // Limpiar flags de bienvenida en memoria de la sesión
       welcomeEmailSentInSession.clear();
       welcomeEmailInProgress.clear();
-      welcomeEmailAttempted.current = {};
 
       if (isSupabaseConfigured() && supabase) {
         await supabase.auth.signOut().catch((e) => logger.warn('Supabase signout notice:', e));

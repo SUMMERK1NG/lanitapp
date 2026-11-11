@@ -76,7 +76,7 @@ export const sendWelcomeEmail = async (
                       </tr>
                       <tr>
                         <td style="padding: 6px 0; color: #cbd5e1; font-size: 13px; line-height: 1.5;">
-                          📱 <strong>Offline-First PWA:</strong> Accede a tus finanzas y anota movimientos incluso sin internet.
+                          📱 <strong>Acceso Multi-dispositivo:</strong> Consulta tus finanzas al instante desde móvil o PC con respaldo en la nube.
                         </td>
                       </tr>
                     </table>

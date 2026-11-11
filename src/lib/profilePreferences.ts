@@ -251,7 +251,7 @@ export async function saveUserProfile(
       };
       if (record.last_active_view !== undefined) profilePayload.last_active_view = record.last_active_view;
       if (record.keep_session !== undefined) profilePayload.keep_session = record.keep_session;
-      if (record.welcome_email_sent !== undefined) profilePayload.welcome_email_sent = record.welcome_email_sent;
+      if (record.welcome_email_sent === true) profilePayload.welcome_email_sent = true;
 
       const { error } = await supabase.from('profiles').upsert(profilePayload);
       if (error) {

@@ -8,5 +8,7 @@
 ALTER TABLE public.profiles 
 ADD COLUMN IF NOT EXISTS welcome_email_sent BOOLEAN DEFAULT false;
 
--- 2. (Opcional) Si no deseas que usuarios activos antiguos reciban el correo de bienvenida al entrar:
--- UPDATE public.profiles SET welcome_email_sent = true WHERE last_sign_in_at IS NOT NULL;
+-- 2. Marcar a todos los usuarios existentes como ya notificados para que no reciban bienvenida al iniciar sesión
+UPDATE public.profiles
+SET welcome_email_sent = true
+WHERE COALESCE(welcome_email_sent, false) = false;

@@ -773,7 +773,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         {/* Security Footer Notice */}
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 pt-2 border-t border-white/10">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Datos cifrados de extremo a extremo y soporte offline</span>
+          <span>Conexión cifrada y sincronización en tiempo real en la nube</span>
         </div>
       </div>
 
