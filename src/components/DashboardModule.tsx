@@ -49,13 +49,13 @@ import { formatCurrencyVE } from '../utils/numberFormat.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { Skeleton } from './ui/Skeleton.tsx';
-import { updatePreference, getUserPreferences } from '../lib/profilePreferences.ts';
+import { updatePreference, getUserPreferences, patchDashboardWidgets } from '../lib/profilePreferences.ts';
+import { getActiveUserId } from '../lib/supabaseSession.ts';
 import {
-  getActiveUserId,
   DEFAULT_CATEGORY_COLOR_MAP,
   DEFAULT_CATEGORY_COLOR_BY_NAME,
   PALETTE_COLORS,
-} from '../lib/db.ts';
+} from '../constants/finance.ts';
 import { logger } from '../utils/logger.ts';
 
 interface DashboardModuleProps {
@@ -142,15 +142,8 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
   const [dashFortnight, setDashFortnight] = useState<'q1' | 'q2'>(() => (today.getDate() <= 15 ? 'q1' : 'q2'));
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState<boolean>(() => {
-    try {
-      if (!currentUserId) return false;
-      return (
-        localStorage.getItem(`lanitapp_onboarding_completed_${currentUserId}`) === 'true' ||
-        localStorage.getItem(`lanitapp_onboarding_banner_dismissed_${currentUserId}`) === 'true'
-      );
-    } catch {
-      return false;
-    }
+    const raw = initialWidgets as unknown as Record<string, unknown> | null | undefined;
+    return Boolean(raw?.onboarding_completed || raw?.onboarding_banner_dismissed);
   });
 
   // Load custom widget preferences from Supabase profiles (with fallback to DEFAULT_WIDGETS)
@@ -165,6 +158,10 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
   useEffect(() => {
     if (initialWidgets && typeof initialWidgets === 'object') {
       setWidgets((prev) => ({ ...prev, ...initialWidgets }));
+      const raw = initialWidgets as unknown as Record<string, unknown>;
+      if (raw.onboarding_completed || raw.onboarding_banner_dismissed) {
+        setIsOnboardingDismissed(true);
+      }
     }
   }, [initialWidgets]);
 
@@ -175,6 +172,10 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
       getUserPreferences(effectiveUserId).then((prefs) => {
         if (prefs?.dashboard_widgets && typeof prefs.dashboard_widgets === 'object') {
           setWidgets((prev) => ({ ...prev, ...prefs.dashboard_widgets }));
+          const raw = prefs.dashboard_widgets as unknown as Record<string, unknown>;
+          if (raw.onboarding_completed || raw.onboarding_banner_dismissed) {
+            setIsOnboardingDismissed(true);
+          }
         }
       });
     }
@@ -664,7 +665,10 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
               type="button"
               onClick={() => {
                 setIsOnboardingDismissed(true);
-                if (currentUserId) localStorage.setItem(`lanitapp_onboarding_banner_dismissed_${currentUserId}`, 'true');
+                const effectiveUserId = currentUserId || getActiveUserId();
+                if (effectiveUserId) {
+                  void patchDashboardWidgets(effectiveUserId, { onboarding_banner_dismissed: true });
+                }
               }}
               className="px-3 py-1.5 rounded-xl text-xs font-semibold text-muted hover:text-app cursor-pointer transition-colors"
             >

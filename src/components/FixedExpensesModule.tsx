@@ -22,14 +22,6 @@ import type {
   ExchangeRatesData,
   FixedExpensePaymentMode,
 } from '../types/index.ts';
-import {
-  saveFixedExpense,
-  deleteFixedExpense,
-  toggleMonthlyFixedOverride,
-  saveVariableExpense,
-  deleteVariableExpense,
-  saveAccount,
-} from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { formatCurrencyVE } from '../utils/numberFormat.ts';
@@ -124,6 +116,14 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
   onChangePeriod,
   rates,
 }) => {
+  const {
+    saveFixedExpense,
+    deleteFixedExpense,
+    toggleMonthlyFixedOverride,
+    saveVariableExpense,
+    deleteVariableExpense,
+    saveAccount,
+  } = useFinanceStore();
   const [activeTab, setActiveTab] = useState<'fixed' | 'variable'>('fixed');
 
   const bcvUsd = rates?.bcvDollar && rates.bcvDollar > 0 ? rates.bcvDollar : 1;
@@ -351,22 +351,7 @@ export const FixedExpensesModule: React.FC<FixedExpensesModuleProps> = ({
     setOptimisticStatus((prev) => ({ ...prev, [id]: newStatus }));
 
     try {
-      const record = await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, newStatus);
-      useFinanceStore.setState((state) => {
-        const overrides = [...state.monthlyFixedOverrides];
-        const idx = overrides.findIndex(
-          (o) =>
-            (o.fixed_expense_id === id || (o as any).expense_id === id) &&
-            o.year === selectedYear &&
-            o.month === selectedMonth
-        );
-        if (idx >= 0) {
-          overrides[idx] = record;
-        } else {
-          overrides.push(record);
-        }
-        return { monthlyFixedOverrides: overrides };
-      });
+      await toggleMonthlyFixedOverride(id, selectedYear, selectedMonth, newStatus);
       logger.dev(`[FIXED EXPENSE] Pausa toggled para gasto ${id}: ${newStatus}`);
     } catch (error) {
       // Revertir estado si ocurre error

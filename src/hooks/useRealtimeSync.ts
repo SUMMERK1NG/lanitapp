@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { useFinanceStore, type RealtimeSyncStatus } from '../stores/useFinanceStore.ts';
-import { pushPendingLocalRecords } from '../lib/db.ts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { logger } from '../utils/logger.ts';
 
@@ -14,11 +13,13 @@ export const SYNCED_TABLES = [
   'variable_incomes',
   'fixed_expenses',
   'monthly_fixed_overrides',
+  'variable_expenses',
   'debts',
   'debt_payments',
   'savings_goals',
   'saving_contributions',
   'fortnight_item_states',
+  'planning_notes',
   'transactions',
 ] as const;
 
@@ -35,7 +36,7 @@ export function useRealtimeSync(userId: string | null) {
     setSyncStatus,
     fetchInitialData,
     handleRealtimePayload,
-    loadFromLocalCache,
+    flushSyncQueue,
   } = useFinanceStore();
 
   const isSyncing = syncStatus === 'syncing';
@@ -44,8 +45,8 @@ export function useRealtimeSync(userId: string | null) {
   const syncNow = useCallback(async () => {
     if (!userId || !navigator.onLine) return;
     await fetchInitialData(userId);
-    await pushPendingLocalRecords(userId);
-  }, [userId, fetchInitialData]);
+    await flushSyncQueue(userId);
+  }, [userId, fetchInitialData, flushSyncQueue]);
 
   // Online / Offline Detection
   useEffect(() => {
@@ -54,7 +55,7 @@ export function useRealtimeSync(userId: string | null) {
       if (userId) {
         setSyncStatus('syncing');
         fetchInitialData(userId)
-          .then(() => pushPendingLocalRecords(userId))
+          .then(() => flushSyncQueue(userId))
           .catch(() => {});
       }
     };
@@ -75,7 +76,7 @@ export function useRealtimeSync(userId: string | null) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [userId, setSyncStatus, fetchInitialData]);
+  }, [userId, setSyncStatus, fetchInitialData, flushSyncQueue]);
 
   // Initial Load & Realtime Subscriptions
   useEffect(() => {
@@ -86,19 +87,16 @@ export function useRealtimeSync(userId: string | null) {
 
     let isMounted = true;
 
-    // 1. Carga inmediata desde Dexie (IndexedDB) para no bloquear UI
-    loadFromLocalCache(userId);
-
     if (!isOnline || !isSupabaseConfigured() || !supabase) {
       setSyncStatus('offline');
       return;
     }
 
-    // 2. Fetch inicial completo desde Supabase y empuje automático de pendientes
+    // 1. Fetch inicial completo desde Supabase y empuje de cola en memoria si existe
     fetchInitialData(userId)
       .then(() => {
         if (isMounted) {
-          pushPendingLocalRecords(userId).catch(() => {});
+          flushSyncQueue(userId).catch(() => {});
         }
       })
       .catch((err) => {
@@ -106,7 +104,7 @@ export function useRealtimeSync(userId: string | null) {
         if (isMounted) setSyncStatus('error');
       });
 
-    // 3. Crear Canal Realtime Unificado para las 14 tablas oficiales
+    // 2. Crear Canal Realtime Unificado para las 16 tablas oficiales
     const channelName = `realtime-sync-${userId}-${Math.random().toString(36).substring(2, 7)}`;
     let channel = supabase.channel(channelName);
 
@@ -133,10 +131,10 @@ export function useRealtimeSync(userId: string | null) {
 
     channelRef.current = channel;
 
-    // 4. Sincronizador automático en segundo plano periódico (cada 45s)
+    // 3. Reintento periódico en memoria si quedó algo pendiente en cola
     const autoSyncInterval = setInterval(() => {
       if (navigator.onLine && userId) {
-        pushPendingLocalRecords(userId).catch(() => {});
+        flushSyncQueue(userId).catch(() => {});
       }
     }, 45000);
 
@@ -149,7 +147,7 @@ export function useRealtimeSync(userId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [userId, isOnline, fetchInitialData, handleRealtimePayload, loadFromLocalCache, setSyncStatus]);
+  }, [userId, isOnline, fetchInitialData, handleRealtimePayload, flushSyncQueue, setSyncStatus]);
 
   const syncStatusInfo = {
     connected: { label: 'Al día', color: 'green', icon: '🟢' },

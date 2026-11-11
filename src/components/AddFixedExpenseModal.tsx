@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Receipt, ChevronDown } from 'lucide-react';
 import type { FixedExpense, Category, ExchangeRatesData, FixedExpensePaymentMode } from '../types/index.ts';
-import { saveFixedExpense } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
@@ -31,6 +31,7 @@ export const AddFixedExpenseModal: React.FC<AddFixedExpenseModalProps> = ({
   rates,
   onSaved,
 }) => {
+  const saveFixedExpense = useFinanceStore((s) => s.saveFixedExpense);
   const [fixedName, setFixedName] = useState<string>('');
   const [fixedAmount, setFixedAmount] = useState<number>(0);
   const [fixedPaymentMode, setFixedPaymentMode] = useState<FixedExpensePaymentMode>('ves_bcv');

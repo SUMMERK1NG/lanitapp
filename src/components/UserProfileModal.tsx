@@ -20,7 +20,7 @@ import {
 import { isSuperAdmin, type UserProfile, type ThemeMode, type AccentColor } from '../types/index.ts';
 import { THEME_MODE_OPTIONS, ACCENT_COLOR_OPTIONS } from '../hooks/useTheme.ts';
 import { evaluatePasswordStrength } from './AuthScreen.tsx';
-import { saveUserProfile } from '../lib/db.ts';
+import { saveUserProfile } from '../lib/profilePreferences.ts';
 import { supabase } from '../lib/supabase.ts';
 import { logger } from '../utils/logger.ts';
 import { SignOutConfirmModal } from './SignOutConfirmModal.tsx';

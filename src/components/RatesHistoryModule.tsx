@@ -103,26 +103,12 @@ export const RatesHistoryModule: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Fetch historical data with localStorage cache
+  // Fetch historical data directly online from API
   const fetchHistoricalData = async (rateType: RateTypeOption) => {
     const config = RATE_OPTIONS.find((r) => r.id === rateType);
     if (!config) return;
 
-    const cacheKey = `lanitapp_hist_${rateType}`;
-    const cached = localStorage.getItem(cacheKey);
-
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setHistoryData((prev) => ({ ...prev, [rateType]: parsed }));
-        }
-      } catch (e) {
-        logger.warn('Error reading history cache', e);
-      }
-    }
-
-    if (!navigator.onLine && cached) return;
+    if (!navigator.onLine) return;
 
     setIsLoading(true);
     try {
@@ -133,7 +119,6 @@ export const RatesHistoryModule: React.FC = () => {
           // Sort by date ascending
           const sorted = [...data].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
           setHistoryData((prev) => ({ ...prev, [rateType]: sorted }));
-          localStorage.setItem(cacheKey, JSON.stringify(sorted));
         }
       }
     } catch (err) {

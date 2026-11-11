@@ -331,6 +331,9 @@ export interface SavingContribution {
   is_skipped: boolean; // Si el usuario omitió este periodo por imprevisto
   contribution_date: string;
   notes?: string;
+  source_type?: 'account' | 'variable_income';
+  source_income_id?: string;
+  source_account_id?: string;
   sync_status: SyncStatus;
   created_at?: string;
 }

@@ -27,19 +27,9 @@ export const ACCENT_COLOR_OPTIONS: { name: string; color: AccentColor; bgClass: 
 ];
 
 export function useTheme() {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-    if (typeof localStorage !== 'undefined') {
-      return (localStorage.getItem('lanitapp_theme_mode') as ThemeMode) || 'navy';
-    }
-    return 'navy';
-  });
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('navy');
 
-  const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
-    if (typeof localStorage !== 'undefined') {
-      return (localStorage.getItem('lanitapp_accent_color') as AccentColor) || '#147DF0';
-    }
-    return '#147DF0';
-  });
+  const [accentColor, setAccentColorState] = useState<AccentColor>('#147DF0');
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -107,14 +97,9 @@ export function useTheme() {
     applyTheme(themeMode, accentColor);
   }, [themeMode, accentColor]);
 
-  // Actualizar tema con sincronización a Supabase y caché de respaldo
+  // Actualizar tema con sincronización directa a Supabase profiles
   const setThemeMode = useCallback(async (mode: ThemeMode) => {
     setThemeModeState(mode);
-
-    // Caché rápido local para respuesta visual inmediata
-    try {
-      localStorage.setItem('lanitapp_theme_mode', mode);
-    } catch {}
 
     // Persistir en Supabase profiles
     try {
@@ -129,14 +114,9 @@ export function useTheme() {
     }
   }, []);
 
-  // Actualizar color de acento con sincronización a Supabase y caché de respaldo
+  // Actualizar color de acento con sincronización directa a Supabase profiles
   const setAccentColor = useCallback(async (color: AccentColor) => {
     setAccentColorState(color);
-
-    // Caché rápido local para respuesta visual inmediata
-    try {
-      localStorage.setItem('lanitapp_accent_color', color);
-    } catch {}
 
     // Persistir en Supabase profiles
     try {

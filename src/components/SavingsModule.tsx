@@ -18,7 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import type { SavingsGoal, SavingContribution, FortnightType, Account } from '../types/index.ts';
-import { saveSavingsGoal, deleteSavingsGoal, addSavingContribution } from '../lib/db.ts';
+import { getLocalTodayString } from '../utils/date.ts';
 import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 
@@ -40,7 +40,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   accounts = [],
   currency = '$',
 }) => {
-  const { accounts: storeAccounts } = useFinanceStore();
+  const { accounts: storeAccounts, saveSavingsGoal, deleteSavingsGoal, addSavingContribution } = useFinanceStore();
   const availableAccounts = accounts && accounts.length > 0 ? accounts : storeAccounts;
 
   // Modal states
@@ -64,7 +64,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
   const [frequency, setFrequency] = useState<'fortnightly' | 'monthly'>('fortnightly');
   const [targetFortnight, setTargetFortnight] = useState<15 | 30 | null>(null);
   const [amountPerPeriod, setAmountPerPeriod] = useState<number>(0);
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState<string>(() => getLocalTodayString());
   const [targetDate, setTargetDate] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isStartPeriodDropdownOpen, setIsStartPeriodDropdownOpen] = useState<boolean>(false);
@@ -94,7 +94,7 @@ export const SavingsModule: React.FC<SavingsModuleProps> = ({
     return { fortnightNumber, label, day, monthName, year };
   };
 
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayStr = getLocalTodayString();
 
   // Cambio de frecuencia con reseteo de quincena objetivo
   const handleFrequencyChange = (newFreq: 'fortnightly' | 'monthly') => {

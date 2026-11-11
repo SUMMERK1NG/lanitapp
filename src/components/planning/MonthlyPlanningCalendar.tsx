@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Calendar as CalendarIcon,
   List,
@@ -27,11 +26,10 @@ import type {
   ExchangeRatesData,
   FortnightType,
 } from '../../types/index.ts';
-import {
-  db,
-  setFortnightExpensePaid,
-  unmarkFortnightExpensePaid,
-} from '../../lib/db.ts';
+import { useFinanceStore } from '../../stores/useFinanceStore.ts';
+import { getPlanningNoteUuid } from '../../lib/supabasePayloads.ts';
+import { parseLocalDate } from '../../utils/date.ts';
+import { ensureValidUuid } from '../../utils/uuid.ts';
 import { MonthPicker } from '../MonthPicker.tsx';
 import { CalendarMonthlySidebar, type CalendarFilterType } from './CalendarMonthlySidebar.tsx';
 import { CalendarDayDetailModal, type CalendarDayItem } from './CalendarDayDetailModal.tsx';
@@ -90,12 +88,17 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
   const [selectedDayForModal, setSelectedDayForModal] = useState<number | null>(null);
   const [selectedDayInline, setSelectedDayInline] = useState<number>(15);
 
-  // Live queries for reactive updates
-  const allFortnightStates = useLiveQuery(() => db.fortnight_item_states.toArray(), []) || [];
-  const planningNote = useLiveQuery(
-    () => db.planning_notes.get(`pn_${userId || ''}_${selectedYear}_${selectedMonth}`),
-    [userId, selectedYear, selectedMonth]
-  );
+  // Live state from Zustand + Supabase
+  const allFortnightStates = useFinanceStore((s) => s.fortnightItemStates);
+  const planningNotes = useFinanceStore((s) => s.planningNotes);
+  const setFortnightExpensePaid = useFinanceStore((s) => s.setFortnightExpensePaid);
+  const unmarkFortnightExpensePaid = useFinanceStore((s) => s.unmarkFortnightExpensePaid);
+  const planningNote = useMemo(() => {
+    const targetId = userId ? getPlanningNoteUuid(userId, selectedYear, selectedMonth) : '';
+    return planningNotes.find(
+      (n) => (targetId && n.id === targetId) || (n.year === selectedYear && n.month === selectedMonth)
+    );
+  }, [planningNotes, userId, selectedYear, selectedMonth]);
 
   const monthName = MONTH_NAMES[selectedMonth];
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
@@ -143,8 +146,10 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
       targetDays.forEach((targetDay) => {
         const fortnight: FortnightType = targetDay <= 15 ? 'q1' : 'q2';
         const periodKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${fortnight === 'q1' ? '15' : '30'}`;
-        const stateId = `fixed_expense_${exp.id}_${periodKey}`;
-        const state = allFortnightStates.find((s) => s.id === stateId);
+        const cleanExpId = ensureValidUuid(exp.id);
+        const state = allFortnightStates.find(
+          (s) => (s.item_id === exp.id || s.item_id === cleanExpId) && s.period_key === periodKey
+        );
         const isPaid = state?.status === 'paid';
         const isSkipped = state?.status === 'skipped';
 
@@ -179,7 +184,7 @@ export const MonthlyPlanningCalendar: React.FC<MonthlyPlanningCalendarProps> = (
       let targetDay = debt.due_day;
 
       if (!targetDay && debt.due_date) {
-        const parsedDate = new Date(debt.due_date);
+        const parsedDate = parseLocalDate(debt.due_date);
         if (!isNaN(parsedDate.getTime())) {
           targetDay = parsedDate.getDate();
         }

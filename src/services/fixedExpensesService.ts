@@ -1,14 +1,11 @@
 /**
  * Servicio centralizado para la gestión de Gastos Fijos y Overrides mensuales.
+ * Delega 100% al store en línea (Zustand + Supabase).
  */
 
-import {
-  toggleMonthlyFixedOverride,
-  saveFixedExpense,
-  deleteFixedExpense,
-} from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { logger } from '../utils/logger.ts';
-import type { MonthlyFixedOverride } from '../types/index.ts';
+import type { FixedExpense, MonthlyFixedOverride } from '../types/index.ts';
 
 /**
  * Pausar o activar un gasto fijo para un mes y año determinados.
@@ -27,10 +24,14 @@ export async function toggleFixedExpensePause(
   const targetMonth = month !== undefined ? month : new Date().getMonth();
   const isActive = !isPaused;
 
-  logger.dev(`[FIXED EXPENSE SERVICE] ${isPaused ? 'Pausando' : 'Activando'} gasto fijo ${expenseId} para ${targetYear}-${targetMonth + 1}`);
+  logger.dev(
+    `[FIXED EXPENSE SERVICE] ${isPaused ? 'Pausando' : 'Activando'} gasto fijo ${expenseId} para ${targetYear}-${targetMonth + 1}`
+  );
 
   try {
-    return await toggleMonthlyFixedOverride(expenseId, targetYear, targetMonth, isActive);
+    return await useFinanceStore
+      .getState()
+      .toggleMonthlyFixedOverride(expenseId, targetYear, targetMonth, isActive);
   } catch (error: any) {
     logger.error('[FIXED EXPENSE PAUSE ERROR]:', {
       message: error?.message || 'Error desconocido al actualizar override',
@@ -45,8 +46,30 @@ export async function toggleFixedExpensePause(
   }
 }
 
-export {
-  toggleMonthlyFixedOverride,
-  saveFixedExpense,
-  deleteFixedExpense,
-};
+export function toggleMonthlyFixedOverride(
+  expenseId: string,
+  year: number,
+  month: number,
+  isActive: boolean,
+  customAmount?: number,
+  notes?: string
+): Promise<MonthlyFixedOverride> {
+  return useFinanceStore
+    .getState()
+    .toggleMonthlyFixedOverride(expenseId, year, month, isActive, customAmount, notes);
+}
+
+export function saveFixedExpense(
+  expense: Partial<FixedExpense> & {
+    name: string;
+    amount: number;
+    default_fortnight: 'q1' | 'q2' | 'both';
+  },
+  userId?: string
+): Promise<FixedExpense> {
+  return useFinanceStore.getState().saveFixedExpense(expense, userId);
+}
+
+export function deleteFixedExpense(id: string, userId?: string): Promise<void> {
+  return useFinanceStore.getState().deleteFixedExpense(id, userId);
+}

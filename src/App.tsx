@@ -1,14 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, lazy, Suspense, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import {
-  db,
-  addTransaction,
-  DEFAULT_CATEGORIES,
-  seedUserDefaultCategories,
-  migrateLocalDataToCloud,
-  subscribeToRealtimeChanges,
-} from './lib/db.ts';
-import { useNetworkStatus } from './hooks/useNetworkStatus.ts';
+import { DEFAULT_CATEGORIES } from './constants/finance.ts';
+import { setAuthFlashError } from './lib/authFlash.ts';
 import { useRealtimeSync } from './hooks/useRealtimeSync.ts';
 import { useExchangeRates } from './hooks/useExchangeRates.ts';
 import { useTheme } from './hooks/useTheme.ts';
@@ -41,7 +33,7 @@ import { CurrencyConverterModal } from './components/CurrencyConverterModal.tsx'
 import { UserProfileModal } from './components/UserProfileModal.tsx';
 import { ResetPasswordModal } from './components/ResetPasswordModal.tsx';
 import { CompleteCedulaModal } from './components/CompleteCedulaModal.tsx';
-import { GuidedOnboardingModal } from './components/GuidedOnboardingModal.tsx';
+import { GuidedOnboardingModal, isOnboardingSkippedInSession } from './components/GuidedOnboardingModal.tsx';
 import { SignOutConfirmModal } from './components/SignOutConfirmModal.tsx';
 import { TransactionModal } from './components/TransactionModal.tsx';
 import { QuickActionModal } from './components/QuickActionModal.tsx';
@@ -49,7 +41,12 @@ import { AddVariableIncomeModal } from './components/AddVariableIncomeModal.tsx'
 import { AddFixedExpenseModal } from './components/AddFixedExpenseModal.tsx';
 import { AddVariableExpenseModal } from './components/AddVariableExpenseModal.tsx';
 import { AddPaymentModal } from './components/AddPaymentModal.tsx';
-import { NotificationCenterModal, computeSystemNotifications, getDismissedAlertIds } from './components/NotificationCenterModal.tsx';
+import {
+  NotificationCenterModal,
+  computeSystemNotifications,
+  getDismissedAlertIds,
+  hydrateDismissedAlertIds,
+} from './components/NotificationCenterModal.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { PullToRefresh } from './components/PullToRefresh.tsx';
 import { Skeleton } from './components/ui/Skeleton.tsx';
@@ -128,18 +125,28 @@ const ViewLoadingFallback: React.FC = () => (
 );
 
 export function App() {
-  const [activeView, setActiveView] = useState<ActiveViewType>(() => {
-    try {
-      const saved = localStorage.getItem('lanitapp_last_active_view') as ActiveViewType;
-      if (saved && AVAILABLE_VIEWS.includes(saved)) return saved;
-    } catch {}
-    return 'dashboard';
-  });
+  const [activeView, setActiveView] = useState<ActiveViewType>('dashboard');
 
   const mainScrollRef = useRef<HTMLElement>(null);
   const isSidebarCollapsed = useFinanceStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useFinanceStore((state) => state.toggleSidebar);
   const isStoreLoading = useFinanceStore((state) => state.isLoading);
+  const addTransaction = useFinanceStore((state) => state.addTransaction);
+  const storeProfiles = useFinanceStore((state) => state.profiles);
+  const storeCategories = useFinanceStore((state) => state.categories);
+  const liveAccounts = useFinanceStore((state) => state.accounts);
+  const liveFixedIncomes = useFinanceStore((state) => state.fixedIncomes);
+  const liveMonthlyIncomeOverrides = useFinanceStore((state) => state.monthlyIncomeOverrides);
+  const liveVariableIncomes = useFinanceStore((state) => state.variableIncomes);
+  const liveFixedExpenses = useFinanceStore((state) => state.fixedExpenses);
+  const liveMonthlyOverrides = useFinanceStore((state) => state.monthlyFixedOverrides);
+  const liveVariableExpenses = useFinanceStore((state) => state.variableExpenses);
+  const liveDebts = useFinanceStore((state) => state.debts);
+  const liveDebtPayments = useFinanceStore((state) => state.debtPayments);
+  const liveSavingsGoals = useFinanceStore((state) => state.savingsGoals);
+  const liveSavingContributions = useFinanceStore((state) => state.savingContributions);
+  const liveTransactions = useFinanceStore((state) => state.transactions);
+  const syncQueue = useFinanceStore((state) => state.syncQueue);
 
   // Authentication hook
   const {
@@ -161,9 +168,6 @@ export function App() {
 
   const handleViewChange = useCallback((newView: ActiveViewType) => {
     setActiveView(newView);
-    try {
-      localStorage.setItem('lanitapp_last_active_view', newView);
-    } catch {}
     if (currentUser?.id) {
       updateProfile({ last_active_view: newView }).catch(() => {});
     }
@@ -229,49 +233,25 @@ export function App() {
   }, [currentUser?.theme_mode, currentUser?.accent_color]);
 
   // Sesión persistente / Inactividad (declarado antes de efectos para evitar TDZ)
-  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('lanitapp_keep_connected') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [keepConnected, setKeepConnected] = useState<boolean>(false);
+  const [notifRevision, setNotifRevision] = useState<number>(0);
 
   // Synchronize all user preferences from Supabase profiles on login or session restore
   useEffect(() => {
     if (currentUser?.id) {
-      try {
-        const localSaved = localStorage.getItem('lanitapp_last_active_view');
-        if (!localSaved && currentUser.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
-          setActiveView(currentUser.last_active_view as ActiveViewType);
-        }
-      } catch {}
+      if (currentUser.last_active_view && AVAILABLE_VIEWS.includes(currentUser.last_active_view as ActiveViewType)) {
+        setActiveView(currentUser.last_active_view as ActiveViewType);
+      }
       if (currentUser.keep_session !== undefined) {
         setKeepConnected(currentUser.keep_session);
-      }
-
-      // Inicializar categorías individuales para el usuario si no han sido sembradas aún
-      const catFlag = 'lanitapp_cat_seeded_' + currentUser.id;
-      if (!localStorage.getItem(catFlag)) {
-        seedUserDefaultCategories(currentUser.id).then((seeded) => {
-          try {
-            localStorage.setItem(catFlag, 'true');
-            if (seeded && seeded.length > 0) {
-              useFinanceStore.getState().loadFromLocalCache(currentUser.id);
-            }
-          } catch {}
-        });
       }
 
       // Fetch fresh preferences from profiles in Supabase
       getUserPreferences(currentUser.id).then((prefs) => {
         if (prefs) {
-          try {
-            const localSaved = localStorage.getItem('lanitapp_last_active_view');
-            if (!localSaved && prefs.last_active_view && AVAILABLE_VIEWS.includes(prefs.last_active_view as ActiveViewType)) {
-              setActiveView(prefs.last_active_view as ActiveViewType);
-            }
-          } catch {}
+          if (prefs.last_active_view && AVAILABLE_VIEWS.includes(prefs.last_active_view as ActiveViewType)) {
+            setActiveView(prefs.last_active_view as ActiveViewType);
+          }
           if (prefs.keep_session !== undefined) {
             setKeepConnected(prefs.keep_session);
           }
@@ -285,6 +265,20 @@ export function App() {
       });
     }
   }, [currentUser?.id]);
+
+  // Hidratar alertas descartadas desde profiles.dashboard_widgets en Supabase
+  useEffect(() => {
+    const profileWidgets = (storeProfiles[0] as any)?.dashboard_widgets;
+    if (profileWidgets?.dismissed_notifications) {
+      hydrateDismissedAlertIds(profileWidgets.dismissed_notifications);
+    }
+  }, [storeProfiles]);
+
+  useEffect(() => {
+    const onNotifUpdated = () => setNotifRevision((n) => n + 1);
+    window.addEventListener('lanitapp_alerts_dismissed', onNotifUpdated);
+    return () => window.removeEventListener('lanitapp_alerts_dismissed', onNotifUpdated);
+  }, []);
 
   // Realtime subscription for preferences synchronization across multiple devices
   useEffect(() => {
@@ -399,9 +393,7 @@ export function App() {
     ) {
       setIsResetPasswordModalOpen(false);
       const msg = 'El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
-      try {
-        sessionStorage.setItem('lanitapp_auth_flash_error', msg);
-      } catch {}
+      setAuthFlashError(msg);
       try {
         window.history.replaceState(null, '', window.location.origin + window.location.pathname);
       } catch {}
@@ -437,60 +429,20 @@ export function App() {
   // Current active user ID
   const activeUserId = currentUser?.id || '';
 
-  // Realtime Sync & Exchange Rate hooks
+  // Realtime Sync & Exchange Rate hooks (Zustand + Supabase 100% en línea)
   const { isOnline, isSyncing, syncStatus, lastSyncTime, syncNow } = useRealtimeSync(activeUserId);
-  const { lastSyncResult } = useNetworkStatus();
   const { rates, loading: ratesLoading, isRefreshing: ratesRefreshing, refreshRates } = useExchangeRates();
-  // Cloud-First Initial Consolidation & Realtime Subscriptions
-  useEffect(() => {
-    if (!activeUserId) return;
 
-    // 1. Migrar datos locales previos (si existen) y consolidar desde Supabase Cloud en segundo plano
-    migrateLocalDataToCloud(activeUserId).catch((e) =>
-      logger.error('Cloud migration error:', e)
-    );
-
-    // 2. Realtime listener para sincronización cruzada instantánea
-    const unsubscribe = subscribeToRealtimeChanges(activeUserId);
-
-    return () => {
-      unsubscribe();
-    };
-  }, [activeUserId]);
-
-  const liveTransactions = useLiveQuery(() => db.transactions.toArray(), []) || [];
-  const liveCategories = useLiveQuery(
-    () => {
-      if (!activeUserId) return db.categories.toArray();
-      return db.categories
-        .filter((c) => !c.user_id || c.user_id === activeUserId)
-        .toArray();
-    },
-    [activeUserId]
-  ) || [];
-  const liveAccounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
-  const liveFixedIncomes = useLiveQuery(() => db.fixed_incomes.toArray(), []) || [];
-  const liveMonthlyIncomeOverrides = useLiveQuery(() => db.monthly_fixed_income_overrides.toArray(), []) || [];
-  const liveVariableIncomes = useLiveQuery(() => db.variable_incomes.toArray(), []) || [];
-  const liveFixedExpenses = useLiveQuery(() => db.fixed_expenses.toArray(), []) || [];
-  const liveMonthlyOverrides = useLiveQuery(() => db.monthly_fixed_overrides.toArray(), []) || [];
-  const liveVariableExpenses = useLiveQuery(() => db.variable_expenses.toArray(), []) || [];
-  const liveDebts = useLiveQuery(() => db.debts.toArray(), []) || [];
-  const liveDebtPayments = useLiveQuery(() => db.debt_payments.toArray(), []) || [];
-  const liveSavingsGoals = useLiveQuery(() => db.savings_goals.toArray(), []) || [];
-  const liveSavingContributions = useLiveQuery(() => db.saving_contributions.toArray(), []) || [];
-
-  // Categorías individuales por usuario
+  // Categorías individuales por usuario desde Zustand + Supabase
   const categories: Category[] = useMemo(() => {
-    const userCategories = liveCategories.filter((c) => c.user_id === activeUserId);
-    const fallbackCategories = liveCategories.filter((c) => !c.user_id);
-    const hasUserCustom = activeUserId ? Boolean(localStorage.getItem('lanitapp_cat_seeded_' + activeUserId)) : false;
-    return userCategories.length > 0 || hasUserCustom
+    const userCategories = storeCategories.filter((c) => c.user_id === activeUserId);
+    const fallbackCategories = storeCategories.filter((c) => !c.user_id);
+    return userCategories.length > 0
       ? userCategories
       : fallbackCategories.length > 0
       ? fallbackCategories
       : DEFAULT_CATEGORIES;
-  }, [liveCategories, activeUserId]);
+  }, [storeCategories, activeUserId]);
 
   // SEGURIDAD: Validación estricta. Ambos IDs deben existir y coincidir exactamente para evitar filtración de datos entre usuarios.
   const isUserMatch = useCallback(
@@ -535,21 +487,19 @@ export function App() {
         return;
       }
 
-      // 2. Si el usuario ya completó el asistente de bienvenida, no volver a abrirlo automáticamente
-      const hasCompleted = localStorage.getItem(`lanitapp_onboarding_completed_${currentUser.id}`) === 'true';
+      // 2. Si el usuario ya completó el asistente de bienvenida en Supabase, no volver a abrirlo automáticamente
+      const hasCompleted = Boolean((storeProfiles[0] as any)?.dashboard_widgets?.onboarding_completed);
       if (hasCompleted) return;
 
       // 3. Si el usuario aún no tiene cuentas ni ingresos ni gastos registrados en su perfil (cuenta en blanco)
       const hasFinancialData = accounts.length > 0 || fixedIncomes.length > 0 || fixedExpenses.length > 0;
       if (!hasFinancialData) {
-        // Verificar si solo se omitió temporalmente en esta sesión activa específica
-        const isSkippedInThisSession = sessionStorage.getItem(`lanitapp_onboarding_skipped_${currentUser.id}`) === 'true';
-        if (!isSkippedInThisSession) {
+        if (!isOnboardingSkippedInSession(currentUser.id)) {
           setIsOnboardingOpen(true);
         }
       }
     }
-  }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length, fixedExpenses.length]);
+  }, [currentUser?.id, isStoreLoading, authLoading, accounts.length, fixedIncomes.length, fixedExpenses.length, storeProfiles]);
 
   // Unread system notifications count for badge indicators (prioriza alertas urgentes de alta prioridad)
   const unreadNotificationsCount = useMemo(() => {
@@ -560,11 +510,12 @@ export function App() {
     } catch {
       return 0;
     }
-  }, [debts, fixedExpenses, selectedYear, selectedMonth, fixedIncomes, variableIncomes, variableExpenses]);
+  }, [debts, fixedExpenses, selectedYear, selectedMonth, fixedIncomes, variableIncomes, variableExpenses, notifRevision]);
 
-  // Pending sync count
+  // Pending sync count (cola en memoria en caso de pérdida temporal de red)
   const pendingCount = useMemo(() => {
     return (
+      syncQueue.length +
       transactions.filter((t) => t.sync_status === 'pending').length +
       debts.filter((d) => d.sync_status === 'pending').length +
       fixedIncomes.filter((i) => i.sync_status === 'pending').length +
@@ -572,7 +523,7 @@ export function App() {
       fixedExpenses.filter((f) => f.sync_status === 'pending').length +
       savingsGoals.filter((s) => s.sync_status === 'pending').length
     );
-  }, [transactions, debts, fixedIncomes, variableIncomes, fixedExpenses, savingsGoals]);
+  }, [syncQueue.length, transactions, debts, fixedIncomes, variableIncomes, fixedExpenses, savingsGoals]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -691,7 +642,7 @@ export function App() {
           isSyncing={isSyncing}
           syncStatus={syncStatus}
           lastSyncTime={lastSyncTime}
-          lastSyncResult={lastSyncResult}
+          lastSyncResult={null}
           pendingCount={pendingCount}
           activeProfile={currentUser}
           debts={debts}
@@ -713,7 +664,7 @@ export function App() {
           <div className="w-full bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 flex items-center justify-center gap-2 animate-in slide-in-from-top-2">
             <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="text-xs font-medium text-amber-400 text-center">
-              Modo Offline: Mostrando últimos datos en caché. La sincronización se reanudará al recuperar la conexión.
+              Sin conexión a Internet. Reconéctate para guardar y sincronizar tus movimientos directamente en Supabase.
             </span>
           </div>
         )}

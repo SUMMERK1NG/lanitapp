@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { db } from '../lib/db.ts';
 import { logger } from '../utils/logger.ts';
 import { evaluatePasswordStrength } from './AuthScreen.tsx';
 
@@ -173,16 +172,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         if (error) throw error;
       }
 
-      const finalRole: UserRole = isSuperAdmin(editingUser) ? 'admin' : editRole;
-      await db.user_profiles.update(editingUser.id, {
-        cedula: fullCedula,
-        first_name: editFirstName.trim(),
-        last_name: editLastName.trim(),
-        name: fullName,
-        email: editEmail.trim().toLowerCase(),
-        role: finalRole,
-      });
-
       showToast('success', `Datos de ${fullName} actualizados con éxito.`);
       setEditingUser(null);
       await fetchUsers();
@@ -218,7 +207,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         if (error) throw error;
       }
 
-      await db.user_profiles.update(profile.id, { role: newRole });
       showToast('success', `Rol de ${profile.name || profile.cedula} actualizado a ${roleLabel}.`);
       await fetchUsers();
     } catch (err: any) {
@@ -361,7 +349,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({ currentU
         }
       }
 
-      await db.user_profiles.delete(deletingUser.id);
       showToast('success', `Usuario ${deletingUser.name || deletingUser.cedula} eliminado correctamente.`);
       setDeletingUser(null);
       await fetchUsers();

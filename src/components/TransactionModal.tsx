@@ -8,6 +8,7 @@ import {
 import type { Category, Account, TransactionType, FortnightType } from '../types/index.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
+import { getLocalTodayString } from '../utils/date.ts';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [description, setDescription] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [accountId, setAccountId] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalTodayString());
   const [selectedFortnight, setSelectedFortnight] = useState<FortnightType>('q1');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         description: description.trim() || (type === 'expense' ? 'Gasto' : 'Ingreso'),
         category_id: categoryId,
         account_id: accountId,
-        transaction_date: date || new Date().toISOString().split('T')[0],
+        transaction_date: date || getLocalTodayString(),
       });
 
       setAmount(0);

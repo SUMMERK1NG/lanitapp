@@ -54,7 +54,6 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
       } else if (supabase) {
         await supabase.auth.signOut().catch(() => {});
       }
-      sessionStorage.clear();
     } finally {
       onClose();
     }
@@ -122,7 +121,6 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
       } else if (supabase) {
         await supabase.auth.signOut().catch(() => {});
       }
-      sessionStorage.clear();
 
       // 4. Notificar con toast y cerrar modal
       if (onSuccessToast) {

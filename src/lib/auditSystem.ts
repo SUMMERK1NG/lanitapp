@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from './supabase.ts';
-import { db, getActiveUserId } from './db.ts';
+import { getActiveUserId } from './supabaseSession.ts';
 import { generateUuid } from '../utils/uuid.ts';
+import { getLocalTodayString } from '../utils/date.ts';
 import { logger } from '../utils/logger.ts';
 
 export interface AuditResult {
@@ -58,7 +59,7 @@ function getSafeTestPayload(
   sampleIncomeCategoryId: string | null
 ): Record<string, any> | null {
   const nowIso = new Date().toISOString();
-  const todayDate = nowIso.split('T')[0];
+  const todayDate = getLocalTodayString();
 
   switch (table) {
     case 'accounts':
@@ -80,7 +81,7 @@ function getSafeTestPayload(
         name: '__LANITAPP_AUDIT_TEMP__',
         amount: 1,
         currency: 'USD',
-        default_fortnight: 15,
+        default_fortnight: 'q1',
         category_id: sampleExpenseCategoryId,
         is_active: false,
         notes: 'Audit test row',
@@ -94,7 +95,7 @@ function getSafeTestPayload(
         name: '__LANITAPP_AUDIT_TEMP__',
         amount: 1,
         currency: 'USD',
-        default_fortnight: 15,
+        default_fortnight: 'q1',
         category_id: sampleIncomeCategoryId,
         is_active: false,
         notes: 'Audit test row',
@@ -130,11 +131,14 @@ function getSafeTestPayload(
       return {
         id: testId,
         user_id: userId,
+        name: '__LANITAPP_AUDIT_TEMP__',
         description: '__LANITAPP_AUDIT_TEMP__',
         amount: 1,
         year: 2026,
         month: 8,
+        quincena: 15,
         fortnight: 'q1',
+        month_year: '2026-09',
         currency: 'USD',
         created_at: nowIso,
       };
@@ -142,9 +146,10 @@ function getSafeTestPayload(
       return {
         id: testId,
         user_id: userId,
+        title: '2026-09',
         year: 2026,
         month: 8,
-        content: '__LANITAPP_AUDIT_TEMP__',
+        content: JSON.stringify({ notes: '__LANITAPP_AUDIT_TEMP__', tasks: [] }),
         created_at: nowIso,
       };
     default:
@@ -229,21 +234,12 @@ export const runFullAudit = async (): Promise<AuditReport> => {
   let sampleExpenseCategoryId: string | null = null;
   let sampleIncomeCategoryId: string | null = null;
   try {
-    const expenseCat = await db.categories.where('type').equals('expense').first();
-    sampleExpenseCategoryId = expenseCat?.id || null;
-    const incomeCat = await db.categories.where('type').equals('income').first();
-    sampleIncomeCategoryId = incomeCat?.id || null;
+    const { data: remoteCats } = await supabase.from('categories').select('id, type').limit(20);
+    if (remoteCats && remoteCats.length > 0) {
+      sampleExpenseCategoryId = remoteCats.find((c) => c.type === 'expense')?.id || remoteCats[0].id;
+      sampleIncomeCategoryId = remoteCats.find((c) => c.type === 'income')?.id || remoteCats[0].id;
+    }
   } catch {}
-
-  if (!sampleExpenseCategoryId || !sampleIncomeCategoryId) {
-    try {
-      const { data: remoteCats } = await supabase.from('categories').select('id, type').limit(10);
-      if (remoteCats && remoteCats.length > 0) {
-        sampleExpenseCategoryId = sampleExpenseCategoryId || remoteCats.find(c => c.type === 'expense')?.id || remoteCats[0].id;
-        sampleIncomeCategoryId = sampleIncomeCategoryId || remoteCats.find(c => c.type === 'income')?.id || remoteCats[0].id;
-      }
-    } catch {}
-  }
 
   // 3. Auditoría tabla por tabla
   for (const table of TABLES_TO_AUDIT) {

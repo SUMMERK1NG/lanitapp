@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Transaction, Category, Account } from '../types/index.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
+import { getLocalTodayString } from '../utils/date.ts';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -67,8 +68,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // Group transactions by date
   const groupedTransactions = useMemo(() => {
     const groups: { [key: string]: Transaction[] } = {};
-    const todayStr = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const todayStr = getLocalTodayString();
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = getLocalTodayString(yesterdayDate);
 
     filteredTransactions.forEach((tx) => {
       let label = tx.transaction_date;
@@ -114,7 +117,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Movimientos_LanitApp_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Movimientos_LanitApp_${getLocalTodayString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

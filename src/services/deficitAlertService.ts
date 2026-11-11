@@ -20,6 +20,9 @@ const MONTH_NAMES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+// Deduplicación en memoria durante la sesión (respaldada por tabla Supabase alert_logs)
+const _recentAlertSentAt = new Map<string, number>();
+
 /**
  * Genera sugerencias inteligentes basadas en el déficit y el balance disponible en cuentas
  */
@@ -268,17 +271,17 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
       0
     );
 
-    // Llave única para dedup de alertas (evita spamear correos repetidos)
-    const alertCycleKey = `lanitapp_deficit_alert_${currentYear}_${currentMonth}_${nextQuincena}`;
-    const lastSentLocal = localStorage.getItem(alertCycleKey);
-    if (lastSentLocal) {
-      const hours = (Date.now() - Number(lastSentLocal)) / (1000 * 60 * 60);
+    // Llave única para dedup de alertas en memoria + Supabase alert_logs (evita spamear correos repetidos)
+    const alertCycleKey = `${user.id}_${currentYear}_${currentMonth}_${nextQuincena}`;
+    const lastSentMem = _recentAlertSentAt.get(alertCycleKey);
+    if (lastSentMem) {
+      const hours = (Date.now() - lastSentMem) / (1000 * 60 * 60);
       if (hours < 48) {
         return false;
       }
     }
 
-    // Comprobar en Supabase si existe la tabla alert_logs
+    // Comprobar en Supabase si existe un envío reciente en alert_logs
     try {
       const { data: recentLogs } = await supabase
         .from('alert_logs')
@@ -289,15 +292,16 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
         .order('sent_at', { ascending: false })
         .limit(1);
 
-      if (recentLogs && recentLogs.length > 0) {
+      if (recentLogs && recentLogs.length > 0 && recentLogs[0].sent_at) {
         const lastSent = new Date(recentLogs[0].sent_at).getTime();
         const hours = (Date.now() - lastSent) / (1000 * 60 * 60);
         if (hours < 48) {
+          _recentAlertSentAt.set(alertCycleKey, lastSent);
           return false;
         }
       }
     } catch {
-      // Si la tabla no existe en Supabase aún, se continúa con la verificación local
+      // Continuar si alert_logs aún no está accesible
     }
 
     const alertData: DeficitAlert = {
@@ -319,10 +323,7 @@ export const checkAndNotifyDeficit = async (): Promise<boolean> => {
       logger.warn('Aviso: no se pudo enviar correo de déficit:', emailErr);
     }
 
-    // Registrar en local
-    try {
-      localStorage.setItem(alertCycleKey, String(Date.now()));
-    } catch {}
+    _recentAlertSentAt.set(alertCycleKey, Date.now());
 
     // Registrar en Supabase alert_logs (silencioso si la tabla no existe aún)
     try {

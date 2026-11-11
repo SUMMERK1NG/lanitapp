@@ -6,7 +6,6 @@ import {
   PiggyBank,
   Wallet,
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import type {
   PlanningNote,
   ExchangeRatesData,
@@ -14,7 +13,7 @@ import type {
   SavingContribution,
   Account,
 } from '../../types/index.ts';
-import { db } from '../../lib/db.ts';
+import { useFinanceStore } from '../../stores/useFinanceStore.ts';
 import { formatCurrencyVE } from '../../utils/numberFormat.ts';
 
 export type CalendarFilterType = 'all' | 'fixed_expenses' | 'debts' | 'pending' | 'paid';
@@ -54,11 +53,11 @@ export const CalendarMonthlySidebar: React.FC<CalendarMonthlySidebarProps> = ({
   savingContributions: propSavingContributions,
   accounts: propAccounts,
 }) => {
-  // Queries reactivas en vivo como fallback continuo
-  const liveGoals = useLiveQuery(() => db.savings_goals.toArray(), []) || [];
-  const liveContribs = useLiveQuery(() => db.saving_contributions.toArray(), []) || [];
-  const liveAccounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
-  const liveTransactions = useLiveQuery(() => db.transactions.toArray(), []) || [];
+  // Datos en tiempo real desde Zustand + Supabase
+  const liveGoals = useFinanceStore((s) => s.savingsGoals);
+  const liveContribs = useFinanceStore((s) => s.savingContributions);
+  const liveAccounts = useFinanceStore((s) => s.accounts);
+  const liveTransactions = useFinanceStore((s) => s.transactions);
 
   const savingsGoals = propSavingsGoals && propSavingsGoals.length > 0 ? propSavingsGoals : liveGoals;
   const savingContributions = propSavingContributions && propSavingContributions.length > 0 ? propSavingContributions : liveContribs;

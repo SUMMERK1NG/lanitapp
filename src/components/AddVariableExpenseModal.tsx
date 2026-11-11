@@ -8,7 +8,7 @@ import type {
   FixedExpensePaymentMode,
   FortnightType,
 } from '../types/index.ts';
-import { saveVariableExpense } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
@@ -44,6 +44,7 @@ export const AddVariableExpenseModal: React.FC<AddVariableExpenseModalProps> = (
   selectedMonth,
   onSaved,
 }) => {
+  const saveVariableExpense = useFinanceStore((s) => s.saveVariableExpense);
   const [varDescription, setVarDescription] = useState<string>('');
   const [varAmount, setVarAmount] = useState<number>(0);
   const [varPaymentMode, setVarPaymentMode] = useState<FixedExpensePaymentMode>('usd_cash');

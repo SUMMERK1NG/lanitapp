@@ -97,13 +97,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [loginCedula, setLoginCedula] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [keepConnected, setKeepConnected] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('lanitapp_keep_connected') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [keepConnected, setKeepConnected] = useState<boolean>(false);
 
   // Register form fields
   const [regPrefix, setRegPrefix] = useState<string>('V');
@@ -206,9 +200,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       ? rawNumber.toUpperCase()
       : `${loginPrefix}-${rawNumber}`;
 
-    try {
-      localStorage.setItem('lanitapp_keep_connected', keepConnected ? 'true' : 'false');
-    } catch {}
     const res = await onSignIn(fullCedula, loginPassword, keepConnected);
     setIsSubmitting(false);
 
@@ -475,11 +466,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   : 'bg-card/50 border-app hover:border-primary-custom/30'
               }`}
               onClick={() => {
-                const nextVal = !keepConnected;
-                setKeepConnected(nextVal);
-                try {
-                  localStorage.setItem('lanitapp_keep_connected', nextVal ? 'true' : 'false');
-                } catch {}
+                setKeepConnected(!keepConnected);
               }}
             >
               <div className="flex items-center gap-3 flex-1">

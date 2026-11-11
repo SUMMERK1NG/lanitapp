@@ -11,8 +11,9 @@ import {
   Activity,
 } from 'lucide-react';
 import type { Category, Account, ExchangeRatesData } from '../types/index.ts';
-import { forceCloudSyncAndPurgeResiduals } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { isSupabaseConfigured, SUPABASE_URL } from '../lib/supabase.ts';
+import { getLocalTodayString } from '../utils/date.ts';
 
 interface AdminBackupProps {
   categories: Category[];
@@ -40,6 +41,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
   const [isForcingSync, setIsForcingSync] = useState<boolean>(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const forceCloudSync = useFinanceStore((s) => s.forceCloudSync);
 
   // 1. Exportar Esquema y Configuración Global del Sistema (Exclusivo Admin)
   const handleExportSystemSchema = () => {
@@ -58,7 +60,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
           : 300000,
       },
       system_database_schema: {
-        database_engine: 'PostgreSQL 15 (Supabase Cloud) + Dexie IndexedDB Cache',
+        database_engine: 'PostgreSQL 15 (Supabase Cloud)',
         tables: [
           'profiles',
           'categories',
@@ -68,11 +70,13 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
           'variable_incomes',
           'fixed_expenses',
           'monthly_fixed_overrides',
+          'variable_expenses',
           'debts',
           'debt_payments',
           'savings_goals',
           'saving_contributions',
           'fortnight_item_states',
+          'planning_notes',
           'transactions',
         ],
       },
@@ -110,7 +114,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lanitapp_sistema_esquema_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `lanitapp_sistema_esquema_${getLocalTodayString()}.json`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -132,7 +136,7 @@ export const AdminBackup: React.FC<AdminBackupProps> = ({
     setSyncStatusMsg(null);
 
     try {
-      const result = await forceCloudSyncAndPurgeResiduals(currentUserId);
+      const result = await forceCloudSync(currentUserId);
       if (result.success) {
         setSyncStatusMsg({
           type: 'success',

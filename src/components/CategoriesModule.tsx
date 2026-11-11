@@ -8,7 +8,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { Category, TransactionType } from '../types/index.ts';
-import { saveCategory, deleteCategory, seedUserDefaultCategories, getActiveUserId } from '../lib/db.ts';
+import { getActiveUserId } from '../lib/supabaseSession.ts';
 import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 
@@ -65,6 +65,9 @@ const CATEGORY_PALETTE = [
 ];
 
 export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }) => {
+  const saveCategory = useFinanceStore((s) => s.saveCategory);
+  const deleteCategory = useFinanceStore((s) => s.deleteCategory);
+  const seedUserDefaultCategories = useFinanceStore((s) => s.seedUserDefaultCategories);
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -107,11 +110,7 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
       type,
       icon,
       color,
-    });
-
-    if (userId) {
-      await useFinanceStore.getState().loadFromLocalCache(userId);
-    }
+    }, userId);
 
     setIsModalOpen(false);
   };
@@ -119,10 +118,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Seguro que deseas eliminar esta categoría? Solo se eliminará de tu cuenta personal y no afectará a los demás usuarios.')) {
       await deleteCategory(id);
-      const userId = getActiveUserId();
-      if (userId) {
-        await useFinanceStore.getState().loadFromLocalCache(userId);
-      }
     }
   };
 
@@ -131,7 +126,6 @@ export const CategoriesModule: React.FC<CategoriesModuleProps> = ({ categories }
     if (!userId) return;
     if (window.confirm('¿Deseas restaurar las categorías sugeridas para tu cuenta?')) {
       await seedUserDefaultCategories(userId, true);
-      await useFinanceStore.getState().loadFromLocalCache(userId);
     }
   };
 

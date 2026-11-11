@@ -21,7 +21,7 @@ import type {
   Category,
 } from '../types/index.ts';
 import { saveDebt } from '../services/debtsService.ts';
-import { DEFAULT_CATEGORIES } from '../lib/db.ts';
+import { DEFAULT_CATEGORIES } from '../constants/finance.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';

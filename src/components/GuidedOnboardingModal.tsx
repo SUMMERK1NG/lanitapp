@@ -14,7 +14,18 @@ import {
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import type { ExchangeRatesData } from '../types/index.ts';
 import { useFinanceStore } from '../stores/useFinanceStore.ts';
+import { patchDashboardWidgets } from '../lib/profilePreferences.ts';
 import { logger } from '../utils/logger.ts';
+
+const skippedOnboardingUsers = new Set<string>();
+const completedOnboardingUsers = new Set<string>();
+
+export const isOnboardingSkippedInSession = (userId: string): boolean =>
+  skippedOnboardingUsers.has(userId) || completedOnboardingUsers.has(userId);
+
+export const markOnboardingSkippedInSession = (userId: string): void => {
+  if (userId) skippedOnboardingUsers.add(userId);
+};
 
 export interface GuidedOnboardingModalProps {
   isOpen: boolean;
@@ -73,7 +84,7 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
     saveFixedExpense,
     saveDebt,
     saveAccount,
-    loadFromLocalCache,
+    fetchInitialData,
   } = useFinanceStore();
 
   if (!isOpen) return null;
@@ -182,15 +193,14 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
         }
       }
 
-      // Marcar onboarding como completado
-      localStorage.setItem(`lanitapp_onboarding_completed_${userId}`, 'true');
-      await loadFromLocalCache(userId);
+      // Marcar onboarding como completado en Supabase (profiles.dashboard_widgets)
+      completedOnboardingUsers.add(userId);
+      await patchDashboardWidgets(userId, { onboarding_completed: true });
+      await fetchInitialData(userId);
       onClose();
     } catch (err) {
       logger.error('Error completando onboarding guiado:', err);
-      try {
-        sessionStorage.setItem(`lanitapp_onboarding_skipped_${userId}`, 'true');
-      } catch {}
+      markOnboardingSkippedInSession(userId);
       onClose();
     } finally {
       setIsSaving(false);
@@ -199,9 +209,7 @@ export const GuidedOnboardingModal: React.FC<GuidedOnboardingModalProps> = ({
   };
 
   const handleSkip = () => {
-    try {
-      sessionStorage.setItem(`lanitapp_onboarding_skipped_${userId}`, 'true');
-    } catch {}
+    markOnboardingSkippedInSession(userId);
     onClose();
   };
 

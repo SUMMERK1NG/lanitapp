@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from '../lib/supabase.ts';
 
 interface Props {
   children: ReactNode;
@@ -39,13 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleGoToLogin = () => {
     try {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && (k.startsWith('sb-') || k.includes('auth-token'))) {
-          localStorage.removeItem(k);
-        }
+      if (isSupabaseConfigured() && supabase) {
+        supabase.auth.signOut({ scope: 'local' }).catch(() => {});
       }
-      sessionStorage.clear();
     } catch {}
     window.location.href = window.location.origin + window.location.pathname;
   };

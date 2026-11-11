@@ -16,7 +16,8 @@ import {
   Check,
 } from 'lucide-react';
 import type { Account, AccountType, Transaction, Category, ExchangeRatesData } from '../types/index.ts';
-import { saveAccount, deleteAccount, adjustAccountBalance, addTransaction } from '../lib/db.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
+import { getLocalTodayString } from '../utils/date.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
 
@@ -47,6 +48,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
   categories,
   rates,
 }) => {
+  const { saveAccount, deleteAccount, adjustAccountBalance, addTransaction } = useFinanceStore();
   const [filterType, setFilterType] = useState<'all' | 'cash' | 'bank' | 'digital'>('all');
 
   // Modal states
@@ -228,7 +230,7 @@ export const AccountsManagementModule: React.FC<AccountsManagementModuleProps> =
           type: adjustMode,
           description: adjustDescription.trim() || (adjustMode === 'income' ? 'Ingreso a cuenta' : 'Retiro de cuenta'),
           category_id: adjustCategoryId || (adjustMode === 'income' ? 'cat_salary' : 'cat_other_exp'),
-          transaction_date: new Date().toISOString().split('T')[0],
+          transaction_date: getLocalTodayString(),
         });
       }
       setAdjustingAccount(null);

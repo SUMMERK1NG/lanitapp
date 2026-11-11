@@ -7,8 +7,8 @@ const DOLARFLOW_PARALELO_URL = 'https://dolarflow.com/api/paralelo/';
 const DOLARVZLA_BCV_URL = 'https://rates.dolarvzla.com/bcv/current.json';
 const DOLAR_API_BASE_URL = import.meta.env.VITE_DOLAR_API_BASE_URL || 'https://ve.dolarapi.com/v1';
 
-const CACHE_KEY = 'lanitapp_exchange_rates_cache_v2';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de tiempo de vida
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de tiempo de vida en memoria
+let _inMemoryRatesCache: CachedPayload | null = null;
 
 // Fallback configurable desde variables de entorno con valores por defecto seguros
 const ENV_FALLBACK_USD = Number(import.meta.env.VITE_FALLBACK_USD_RATE);
@@ -79,20 +79,12 @@ async function fetchWithTimeout(url: string, timeoutMs = 4500): Promise<Response
 export async function fetchExchangeRates(forceRefresh = false): Promise<ExchangeRatesData> {
   const fallbackRates = getFallbackRates();
 
-  // 1. Revisar caché local si no es forzado y está vigente (< 5 min)
-  let cachedPayload: CachedPayload | null = null;
-  const cachedRaw = localStorage.getItem(CACHE_KEY);
-  if (cachedRaw) {
-    try {
-      cachedPayload = JSON.parse(cachedRaw);
-    } catch {
-      cachedPayload = null;
-    }
-  }
+  // 1. Revisar caché en memoria si no es forzado y está vigente (< 5 min)
+  const cachedPayload = _inMemoryRatesCache;
 
   const isCacheValid = cachedPayload && (Date.now() - cachedPayload.timestamp < CACHE_TTL_MS);
   if (!forceRefresh && isCacheValid && cachedPayload) {
-    // Si estamos offline o la caché es muy reciente, la usamos de inmediato
+    // Si estamos offline o la caché es muy reciente (< 60s), la usamos de inmediato
     if (!navigator.onLine || Date.now() - cachedPayload.timestamp < 60 * 1000) {
       return cachedPayload.data;
     }
@@ -253,16 +245,11 @@ export async function fetchExchangeRates(forceRefresh = false): Promise<Exchange
     lastUpdated: formattedUpdated,
   };
 
-  // Guardar en caché persistente con marca de tiempo
-  try {
-    const payloadToCache: CachedPayload = {
-      data: result,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(payloadToCache));
-  } catch (e) {
-    logger.warn('No se pudo guardar la tasa en localStorage', e);
-  }
+  // Guardar en caché en memoria con marca de tiempo
+  _inMemoryRatesCache = {
+    data: result,
+    timestamp: Date.now(),
+  };
 
   return result;
 }

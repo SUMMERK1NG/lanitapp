@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { isSuperAdmin, type UserProfile, type UserRole } from '../types/index.ts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { db, saveUserProfile, setActiveUserId, setLastSyncTimestampInMemory } from '../lib/db.ts';
+import { saveUserProfile } from '../lib/profilePreferences.ts';
+import { setActiveUserId, setLastSyncTimestampInMemory } from '../lib/supabaseSession.ts';
+import { consumeAuthFlashError, getAuthFlashError, setAuthFlashError } from '../lib/authFlash.ts';
 import { logger } from '../utils/logger.ts';
 import { sendPasswordResetEmail } from '../lib/emailConfig.ts';
 import { sendWelcomeEmail } from '../services/welcomeEmailService.ts';
@@ -121,18 +123,9 @@ export const sendWelcomeEmailIfPending = async (
   const email = profile.email?.trim();
   if (!email || !email.includes('@')) return false;
 
-  const localFlagKey = `lanitapp_welcome_email_sent_${userId}`;
-
   // ✅ Blindaje 1: Verificar si ya se envió o está en proceso en esta sesión
   if (welcomeEmailSentInSession.has(userId) || welcomeEmailInProgress.has(userId)) {
     logger.dev('[WELCOME EMAIL] Omitido: Ya enviado o en proceso en esta sesión para:', userId);
-    return false;
-  }
-
-  // ✅ Blindaje 1.5: Respaldo en localStorage (evita duplicados entre recargas o si la columna DB aún no se crea)
-  if (typeof window !== 'undefined' && localStorage.getItem(localFlagKey) === 'true') {
-    logger.dev('[WELCOME EMAIL] Omitido: Ya registrado previamente en localStorage para:', userId);
-    welcomeEmailSentInSession.add(userId);
     return false;
   }
 
@@ -140,22 +133,12 @@ export const sendWelcomeEmailIfPending = async (
   if (profile.welcome_email_sent === true) {
     logger.dev('[WELCOME EMAIL] Omitido: Ya enviado previamente según perfil DB para:', userId);
     welcomeEmailSentInSession.add(userId);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(localFlagKey, 'true');
-      } catch {}
-    }
     return false;
   }
 
   // ✅ Blindaje 3: Marcar inmediatamente en memoria ANTES de la llamada asíncrona (anti-race condition)
   welcomeEmailInProgress.add(userId);
   welcomeEmailSentInSession.add(userId);
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(localFlagKey, 'true');
-    } catch {}
-  }
 
   try {
     const firstName = profile.first_name || 'Usuario';
@@ -178,31 +161,16 @@ export const sendWelcomeEmailIfPending = async (
         }
       }
 
-      // Actualizar en Dexie local
-      try {
-        await db.user_profiles.update(userId, { welcome_email_sent: true });
-      } catch {}
-
       logger.dev('[WELCOME EMAIL] Enviado exitosamente a:', email);
       return true;
     } else {
       // Si el envío retornó false (ej. sin conexión), desmarcamos para permitir reintento
       welcomeEmailSentInSession.delete(userId);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.removeItem(localFlagKey);
-        } catch {}
-      }
       return false;
     }
   } catch (error) {
     // Si falla, remover del Set para permitir reintento
     welcomeEmailSentInSession.delete(userId);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem(localFlagKey);
-      } catch {}
-    }
     logger.error('[WELCOME EMAIL ERROR]:', error);
     return false;
   } finally {
@@ -224,23 +192,14 @@ export function useAuth() {
       });
     }
   }, [currentUser]);
-  const [error, setError] = useState<string | null>(() => {
-    try {
-      const flash = sessionStorage.getItem('lanitapp_auth_flash_error');
-      if (flash) return flash;
-    } catch {}
-    return null;
-  });
+  const [error, setError] = useState<string | null>(() => getAuthFlashError());
 
   // Initialize auth session on load (F5 / start)
   const initAuth = useCallback(async () => {
     setLoading(true);
 
     // 0. Revisar si hay un mensaje de error flash por enlace de recuperación expirado o inválido
-    let flashError: string | null = null;
-    try {
-      flashError = sessionStorage.getItem('lanitapp_auth_flash_error');
-    } catch {}
+    const flashError = consumeAuthFlashError();
     if (flashError) {
       logger.warn('[Auth] Enlace expirado detectado vía flash error:', flashError);
       if (isSupabaseConfigured() && supabase) {
@@ -289,10 +248,7 @@ export function useAuth() {
         await supabase.auth.signOut().catch(() => {});
       }
       setActiveUserId('');
-      try {
-        sessionStorage.clear();
-        sessionStorage.setItem('lanitapp_auth_flash_error', friendlyMsg);
-      } catch {}
+      setAuthFlashError(friendlyMsg);
       setCurrentUser(null);
       setError(friendlyMsg);
       setLoading(false);
@@ -526,9 +482,8 @@ export function useAuth() {
         }
       }
 
-      // No active session in Supabase: Clear any residual tokens
+      // No active session in Supabase
       setActiveUserId('');
-      sessionStorage.clear();
       setCurrentUser(null);
     } catch (err: any) {
       logger.error('Auth initialization error:', err);
@@ -547,11 +502,7 @@ export function useAuth() {
     if (isSupabaseConfigured() && client) {
       const { data: listener } = client.auth.onAuthStateChange(async (event, session) => {
         // Si hay un error de enlace expirado o inválido activo, bloquear cualquier inicio de sesión automático
-        let hasFlash = false;
-        try {
-          hasFlash = Boolean(sessionStorage.getItem('lanitapp_auth_flash_error'));
-        } catch {}
-        if (hasFlash) {
+        if (getAuthFlashError()) {
           logger.warn('[Auth] Bloqueando evento onAuthStateChange debido a flash error de enlace expirado.');
           return;
         }
@@ -645,7 +596,6 @@ export function useAuth() {
           }
         } else if (event === 'SIGNED_OUT') {
           setActiveUserId('');
-          sessionStorage.clear();
           setCurrentUser(null);
         }
       });
@@ -658,14 +608,12 @@ export function useAuth() {
 
   /**
    * Obtiene de forma segura el correo electrónico asociado a una cédula.
-   * Cuenta con triple capa de resiliencia:
-   * 1. Caché local Dexie (inmediato si existe sesión en este dispositivo).
-   * 2. Función RPC 'get_login_identifier' en Supabase (si está instalada).
-   * 3. Fallback directo sobre la tabla profiles en Supabase (compatible con cualquier entorno sin RPCs).
+   * 1. Función RPC 'get_login_identifier' en Supabase.
+   * 2. Fallback directo sobre la tabla profiles en Supabase.
    */
   const getLoginIdentifier = async (fullCedula: string): Promise<{ exists: boolean; email?: string } | null> => {
     const clean = fullCedula.trim();
-    if (!clean) return null;
+    if (!clean || !supabase) return null;
 
     const rawNum = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
     const candidateVariants = Array.from(
@@ -683,24 +631,7 @@ export function useAuth() {
       ].filter(Boolean))
     );
 
-    // 1. Verificación local en Dexie (inmediata si existe sesión previa en este dispositivo)
-    try {
-      for (const variant of candidateVariants) {
-        const local = await db.user_profiles
-          .where('cedula')
-          .equalsIgnoreCase(variant)
-          .first();
-        if (local?.email) {
-          return { exists: true, email: local.email };
-        }
-      }
-    } catch (err) {
-      logger.warn('[Auth] Error buscando cédula en Dexie local:', err);
-    }
-
-    if (!supabase) return null;
-
-    // 2. Intentar primero RPC seguro en Supabase si está disponible (SECURITY DEFINER)
+    // 1. Intentar primero RPC seguro en Supabase si está disponible (SECURITY DEFINER)
     try {
       const { data, error } = await supabase.rpc('get_login_identifier', { p_cedula: clean });
       if (!error && data && typeof data === 'object' && (data as any).exists && (data as any).email) {
@@ -713,7 +644,7 @@ export function useAuth() {
       logger.warn('[Auth] RPC get_login_identifier no disponible o falló:', err);
     }
 
-    // 3. Fallback directo sobre la tabla profiles en Supabase (compatible con cualquier entorno)
+    // 2. Fallback directo sobre la tabla profiles en Supabase (compatible con cualquier entorno)
     try {
       for (const variant of candidateVariants) {
         const { data: profile, error: pErr } = await supabase
@@ -741,7 +672,7 @@ export function useAuth() {
    */
   const checkCedulaExists = async (fullCedula: string): Promise<boolean> => {
     const clean = fullCedula.trim();
-    if (!clean) return false;
+    if (!clean || !supabase) return false;
 
     const rawNum = clean.replace(/^[VEJGvejg][- ]?/, '').trim();
     const candidateVariants = Array.from(
@@ -757,20 +688,7 @@ export function useAuth() {
       ].filter(Boolean))
     );
 
-    // 1. Verificación local en Dexie
-    try {
-      for (const variant of candidateVariants) {
-        const local = await db.user_profiles
-          .where('cedula')
-          .equalsIgnoreCase(variant)
-          .first();
-        if (local) return true;
-      }
-    } catch {}
-
-    if (!supabase) return false;
-
-    // 2. RPC seguro en Supabase
+    // 1. RPC seguro en Supabase
     try {
       const { data, error } = await supabase.rpc('check_cedula_exists', { p_cedula: clean });
       if (!error && typeof data === 'boolean') {
@@ -778,7 +696,7 @@ export function useAuth() {
       }
     } catch {}
 
-    // 3. Fallback directo a profiles
+    // 2. Fallback directo a profiles
     try {
       for (const variant of candidateVariants) {
         const { data: direct, error: dErr } = await supabase
@@ -798,20 +716,9 @@ export function useAuth() {
    */
   const checkEmailExists = async (email: string): Promise<boolean> => {
     const clean = email.trim().toLowerCase();
-    if (!clean) return false;
+    if (!clean || !supabase) return false;
 
-    // 1. Verificación local en Dexie
-    try {
-      const local = await db.user_profiles
-        .where('email')
-        .equalsIgnoreCase(clean)
-        .first();
-      if (local) return true;
-    } catch {}
-
-    if (!supabase) return false;
-
-    // 2. RPC seguro en Supabase
+    // 1. RPC seguro en Supabase
     try {
       const { data, error } = await supabase.rpc('check_email_exists', { p_email: clean });
       if (!error && typeof data === 'boolean') {
@@ -819,7 +726,7 @@ export function useAuth() {
       }
     } catch {}
 
-    // 3. Fallback directo a profiles
+    // 2. Fallback directo a profiles
     try {
       const { data: direct, error: dErr } = await supabase
         .from('profiles')
@@ -833,22 +740,12 @@ export function useAuth() {
   };
 
   /**
-   * Helper para buscar perfil por documento (usa getLoginIdentifier y Dexie)
+   * Helper para buscar perfil por documento en Supabase
    */
   const findProfileByDocument = async (fullCedula: string) => {
     const clean = fullCedula.trim();
     if (!clean) return null;
 
-    // 1. Verificación local en Dexie (inmediata)
-    try {
-      const local = await db.user_profiles
-        .where('cedula')
-        .equalsIgnoreCase(clean)
-        .first();
-      if (local) return local;
-    } catch {}
-
-    // 2. Usar getLoginIdentifier que incluye RPC y Fallback directo
     const idRes = await getLoginIdentifier(clean);
     if (idRes?.exists && idRes.email) {
       return {
@@ -861,20 +758,11 @@ export function useAuth() {
   };
 
   /**
-   * Helper para buscar perfil por correo electrónico
+   * Helper para buscar perfil por correo electrónico en Supabase
    */
   const findProfileByEmail = async (email: string) => {
     const clean = email.trim().toLowerCase();
     if (!clean) return null;
-
-    // 1. Verificación local en Dexie (inmediata)
-    try {
-      const local = await db.user_profiles
-        .where('email')
-        .equalsIgnoreCase(clean)
-        .first();
-      if (local) return local;
-    } catch {}
 
     const exists = await checkEmailExists(clean);
     if (exists) {
@@ -896,7 +784,7 @@ export function useAuth() {
     setLoading(true);
 
     const cleanCedula = fullCedula.trim();
-    sessionStorage.removeItem('lanitapp_auth_flash_error');
+    setAuthFlashError(null);
     if (!cleanCedula || !password) {
       setLoading(false);
       const msg = 'Por favor ingresa tu cédula de identidad y contraseña.';
@@ -1432,14 +1320,7 @@ export function useAuth() {
       }
       setActiveUserId('');
       setLastSyncTimestampInMemory(null);
-      let flash: string | null = null;
-      try {
-        flash = sessionStorage.getItem('lanitapp_auth_flash_error');
-        sessionStorage.clear();
-        if (flash) {
-          sessionStorage.setItem('lanitapp_auth_flash_error', flash);
-        }
-      } catch {}
+      const flash = consumeAuthFlashError();
       setCurrentUser(null);
       if (flash) {
         setError(flash);

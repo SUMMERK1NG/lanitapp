@@ -4,6 +4,8 @@ import './utils/logger.ts'
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { setAuthFlashError } from './lib/authFlash.ts'
+import { supabase, isSupabaseConfigured } from './lib/supabase.ts'
 
 // Interceptar y neutralizar enlaces de recuperación expirados o inválidos antes de montar la app
 try {
@@ -15,21 +17,12 @@ try {
     search.includes('error=') ||
     search.includes('error_code=')
   ) {
-    // 1. Borrar inmediatamente cualquier token de sesión en localStorage para que NO abra el Dashboard
-    try {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith('sb-') || key.includes('auth-token') || key.includes('lanitapp_keep_connected') || key.includes('lanitapp_last_active_view'))) {
-          localStorage.removeItem(key);
-        }
-      }
-    } catch {}
+    // 1. Cerrar inmediatamente cualquier sesión activa en Supabase
+    if (isSupabaseConfigured() && supabase) {
+      supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    }
 
-    try {
-      sessionStorage.clear();
-    } catch {}
-
-    // 2. Extraer el motivo del error y preparar mensaje para la pantalla de Login
+    // 2. Extraer el motivo del error y preparar mensaje en memoria para la pantalla de Login
     let friendlyMsg = 'El enlace de recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.';
     try {
       const hashParams = new URLSearchParams(hash.replace(/^#/, '?'));
@@ -41,9 +34,7 @@ try {
       }
     } catch {}
 
-    try {
-      sessionStorage.setItem('lanitapp_auth_flash_error', friendlyMsg);
-    } catch {}
+    setAuthFlashError(friendlyMsg);
 
     // 3. Limpiar inmediatamente la barra de direcciones (quitar el hash de error largo)
     try {

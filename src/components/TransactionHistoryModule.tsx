@@ -510,7 +510,11 @@ export const TransactionHistoryModule: React.FC<TransactionHistoryModuleProps> =
       `_Total movimientos: ${filteredMovements.length}_\n\n` +
       `_Generado desde LANITAPP_`;
 
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(
+      `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   return (

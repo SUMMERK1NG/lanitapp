@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import {
   DollarSign,
   Briefcase,
@@ -46,22 +45,8 @@ import type {
   Category,
 } from '../types/index.ts';
 import { MonthPicker } from './MonthPicker.tsx';
-import {
-  db,
-  getFortnightPeriodKey,
-  setFortnightExpensePaid,
-  unmarkFortnightExpensePaid,
-  setFortnightExpenseSkipped,
-  unmarkFortnightExpenseSkipped,
-  setFortnightDebtSkipped,
-  unmarkFortnightDebtSkipped,
-  addTransaction,
-  saveVariableIncome,
-  deleteVariableIncome,
-  addSavingContribution,
-  setSavingContributionSkipped,
-  unmarkSavingContribution,
-} from '../lib/db.ts';
+import { getFortnightPeriodKey } from '../utils/date.ts';
+import { useFinanceStore } from '../stores/useFinanceStore.ts';
 import { AddPaymentModal } from './AddPaymentModal.tsx';
 import { AddDebtModal } from './AddDebtModal.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
@@ -181,8 +166,22 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [copiedShareToast, setCopiedShareToast] = useState<boolean>(false);
 
-  // Reactive DB queries for Fortnight Item States
-  const allFortnightStates = useLiveQuery(() => db.fortnight_item_states.toArray(), []) || [];
+  // Estado reactivo global en memoria (sincronizado con Supabase Realtime)
+  const {
+    fortnightItemStates: allFortnightStates,
+    setFortnightExpensePaid,
+    unmarkFortnightExpensePaid,
+    setFortnightExpenseSkipped,
+    unmarkFortnightExpenseSkipped,
+    setFortnightDebtSkipped,
+    unmarkFortnightDebtSkipped,
+    addTransaction,
+    saveVariableIncome,
+    deleteVariableIncome,
+    addSavingContribution,
+    setSavingContributionSkipped,
+    unmarkSavingContribution,
+  } = useFinanceStore();
 
   const monthName = MONTH_NAMES[selectedMonth];
   const fortnightLabel = selectedFortnight === 'q1'
@@ -398,7 +397,11 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
       .filter((fe) => {
         if (regularIds.has(fe.id)) return false;
         const prevSkippedState = allFortnightStates.find(
-          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === prevPeriodInfo.key && s.status === 'skipped'
+          (s) =>
+            (s.item_id === fe.id || s.item_id === ensureValidUuid(fe.id)) &&
+            (s.item_type === 'fixed_expense' || s.item_type === 'expense') &&
+            s.period_key === prevPeriodInfo.key &&
+            s.status === 'skipped'
         );
         return Boolean(prevSkippedState);
       })
@@ -406,7 +409,10 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
         const override = overrideMap.get(fe.id);
         const amount = override?.custom_amount !== undefined ? override.custom_amount : fe.amount;
         const state = allFortnightStates.find(
-          (s) => s.item_id === fe.id && (s.item_type === 'fixed_expense' || s.item_type === 'expense') && s.period_key === activePeriodKey
+          (s) =>
+            (s.item_id === fe.id || s.item_id === ensureValidUuid(fe.id)) &&
+            (s.item_type === 'fixed_expense' || s.item_type === 'expense') &&
+            s.period_key === activePeriodKey
         );
 
         return {
@@ -1025,7 +1031,7 @@ export const FortnightPlanner: React.FC<FortnightPlannerProps> = ({
 
   const handleOpenWhatsAppShare = () => {
     const text = generateFortnightSummaryText();
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleCopyWhatsAppText = () => {

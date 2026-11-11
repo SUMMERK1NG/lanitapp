@@ -26,14 +26,6 @@ import type {
   ExchangeRatesData,
   FixedExpensePaymentMode,
 } from '../types/index.ts';
-import {
-  saveFixedIncome,
-  deleteFixedIncome,
-  toggleMonthlyFixedIncomeOverride,
-  saveVariableIncome,
-  deleteVariableIncome,
-  saveAccount,
-} from '../lib/db.ts';
 import { CategoryIcon } from './CategoryIcon.tsx';
 import { MonthPicker } from './MonthPicker.tsx';
 import { MoneyInput } from './ui/MoneyInput.tsx';
@@ -123,6 +115,14 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
   rates,
   currency = '$',
 }) => {
+  const {
+    saveFixedIncome,
+    deleteFixedIncome,
+    toggleMonthlyFixedIncomeOverride,
+    saveVariableIncome,
+    deleteVariableIncome,
+    saveAccount,
+  } = useFinanceStore();
   const [activeTab, setActiveTab] = useState<'fixed' | 'variable'>('fixed');
 
   const bcvUsd = rates?.bcvDollar && rates.bcvDollar > 0 ? rates.bcvDollar : 1;
@@ -388,29 +388,13 @@ export const IncomesManagementModule: React.FC<IncomesManagementModuleProps> = (
     setOptimisticStatus((prev) => ({ ...prev, [income.id]: newStatus }));
 
     try {
-      const record = await toggleMonthlyFixedIncomeOverride(
+      await toggleMonthlyFixedIncomeOverride(
         income.id,
         selectedYear,
         selectedMonth,
         newStatus,
         income.finalAmount
       );
-      // Sincronizar el store global para que todas las vistas reflejen el cambio al instante
-      useFinanceStore.setState((state) => {
-        const overrides = [...state.monthlyIncomeOverrides];
-        const idx = overrides.findIndex(
-          (o) =>
-            (o.fixed_income_id === income.id || (o as any).income_id === income.id) &&
-            o.year === selectedYear &&
-            o.month === selectedMonth
-        );
-        if (idx >= 0) {
-          overrides[idx] = record;
-        } else {
-          overrides.push(record);
-        }
-        return { monthlyIncomeOverrides: overrides };
-      });
       logger.dev(`[FIXED INCOME] Pausa toggled para ingreso ${income.id}: ${newStatus}`);
     } catch (error) {
       // Revertir estado si ocurre error

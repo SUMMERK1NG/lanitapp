@@ -5,6 +5,7 @@ import { addDebtPayment } from '../services/debtsService.ts';
 import { parseCleanNumber } from '../utils/numberFormat.ts';
 import { MoneyInput } from './ui/MoneyInput.tsx';
 import { logger } from '../utils/logger.ts';
+import { getLocalTodayString } from '../utils/date.ts';
 
 interface AddPaymentModalProps {
   isOpen: boolean;
@@ -51,7 +52,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const [interestAmount, setInterestAmount] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState<number>(initialAmount || 0);
 
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState<string>(() => getLocalTodayString());
   const [selectedFortnightKey, setSelectedFortnightKey] = useState<string>('');
   const [customRate, setCustomRate] = useState<string>(rates.bcvDollar.toString());
   const [notes, setNotes] = useState<string>('');
@@ -205,7 +206,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         setSelectedFortnightKey(`${initialYear}_${initialMonth}_${initialFortnight}`);
         setSuggestedNotice(`Período seleccionado: Quincena ${initialFortnight === 'q1' ? '15' : '30'} de ${MONTH_NAMES[initialMonth]} ${initialYear}`);
       } else {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalTodayString();
         setPaymentDate(today);
         const smart = computeSmartFortnight(today);
         setSelectedFortnightKey(`${smart.year}_${smart.month}_${smart.fortnight}`);

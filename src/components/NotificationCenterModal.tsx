@@ -11,6 +11,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { Debt, FixedExpense, FixedIncome, VariableIncome, VariableExpense } from '../types/index.ts';
+import { getActiveUserId } from '../lib/supabaseSession.ts';
+import { patchDashboardWidgets } from '../lib/profilePreferences.ts';
 
 export interface SystemNotification {
   id: string;
@@ -50,27 +52,38 @@ export const generateAlertId = (type: string, key: string, period?: string): str
   return `notif_${type}_${key}${period ? `_${period}` : ''}`;
 };
 
+let _dismissedAlertIds = new Set<string>();
+
 /**
- * Carga el conjunto de IDs descartados desde localStorage
+ * Hidrata los IDs descartados desde el perfil en Supabase (profiles.dashboard_widgets)
  */
-export const getDismissedAlertIds = (): Set<string> => {
-  try {
-    const saved = localStorage.getItem('lanitapp_dismissed_notifs');
-    return saved ? new Set(JSON.parse(saved)) : new Set();
-  } catch {
-    return new Set();
+export const hydrateDismissedAlertIds = (ids?: unknown): void => {
+  if (Array.isArray(ids)) {
+    _dismissedAlertIds = new Set(ids.map((item) => String(item)));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('lanitapp_alerts_dismissed'));
+    }
   }
 };
 
 /**
- * Guarda los IDs descartados en localStorage y notifica globalmente
+ * Retorna el conjunto en memoria de IDs descartados
+ */
+export const getDismissedAlertIds = (): Set<string> => {
+  return new Set(_dismissedAlertIds);
+};
+
+/**
+ * Guarda los IDs descartados en memoria y los persiste en Supabase (profiles.dashboard_widgets)
  */
 export const saveDismissedAlertIds = (ids: Set<string>): void => {
-  try {
-    localStorage.setItem('lanitapp_dismissed_notifs', JSON.stringify(Array.from(ids)));
+  _dismissedAlertIds = new Set(ids);
+  if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('lanitapp_alerts_dismissed'));
-  } catch {
-    // ignore
+  }
+  const uid = getActiveUserId();
+  if (uid) {
+    patchDashboardWidgets(uid, { dismissed_notifications: Array.from(ids) }).catch(() => {});
   }
 };
 
